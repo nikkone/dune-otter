@@ -1,0 +1,14 @@
+/.project
+*.pyc
+*/__pycache__
+private/
+*~
+\#*
+.\#*
+*.mo
+CMakeLists.txt.user
+user/
+build/
+.cproject
+.settings/
+/.vscode
