@@ -1,0 +1,3 @@
+if(NOT DUNE_USING_EIGEN3)
+  set(TASK_ENABLED FALSE)
+endif()
