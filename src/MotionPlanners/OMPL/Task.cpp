@@ -306,7 +306,6 @@ namespace MotionPlanners
         //ss.setPlanner(ob::PlannerPtr(new og::ABITstar(ss.getSpaceInformation())));
         ob::PlannerPtr test= kabitstar( ss.getSpaceInformation(), "kABITstar");
         ss.setPlanner(test);
-        ss.print();
           // attempt to solve the problem within a given planning time
         ob::PlannerStatus solved = ss.solve(m_args.maxPlaningTime);
         if (solved)
