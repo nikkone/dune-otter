@@ -92,6 +92,8 @@ namespace Sensors
       double sync_period;
 
       unsigned transmission_time;
+
+      bool usingPPS;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -146,6 +148,10 @@ namespace Sensors
         .defaultValue("3")
         .minimumValue("0")
         .description("Transmission Time used for finding position");
+
+        param("Use PPS", m_args.usingPPS)
+        .defaultValue("false")
+        .description("If the sensor uses PPS instead of sync messages.");
 
         param("Power Channel - Names", m_args.pwr_channels)
         .defaultValue("")
@@ -244,36 +250,50 @@ namespace Sensors
         {
           if (m_args.init_cmds[i].empty())
             continue;
+          // Try to enter the command mode. Only executed on the first command
           if(!configuration_mode) {
-            slowTbrSend(TBCMD_ENTER_COMMAND_MODE); //TODO:Check for response
+            slowTbrSend(TBCMD_ENTER_COMMAND_MODE);
+            if (!waitForReply(TBCMD_ENTER_COMMAND_MODE_RESPONSE)) {
+              war("%s: %s", DTR("Could not enter command mode with "), TBCMD_ENTER_COMMAND_MODE);
+              war("Trying a command to see if the device is already in command mode.");
+            }
             configuration_mode = true;
           }
+          // Send initialization string and wait for answer
           std::string cmd = String::unescape(m_args.init_cmds[i]);
           m_handle->writeString(cmd.c_str());
 
           if (!m_args.init_rpls[i].empty())
           {
             std::string rpl = String::unescape(m_args.init_rpls[i]);
-            if (!waitInitReply(rpl))
+            if (!waitForReply(rpl))
             {
-              err("%s: %s", DTR("no reply to command"), m_args.init_cmds[i].c_str());
-              throw std::runtime_error(DTR("failed to setup device"));
+              err("%s: %s", DTR("No/Unexpected reply to command"), m_args.init_cmds[i].c_str());
+              throw std::runtime_error(DTR("Failed to setup device"));
             }
           }
         }
+        // If the command mode command was sent the this returns the device to listening mode
         if(configuration_mode) {
-            commandTbrSend(TBCMD_EXIT_COMMAND_MODE); //TODO:Check for response
+            commandTbrSend(TBCMD_EXIT_COMMAND_MODE);
+            if (!waitForReply(TBCMD_EXIT_COMMAND_MODE_RESPONSE))
+            {
+              err("%s: %s", DTR("No/Unexpected reply to command"), TBCMD_EXIT_COMMAND_MODE);
+              throw std::runtime_error(DTR("Failed to leave command mode"));
+            }
             configuration_mode = true;
         }
 
         
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-        //! Set timer for periodic check of surroundings.
-        debug("Waiting to start timer to dividable by 10.");
-        while(std::time(0) % 10 != 0);
-        m_sync_timer.setTop(m_args.sync_period);
-        sendTbrTimestampSync();
-        debug("Finished waiting to start timer to dividable by 10.");
+        if(!m_args.usingPPS) {
+          //! Set timer for periodic check of surroundings.
+          debug("Waiting to start timer to dividable by 10.");
+          while(std::time(0) % 10 != 0);
+          m_sync_timer.setTop(m_args.sync_period);
+          sendTbrTimestampSync();
+          debug("Finished waiting to start timer to dividable by 10.");
+        }
       }
 
       void
@@ -319,7 +339,7 @@ namespace Sensors
       //! @param[in] stn string to compare.
       //! @return true on successful match, false otherwise.
       bool
-      waitInitReply(const std::string& stn)
+      waitForReply(const std::string& stn)
       {
         Counter<float> counter(c_wait_reply_tout);
         while (!stopping() && !counter.overflow())
@@ -333,6 +353,13 @@ namespace Sensors
         }
 
         return false;
+      }
+
+      void sendFullTimestamp() {
+        std::time_t timestamp = std::time(nullptr);
+        // Remove last digit
+        std::string UTCUnixTimestamp = std::to_string(timestamp);
+        slowTbrSend("UT=" + UTCUnixTimestamp);
       }
 
       uint8_t calcLuhnVerifDigit(uint32_t timestamp) // From TB Live datasheet, fw1.0.1 rev.1
@@ -406,9 +433,11 @@ namespace Sensors
       {
         spew(DTR("Process"));
         if (line.find("ack01") != std::string::npos) {
-          spew(DTR("Sensor clock diciplined"));
+          trace(DTR("Sensor clock diciplined."));
         } if(line.find("ack02") != std::string::npos) {
-          spew(DTR("Sensor timestamp set"));
+          trace(DTR("Sensor timestamp set."));
+        } if(line.find("ack03") != std::string::npos) {
+          trace(DTR("Sensor timestamp in PPS mode set."));
         } if (line.find("$") != std::string::npos) {
 
           // Discard leading noise.
@@ -657,16 +686,19 @@ namespace Sensors
           if(m_sync_timer.overflow())
           {
             m_sync_timer.reset();
-
-            if(timestamp_send_counter >= m_args.timestamp_send_divider) {
-              sendTbrTimestampSync();
-              timestamp_send_counter = 0;
+            if(m_args.usingPPS) {
+              sendFullTimestamp();
             } else {
-              sendTbrSync();
+              if(timestamp_send_counter >= m_args.timestamp_send_divider) {
+                sendTbrTimestampSync();
+                timestamp_send_counter = 0;
+              } else {
+                sendTbrSync();
+              }
+              //spew("C: %ld", std::time(0));
+              spew("Sending duration: %f", m_sync_timer.getElapsed());
+              timestamp_send_counter++;
             }
-            //spew("C: %ld", std::time(0));
-            spew("Sending duration: %f", m_sync_timer.getElapsed());
-            timestamp_send_counter++;
           }
           consumeMessages();
         }
