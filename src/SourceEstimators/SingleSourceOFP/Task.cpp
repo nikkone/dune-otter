@@ -30,15 +30,15 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <boost/circular_buffer.hpp>
-#include "ExtendedKalmanFilter.hpp"
-#include "AlgebraicSolution.hpp"
+#include <OpenFilterPack/AlgebraicSolution.hpp>
+#include <OpenFilterPack/ExtendedKalmanFilter.hpp>
 namespace SourceEstimators
 {
   //! TODO: Implement altitude in TBR and use this. More todos in code.
   //! TODO: Implement use preassure/depth from tag. 
   //! Insert explanation on task behaviour here.
   //! @author Nikolai Lauvås
-  namespace SingleSourceEigen
+  namespace SingleSourceOFP
   {
     using DUNE_NAMESPACES;
 
@@ -132,8 +132,8 @@ namespace SourceEstimators
       //! Salinity provider entity label.
       int m_salinity_eid;
 
-      ExtendedKalmanFilter m_ekf;
-      AlgebraicSolver<double, 5, 3> m_aslv;
+      OFP::ExtendedKalmanFilter m_ekf;
+      OFP::AlgebraicSolver<double, 5, 3> m_aslv;
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
       //! Reference coordinate used to calculate NED frame
@@ -528,7 +528,7 @@ namespace SourceEstimators
                 double latLon[3];
                 fromNEDframe(result, m_refCoord, latLon);
                 std::ofstream logOutStream;
-                logOutStream.open(("log/aslveigen.log"), std::fstream::app);
+                logOutStream.open(("log/aslvofp.log"), std::fstream::app);
                 if (logOutStream.good()) {
                   logOutStream.precision(15);
                   logOutStream << m_aslv.x(0) << "," << m_aslv.x(1) << "," << m_aslv.x(2) << "," << DUNE::Math::Angles::degrees(latLon[0]) << "," << DUNE::Math::Angles::degrees(latLon[1]) << std::endl;
@@ -574,9 +574,6 @@ namespace SourceEstimators
 
         while (!stopping())
         {
-
-
-
           if(m_filter_timer.overflow()) {
             m_filter_timer.reset();
             if(m_ekf.active) {
@@ -592,10 +589,10 @@ namespace SourceEstimators
                   tagPosition.lon = longi;
                   tagPosition.alt = -m_ekf.xHat(2);
                   tagPosition.data = std::to_string(m_ekf.xHat(0)) + std::to_string(m_ekf.xHat(1)) + "," + std::to_string(m_ekf.xHat(2));
-                  tagPosition.id = "EigenEKF" + std::to_string(m_args.receiver_serial);
+                  tagPosition.id = "OFPEKF" + std::to_string(m_args.receiver_serial);
                   dispatch(tagPosition);
                   std::ofstream logOutStream;
-                  logOutStream.open(("log/ekfeigen.log"), std::fstream::app);
+                  logOutStream.open(("log/ofpeigen.log"), std::fstream::app);
                   if (logOutStream.good()) {
                     logOutStream.precision(15);
                       logOutStream << m_ekf.xHat(0) << "," << m_ekf.xHat(1) << "," << m_ekf.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
