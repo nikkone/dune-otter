@@ -515,8 +515,8 @@ namespace SourceEstimators
               position_previous << NED2[0] ,NED2[1] ,NED2[2];
               position_current(2) = altitude;
               position_previous(2) = altitude;
-              std::cout << "prevpos" << position_previous << std::endl;
-              std::cout << "curpos" << position_current << std::endl;
+              //std::cout << "prevpos" << position_previous << std::endl;
+              //std::cout << "curpos" << position_current << std::endl;
               if (m_aslv.addMeasurement(measurements,position_previous,position_current)) {
                 double result[3] = {m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)};
                 //Eigen::Matrix<double, 3, 1> X0;
@@ -592,7 +592,7 @@ namespace SourceEstimators
                   tagPosition.lon = longi;
                   tagPosition.alt = -m_ekf.xHat(2);
                   tagPosition.data = std::to_string(m_ekf.xHat(0)) + std::to_string(m_ekf.xHat(1)) + "," + std::to_string(m_ekf.xHat(2));
-                  tagPosition.id = "DepthEKF" + std::to_string(m_args.receiver_serial);
+                  tagPosition.id = "EigenEKF" + std::to_string(m_args.receiver_serial);
                   dispatch(tagPosition);
                   std::ofstream logOutStream;
                   logOutStream.open(("log/ekfeigen.log"), std::fstream::app);
