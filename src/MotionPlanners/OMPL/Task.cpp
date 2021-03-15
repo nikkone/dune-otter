@@ -27,9 +27,17 @@
 // Author: Nikolai Lauvås                                                   *
 //***************************************************************************
 
+#define BENCHMARK 1
+
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
-#include <USER/DUNE.hpp>
+#include <ENCGIS/DBconnection.hpp>
+#include <ENCGIS/DBTree.hpp>
+#include "OMPLfunctions.hpp"
+#include "OMPLMotionValidator.hpp"
+#include "OMPLMotionValidator2.hpp"
+#include "LatLonOptimizationObjective.hpp"
+
 // OMPL headers
 #include <ompl/base/SpaceInformation.h>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
@@ -38,7 +46,10 @@
 #include <ompl/config.h>
 
 #include <ompl/geometric/planners/informedtrees/ABITstar.h>
+
+#if BENCHMARK
 #include <ompl/tools/benchmark/Benchmark.h> // Only used for benchmarking, remove before deployment
+#endif
 
  #include <ompl/util/Time.h>
  #include <utility>
@@ -75,14 +86,21 @@ namespace MotionPlanners
       std::vector<double> planningBounds;
       //! Defines the start and end point to use while developing
       std::vector<double> startAndEnd;
+#if BENCHMARK
+      std::string benchmark_name;
+      double benchmark_maxTime;
+      double benchmark_maxMem;
+      int benchmark_runCount;
+#endif
     };
     struct Task: public DUNE::Tasks::Task
     {
       //! Task arguments.
       Arguments m_args;
       //! Database connection
-      ChartsDatabase::ChartsDBConnection* m_con;
-
+      ENCGIS::DBconnection* m_con;
+      ENCGIS::isPointInLayer2       *qry;//("deparetable", m_con->db);
+      ENCGIS::checkTransectLanding2 *qry2;//2("lndaretable", m_con->db);
       bool m_intermediate;
 
       //! Constructor.
@@ -114,7 +132,24 @@ namespace MotionPlanners
         param("Start and Goal", m_args.startAndEnd)
         .size(4)
         .defaultValue("63.44540, 10.38627, 63.41434, 10.38903")
-        .description("A starting point and end point to use while developing");        
+        .description("A starting point and end point to use while developing");   
+#if BENCHMARK
+        param("Benchmark Name", m_args.benchmark_name)
+        .defaultValue("")
+        .description("Path of the db");
+
+        param("Benchmark Runtime", m_args.benchmark_maxTime)
+        .defaultValue("")
+        .description("Path of the db");
+
+        param("Benchmark Max Memory", m_args.benchmark_maxMem)
+        .defaultValue("")
+        .description("Path of the db");
+
+        param("Benchmark Runs", m_args.benchmark_runCount)
+        .defaultValue("")
+        .description("Path of the db"); 
+#endif
       }
 
       //! Update internal state with new parameter values.
@@ -140,7 +175,9 @@ namespace MotionPlanners
       onResourceAcquisition(void)
       {
         try{
-          m_con = new ChartsDatabase::ChartsDBConnection(m_args.dbPath.c_str(), Database::Connection::CF_CREATE);
+          m_con = new ENCGIS::DBconnection(m_args.dbPath);
+          qry =  new ENCGIS::isPointInLayer2("deparetable", m_con->db);
+          qry2 = new ENCGIS::checkTransectLanding2("lndaretable", m_con->db);
         } catch(std::runtime_error& e) {
           err(DTR("Problem opening charts database: %s"), e.what());
           // Set task state to failure
@@ -152,7 +189,7 @@ namespace MotionPlanners
       onResourceInitialization(void)
       {
         // Set OMPL to use the console output of this task
-        ompl::msg::OutputHandler *oh = new ChartsDatabase::OutputHandlerDUNEConsole(this);
+        ompl::msg::OutputHandler *oh = new MotionPlanners::OMPL::OutputHandlerDUNEConsole(this);
         ompl::msg::useOutputHandler(oh);
         ompl::msg::setLogLevel(ompl::msg::LogLevel::LOG_DEV2);
       }
@@ -203,12 +240,12 @@ namespace MotionPlanners
           auto path = ompl::geometric::PathGeometric(planner->getSpaceInformation());
           for (auto ptr = states.begin(); ptr < states.end(); ptr++) {
             auto state = static_cast<const ompl::base::RealVectorStateSpace::StateType *>(*ptr);
-            std::cout << state->values[1] <<","<< state->values[0] << std::endl;
+            //std::cout << state->values[1] <<","<< state->values[0] << std::endl;
             path.append(*ptr);
           }
 
-              ChartsDatabase::DBTree* tree = new ChartsDatabase::DBTree(m_con);
-              ChartsDatabase::pathToTree(path, "tree", tree);
+              ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_con);
+              MotionPlanners::OMPL::pathToTree(path, "tree", tree);
               Memory::clear(tree);
 
           //intermediate(planner,states, cost); 
@@ -224,7 +261,8 @@ namespace MotionPlanners
           ompl::geometric::ABITstar *planner = new og::ABITstar(si);
           planner->setName(name);
           planner->setPruning(false);
-          planner->setStopOnSolnImprovement(true);
+          //planner->setUseKNearest(false);
+          //planner->setStopOnSolnImprovement(true);
           return ompl::base::PlannerPtr(planner);
       }
 
@@ -240,29 +278,29 @@ namespace MotionPlanners
         dispatch(pcontrol);
         spew("Plan start request sent");
       }
-
+#if BENCHMARK
       //! Function for performing benchmarks on a setup.
       void bmarkPath(og::SimpleSetup &ss)
       {
 
           // Bencmarking code
-          ompl::tools::Benchmark b(ss, "kBITstar");
+          ompl::tools::Benchmark b(ss, m_args.benchmark_name);
           
           // For planners that we want to configure in specific ways,
           // the ompl::base::PlannerAllocator should be used:
           b.addPlannerAllocator(std::bind(&kabitstar, std::placeholders::_1, "kABITstar"));
           
           ompl::tools::Benchmark::Request req = ompl::tools::Benchmark::Request();
-          req.maxTime = m_args.maxPlaningTime;
-          req.maxMem = 5000.0;
-          req.runCount = 2;
+          req.maxTime = m_args.benchmark_maxTime;
+          req.maxMem = m_args.benchmark_maxMem;
+          req.runCount = m_args.benchmark_runCount;
           req.displayProgress = true;
           b.benchmark(req);
           
           // This will generate a file of the form ompl_host_time.log
           b.saveResultsToFile();
       }
-
+#endif
       //! Function searching for path, only stops if condition met, else contnues to optimize
       void findPathExtended(og::SimpleSetup &ss)
       {
@@ -281,21 +319,21 @@ namespace MotionPlanners
         ob::PlannerStatus solved = ss.solve( exactSolnPlannerTerminationCondition( &m_intermediate, this) );
         if (solved)
         {
-          ChartsDatabase::DBTree* tree = new ChartsDatabase::DBTree(m_con);
-          debug("Found solution");
-          //ChartsDatabase::printPath(ss.getSolutionPath());
-          ChartsDatabase::pathToTree(ss.getSolutionPath(), "tree", tree);
+          //ChartsDatabase::DBTree* tree = new ChartsDatabase::DBTree(m_con);
+          //debug("Found solution");
+          ////ChartsDatabase::printPath(ss.getSolutionPath());
+          //ChartsDatabase::pathToTree(ss.getSolutionPath(), "tree", tree);
           // print the path to screen
           ss.simplifySolution();
           //ss.getSolutionPath().print(std::cout);
           og::PathGeometric states = ss.getSolutionPath();
-          IMC::PlanDB pdb = ChartsDatabase::createPlanDBEntry(states, "autoPlan2", 1.0);
+          IMC::PlanDB pdb = OMPL::createPlanDBEntry(states, "autoPlan2", 1.0);
           dispatch(pdb);
           //sendPlan(states, "autoPlan", 1.0);
           activatePlan("autoPlan2");
           //pathToDB(states, "tree3");
-          ChartsDatabase::pathToTree(ss.getSolutionPath(), "tree3", tree);
-          Memory::clear(tree);
+          //ChartsDatabase::pathToTree(ss.getSolutionPath(), "tree3", tree);
+          //Memory::clear(tree);
         }
         else
           war("No solution found");
@@ -317,13 +355,13 @@ namespace MotionPlanners
           og::PathGeometric states = ss.getSolutionPath();
 
           // Dispatch and activate returned path
-          IMC::PlanDB pdb = ChartsDatabase::createPlanDBEntry(states, "autoPlan", 1.0);
+          IMC::PlanDB pdb = MotionPlanners::OMPL::createPlanDBEntry(states, "autoPlan", 1.0);
           dispatch(pdb);
           activatePlan("autoPlan");
 
           // Write path to DB for visualization purposes
-          ChartsDatabase::DBTree* tree = new ChartsDatabase::DBTree(m_con);
-          ChartsDatabase::pathToTree(ss.getSolutionPath(), "tree3", tree);
+          ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_con);
+          MotionPlanners::OMPL::pathToTree(ss.getSolutionPath(), "tree3", tree);
           Memory::clear(tree);
         }
         else
@@ -343,12 +381,16 @@ namespace MotionPlanners
 
         // Define Motion validator for this space
         //ss.getSpaceInformation()->setMotionValidator(std::make_shared<ompl::base::DiscreteMotionValidator>(ss.getSpaceInformation()));
-        ss.getSpaceInformation()->setMotionValidator(std::make_shared<DUNE::ChartsDatabase::ChartsDBMotionValidator>(ss.getSpaceInformation(), m_con, 6));
+        ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator2>(ss.getSpaceInformation(), qry2, 6));
+      //ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator>(ss.getSpaceInformation(), m_con, 6));
+
 
         // Set state validity checking for this space
-        ss.setStateValidityChecker([&](const ob::State *state) { return DUNE::ChartsDatabase::isStateValid(state, m_con); });
+        ss.setStateValidityChecker([&](const ob::State *state) { return isStateValid(state, m_con); });
+        //ss.setStateValidityChecker([&](const ob::State *state) { return MotionPlanners::OMPL::isStateValid(state, m_con); });
+
         // Set optimization objective to strive for if optimizing planner is used
-        ss.setOptimizationObjective(std::make_shared<DUNE::ChartsDatabase::LatLonDist>(ss.getSpaceInformation()));
+        ss.setOptimizationObjective(std::make_shared<MotionPlanners::OMPL::LatLonDist>(ss.getSpaceInformation()));
 
         // Create the start state
         ob::ScopedState<> start(space);
@@ -365,7 +407,18 @@ namespace MotionPlanners
 
         return ss;
       }
-
+    bool isStateValid(const ompl::base::State *state,  ENCGIS::DBconnection *dbCon)
+    {
+        if (state != nullptr)
+        {
+            const auto *rstate = static_cast<const ompl::base::RealVectorStateSpace::StateType *>(state);
+            return qry->run(rstate->values[1], rstate->values[0]);
+        }
+        else
+            std::cout << "nullptr" << std::endl;
+        return false;
+        
+    }
       //! Main loop.
       void
       onMain(void)
@@ -380,15 +433,117 @@ namespace MotionPlanners
         og::SimpleSetup setup = createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds); // Ned nidelven
 
         // Run/benchmark current setup
+        #if BENCHMARK
+          bmarkPath(setup);
+        #else
         findPath(setup);
-        //bmarkPath(setup);
+        #endif
+        //findPathExtended(setup);
+        
+        //std::cout << isPointInLayer(63.8091, 8.9979, "deparetable") << std::endl;
+        //char* c_stmt = "select ID, X(geom), Y(geom) from tree3 where id=?;";
+        /*
+        char c_stmt[] = "select sum(intersects(MakePoint(?1, ?2, 4326), geom)) as c from (SELECT geom FROM deparetable WHERE ROWID IN (SELECT ROWID FROM SpatialIndex WHERE f_table_name = 'deparetable' AND search_frame = BuildMbr(?1, ?2,?1,?2, 4326)));";
 
+        sqlite3_stmt* m_handle;
+        
+        printf("%d \n" ,sqlite3_prepare_v2(m_con->db, c_stmt, -1,&m_handle, 0));
+    int v1, v2;
+    // Get starting timepoint 
+    auto start = std::chrono::high_resolution_clock::now(); 
+  
+        //printf("The statement has %d parameter(s).\n",sqlite3_bind_parameter_count(m_handle));
+        //printf("%d \n", sqlite3_bind_text(m_handle,1,"tree1",5,NULL));
+        //printf("%d \n", sqlite3_bind_int(m_handle,1,1));
+        //printf("%d \n", sqlite3_bind_double(m_handle,1,8.9979));
+        //printf("%d \n", sqlite3_bind_double(m_handle,2,63.8091));
+        sqlite3_bind_double(m_handle,1,8.9979);
+        sqlite3_bind_double(m_handle,2,63.8091);
+      // Execute
+      if(sqlite3_step(m_handle) == SQLITE_ROW) {
+        v1 = sqlite3_column_int(m_handle, 0);
+      }
+        sqlite3_clear_bindings(m_handle);
+        sqlite3_reset(m_handle);
+        //printf("%d \n", sqlite3_bind_double(m_handle,1,9.06304));
+        //printf("%d \n", sqlite3_bind_double(m_handle,2,63.97589));
+        sqlite3_bind_double(m_handle,1,9.06304);
+        sqlite3_bind_double(m_handle,2,63.97589);
+      // Execute
+      if(sqlite3_step(m_handle) == SQLITE_ROW) {
+        v2 = sqlite3_column_int(m_handle, 0);
+      }
+      // Get ending timepoint 
+      auto stop = std::chrono::high_resolution_clock::now(); 
+    
+      // Get duration. Substart timepoints to  
+      // get durarion. To cast it to proper unit 
+      // use duration cast method 
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start); 
+    
+      std::cout << "Time taken by function: "
+          << duration.count() << " microseconds. Result: "<< v1 << "," << v2<< std::endl; 
+
+
+        // Teardown
+        if (m_handle)
+          sqlite3_finalize(m_handle);
+*/
+/*
+        int v[3];
+
+        ENCGIS::isPointInLayer2 qry("deparetable", m_con->db);
+        ENCGIS::checkTransectLanding2 qry2("lndaretable", m_con->db);
+    auto start = std::chrono::high_resolution_clock::now();
+    for(int i=0;i<1000;i++) {
+        v[0] = qry2.run(64.00922, 9.15689, 63.98924, 9.17263);
+        v[1] = qry2.run(64.00922, 9.15689, 64.00995, 9.15842);
+        //v[0]= qry.run(63.97589, 9.06304);
+        //v[1]= qry.run(63.8091, 8.9979);
+        //v[2]= qry.run(42.51,2.62);
+
+        
+    }
+        //v1 = m_con->isPointInLayer(63.8091, 8.9979, "deparetable");
+        //v2 = m_con->isPointInLayer(63.97589, 9.06304, "deparetable");
+      // Get ending timepoint 
+      auto stop = std::chrono::high_resolution_clock::now(); 
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start); 
+//qry.run(63.97589, 9.06304);
+      std::cout << "Time taken by function: " << duration.count() << " microseconds. Result: "<< v[0] << "," << v[1] << "," << v[2]<< std::endl; 
+
+
+            // Get starting timepoint 
+    auto start1 = std::chrono::high_resolution_clock::now();
+        //1= qry.run(63.8091, 8.9979);
+        //2= qry.run(63.97589, 9.06304);
+        for(int i=0;i<1000;i++) {
+          v[0] = m_con->checkTransectLanding(64.00922, 9.15689, 63.98924, 9.17263);
+          v[1] = m_con->checkTransectLanding(64.00922, 9.15689, 64.00995, 9.15842);
+          //v[0] = m_con->isPointInLayer(63.97589, 9.06304, "deparetable");
+          //v[1] = m_con->isPointInLayer(63.8091, 8.9979, "deparetable");
+          //v[2] = m_con->isPointInLayer(42.51,2.62, "deparetable");
+        }
+
+      // Get ending timepoint 
+      auto stop1 = std::chrono::high_resolution_clock::now(); 
+      auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1); 
+          std::cout << "Time taken by function: "
+          << duration1.count() << " microseconds. Result: "<< v[0] << "," << v[1] << "," << v[2]<< std::endl; 
+*/
         inf("findPath finnished");
         while (!stopping())
         {
           waitForMessages(1.0);
         }
       }
+  /*std::string isPointInLayer(double lat, double lon, std::string table) {
+        return "select sum(intersects(MakePoint(" + std::to_string(lon) + ", " + std::to_string(lat) + ", 4326), geom)) as c from (SELECT geom FROM " + table + " "
+      "WHERE ROWID IN ("
+        "SELECT ROWID FROM SpatialIndex "
+        "WHERE f_table_name = '" + table + "' AND "
+          "search_frame = BuildMbr(" + std::to_string(lon) + ", " + std::to_string(lat) + "," + std::to_string(lon) + ", " + std::to_string(lat) + ", 4326)));"; 
+  }*/
     };
   }
 }

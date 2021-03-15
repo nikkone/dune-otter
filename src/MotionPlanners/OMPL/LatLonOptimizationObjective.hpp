@@ -5,9 +5,11 @@
 
 namespace ob = ompl::base;
 
-namespace DUNE
+namespace MotionPlanners
 {
-  namespace ChartsDatabase
+  //! This task demonstrates how OMPL is used in DUNE along with ChartsDatabase
+  //! @author Nikolai Lauvås
+  namespace OMPL
   {
     class LatLonDist : public ob::OptimizationObjective
     {

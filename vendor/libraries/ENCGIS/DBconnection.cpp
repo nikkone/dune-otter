@@ -1,0 +1,221 @@
+#include "DBconnection.hpp"
+
+namespace ENCGIS {
+
+      isPointInLayer2::isPointInLayer2(std::string layer, sqlite3 *db) {
+        /*std::string query = "select sum(intersects(MakePoint(?1,?2, 4326), geom)) as c from (SELECT geom FROM " + layer + " "
+      "WHERE ROWID IN ("
+        "SELECT ROWID FROM SpatialIndex "
+        "WHERE f_table_name = '" + layer + "' AND "
+          "search_frame = BuildMbr(?1,?2,?1,?2, 4326)));"; */
+      std::string query = "select sum(intersects(MakePoint(?1,?2, 4326), geom)) FROM " + layer + " "
+      "WHERE ROWID IN ("
+        "SELECT ROWID FROM SpatialIndex "
+        "WHERE f_table_name = '" + layer + "' AND "
+          "search_frame = BuildMbr(?1,?2,?1,?2));"; 
+        sqlite3_prepare_v3(db, query.c_str(), -1, SQLITE_PREPARE_PERSISTENT, &m_handle, 0);
+      }
+
+      isPointInLayer2::~isPointInLayer2() {
+        if (m_handle)
+          sqlite3_finalize(m_handle);
+      }
+
+      int isPointInLayer2::run(double lat, double lon) {
+        sqlite3_bind_double(m_handle,1,lon);
+        sqlite3_bind_double(m_handle,2,lat);
+        // Execute
+        if(sqlite3_step(m_handle) == SQLITE_ROW) {
+          statusLastResult = sqlite3_column_int(m_handle, 0);
+          sqlite3_reset(m_handle);
+          //return sqlite3_stmt_status(m_handle, SQLITE_STMTSTATUS_FULLSCAN_STEP, false);
+          return statusLastResult;
+        } else {
+          sqlite3_reset(m_handle);
+          return 0;
+        }
+      }
+
+      checkTransectLanding2::checkTransectLanding2(std::string layer, sqlite3 *db) {
+     std::string query = "select sum(intersects(makeline(makepoint(?1,?2, 4326), makepoint(?3,?4, 4326)), geom)) FROM " + layer + " "
+      "WHERE ROWID IN ("
+      "SELECT ROWID FROM SpatialIndex "
+      "WHERE f_table_name = '" + layer + "' AND "
+      "search_frame = BuildMbr(?1,?2,?3,?4, 4326))";
+      //printf("%s", query.c_str());
+        sqlite3_prepare_v3(db, query.c_str(), -1, SQLITE_PREPARE_PERSISTENT, &m_handle, 0);
+      }
+
+      checkTransectLanding2::~checkTransectLanding2() {
+        if (m_handle)
+          sqlite3_finalize(m_handle);
+      }
+
+      int checkTransectLanding2::run(double startLat, double startLon, double endLat, double endLon) {
+        sqlite3_bind_double(m_handle,1,startLon);
+        sqlite3_bind_double(m_handle,2,startLat);
+        sqlite3_bind_double(m_handle,3,endLon);
+        sqlite3_bind_double(m_handle,4,endLat);
+        // Execute
+        if(sqlite3_step(m_handle) == SQLITE_ROW) {
+          statusLastResult = sqlite3_column_int(m_handle, 0);
+          sqlite3_reset(m_handle);
+          //return sqlite3_stmt_status(m_handle, SQLITE_STMTSTATUS_FULLSCAN_STEP, false);
+          return statusLastResult;
+        } else {
+          sqlite3_reset(m_handle);
+          return 0;
+        }
+      }
+
+
+  bool DBconnection::isPointInLayer(double lat, double lon, std::string table, bool useSpatialIndex) {
+      std::string sql_stmt;
+    if(useSpatialIndex) {
+        sql_stmt = "select sum(intersects(MakePoint(" + std::to_string(lon) + ", " + std::to_string(lat) + ", 4326), geom)) as c from (SELECT geom FROM " + table + " "
+      "WHERE ROWID IN ("
+        "SELECT ROWID FROM SpatialIndex "
+        "WHERE f_table_name = '" + table + "' AND "
+          "search_frame = BuildMbr(" + std::to_string(lon) + ", " + std::to_string(lat) + "," + std::to_string(lon) + ", " + std::to_string(lat) + ", 4326)));"; 
+    } else {
+        sql_stmt = "select count(*) from " + table + " as d where intersects(MakePoint(" + std::to_string(lon) + ", " + std::to_string(lat) + ", 4326), d.geom) limit 1";
+    }
+    //std::cout << sql_stmt << std::endl;
+    //Setup
+    sqlite3_stmt* m_handle;
+    
+    if (sqlite3_prepare_v2(db, sql_stmt.c_str(), sql_stmt.length(), &m_handle, 0) != SQLITE_OK)
+    {
+      sqlite3_finalize(m_handle);
+      Error("Failed to prepare statement", sql_stmt.c_str());
+    }
+    // Execute
+    int m_idx = 0;
+    int value = 0;
+    if(sqlite3_step(m_handle) == SQLITE_ROW) {
+      if (sqlite3_column_type(m_handle, m_idx) != SQLITE_INTEGER) {
+        sqlite3_finalize(m_handle);
+        return false;//throw Error("column result is not of INTEGER type", "");
+      }
+      value = sqlite3_column_int(m_handle, m_idx++);
+    }
+    // Teardown
+    if (m_handle)
+      sqlite3_finalize(m_handle);
+    return value;
+  }
+
+    void DBconnection::loadSpatialite() {
+    //std::string ext=""
+    /*char *zErrMsg = 0;
+    if(sqlite3_load_extension(db, "mod_spatialite", 0, &zErrMsg) != SQLITE_OK ) {
+      printf("notok");
+      sqlite3_free(zErrMsg);
+    }*/
+
+    sqlite3_enable_load_extension(db, 1);
+    std::string c_stmt = "SELECT load_extension('mod_spatialite');";
+    runQuery(c_stmt);
+    sqlite3_enable_load_extension(db, 0);
+    runQuery("select spatialite_version();");
+  }
+
+    DBconnection::DBconnection(std::string filename) {
+
+      int rc = sqlite3_open_v2(filename.c_str(), &db,SQLITE_OPEN_READONLY,0);
+      if( rc ){
+        Error("Can't open database: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+      }
+      loadSpatialite();
+    }
+
+    DBconnection::~DBconnection() {
+      sqlite3_close(db);
+    }
+
+  int DBconnection::checkTransectLanding(double startLat, double startLon, double endLat, double endLon, std::string table, bool useSpatialIndex) {
+    std::string sql_stmt;
+    if(useSpatialIndex) {
+      // WARNING: This needs rtree module in sqlite, can be enabled by adding set(SQLITE3_C_FLAGS "${SQLITE3_C_FLAGS} -DSQLITE_ENABLE_RTREE=1") to vendor/libraries/sqlite3/Library.cmake
+      sql_stmt = "select sum(intersects(makeline(makepoint(" + std::to_string(startLon) + ", " + std::to_string(startLat) + ", 4326), makepoint(" + std::to_string(endLon) + ", " + std::to_string(endLat) + ", 4326)), geom)) as s from (SELECT geom FROM " + table + " "
+      "WHERE ROWID IN ("
+      "SELECT ROWID FROM SpatialIndex "
+      "WHERE f_table_name = '" + table + "' AND "
+      "search_frame = BuildMbr(" + std::to_string(startLon) + ", " + std::to_string(startLat) + ", " + std::to_string(endLon) + ", " + std::to_string(endLat) + ", 4326)))";
+    } else {
+      sql_stmt = "select count(*) from " + table + " as l where intersects(GeomFromText(\"LineString(" + std::to_string(startLon) + " " + std::to_string(startLat) + ", " + std::to_string(endLon) + " " + std::to_string(endLat) + ")\", 4326), l.geom)";
+    }
+    /*
+    std::pair<bool, int> DBDepth;
+    iterator_stmt->execute();
+    *iterator_stmt >> DBDepth;
+    if(std::get<0>(DBDepth)) {
+      delete iterator_stmt;
+      return std::get<1>(DBDepth);
+    } else {
+      delete iterator_stmt;
+      return -1;
+    }*/
+    sqlite3_stmt* m_handle;
+    
+    if (sqlite3_prepare_v2(db, sql_stmt.c_str(), sql_stmt.length(), &m_handle, 0) != SQLITE_OK)
+    {
+      sqlite3_finalize(m_handle);
+      Error("Failed to prepare statement", sql_stmt.c_str());
+    }
+    // Execute
+    int m_idx = 0;
+    int value = 0;
+    if(sqlite3_step(m_handle) == SQLITE_ROW) {
+      if (sqlite3_column_type(m_handle, m_idx) != SQLITE_INTEGER) {
+        sqlite3_finalize(m_handle);
+        return -1;//throw Error("column result is not of INTEGER type", "");
+      }
+      value = sqlite3_column_int(m_handle, m_idx++);
+    }
+    // Teardown
+    if (m_handle)
+      sqlite3_finalize(m_handle);
+    return value;
+
+  }
+
+  void DBconnection::runQuery(std::string sqlstmt) {
+      char *zErrMsg = 0;
+      if(sqlite3_exec(db, sqlstmt.c_str(), callback, 0, &zErrMsg)!=SQLITE_OK ){
+        Error("SQL error: %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+      }
+  }
+  int DBconnection::callback(void *NotUsed, int argc, char **argv, char **azColName){
+      int i;
+      for(i=0; i<argc; i++){
+        printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+      }
+      printf("\n");
+      return 0;
+  }
+
+  bool DBconnection::runNoOutputQuery(std::string sql_stmt) {
+      //Setup
+      sqlite3_stmt* m_handle;
+      
+      if (sqlite3_prepare_v2(db, sql_stmt.c_str(), sql_stmt.length(), &m_handle, 0) != SQLITE_OK)
+      {
+        Error("Failed to prepare statement", sql_stmt.c_str());
+      }
+      // Execute
+      int rc = sqlite3_step(m_handle);
+
+      // Teardown
+      if (m_handle)
+        sqlite3_finalize(m_handle);
+
+      if(rc == SQLITE_DONE) {
+        return true;
+      }
+      return false;
+
+  }
+}

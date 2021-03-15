@@ -3,26 +3,29 @@
 
 #include <ompl/base/MotionValidator.h>
 #include <ompl/base/SpaceInformation.h>
-#include <USER/ChartsDatabase/Connection.hpp>
+//#include <USER/ChartsDatabase/Connection.hpp>
+#include <ENCGIS/DBconnection.hpp>
 
  namespace ob = ompl::base;
 
-namespace DUNE
+
+namespace MotionPlanners
 {
-    namespace ChartsDatabase
-    {
+  //! @author Nikolai Lauvås
+  namespace OMPL
+  {
         /** \brief A motion validator that ... */
         class ChartsDBMotionValidator : public ob::MotionValidator
         {
         public:
             /** \brief Constructor */
-            ChartsDBMotionValidator(ob::SpaceInformation *si, DUNE::ChartsDatabase::ChartsDBConnection* dbConIn, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), binDepth(binDepthIn)
+            ChartsDBMotionValidator(ob::SpaceInformation *si, ENCGIS::DBconnection* dbConIn, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), binDepth(binDepthIn)
             {
                 defaultSettings();
             }
 
             /** \brief Constructor */
-            ChartsDBMotionValidator(const ob::SpaceInformationPtr &si, DUNE::ChartsDatabase::ChartsDBConnection* dbConIn, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), binDepth(binDepthIn)
+            ChartsDBMotionValidator(const ob::SpaceInformationPtr &si, ENCGIS::DBconnection* dbConIn, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), binDepth(binDepthIn)
             {
                 defaultSettings();
             }
@@ -60,7 +63,7 @@ namespace DUNE
             //! The OMPL representation of the stateSpace
             ob::StateSpace *stateSpace_;
             //! The database containing the layer to check for intersections
-            DUNE::ChartsDatabase::ChartsDBConnection* dbcon;
+            ENCGIS::DBconnection* dbcon;
             //! Defines how many halvings of the line should be done before being content.
             unsigned binDepth;
             //! Helperfunction used by constructors to check if there is a state space and set pointer variable

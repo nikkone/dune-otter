@@ -1,18 +1,18 @@
-#include "USER/ChartsDatabase/OMPLMotionValidator.hpp"
+#include "OMPLMotionValidator.hpp"
 #include <ompl/util/Exception.h>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 
 namespace ob = ompl::base;
 
 
-void DUNE::ChartsDatabase::ChartsDBMotionValidator::defaultSettings()
+void MotionPlanners::OMPL::ChartsDBMotionValidator::defaultSettings()
 {
     stateSpace_ = si_->getStateSpace().get();
     if (stateSpace_ == nullptr)
         throw ompl::Exception("No state space for motion validator");
 }
 
-bool DUNE::ChartsDatabase::ChartsDBMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2,
+bool MotionPlanners::OMPL::ChartsDBMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2,
                                                       std::pair<ob::State *, double> &lastValid) const
 {
     
@@ -60,7 +60,7 @@ bool DUNE::ChartsDatabase::ChartsDBMotionValidator::checkMotion(const ob::State 
 }
 
 //Works, but monotonically decreasing bin search only
-/*bool DUNE::ChartsDatabase::ChartsDBMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2,
+/*bool MotionPlanners::OMPL::ChartsDBMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2,
                                                       std::pair<ob::State *, double> &lastValid) const
 {
     // If lastValid.first is nullPtr, then the exact state is dontcare? OMPL discreteMotionValidator also does this.
@@ -108,7 +108,7 @@ bool DUNE::ChartsDatabase::ChartsDBMotionValidator::checkMotion(const ob::State 
 https://locationtech.github.io/jts/javadoc/org/locationtech/jts/algorithm/package-summary.html
 https://locationtech.github.io/jts/javadoc/org/locationtech/jts/algorithm/Intersection.html
 " In general it is not possible to accurately compute the intersection point of two lines, due to numerical roundoff. This is particularly true when the input lines are nearly parallel. This routine uses numerical conditioning on the input values to ensure that the computed value should be very close to the correct value."
-bool DUNE::ChartsDatabase::ChartsDBMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2,
+bool MotionPlanners::OMPL::ChartsDBMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2,
                                                       std::pair<ob::State *, double> &lastValid) const
 {
     const auto *state1 = static_cast<const ob::RealVectorStateSpace::StateType *>(s1);
@@ -138,7 +138,7 @@ bool DUNE::ChartsDatabase::ChartsDBMotionValidator::checkMotion(const ob::State 
 }*/
 
 
-bool DUNE::ChartsDatabase::ChartsDBMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2) const
+bool MotionPlanners::OMPL::ChartsDBMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2) const
 {
     // TODO: check if s2 check speeds up?.
     /* assume motion starts in a valid configuration so s1 is valid */
@@ -153,7 +153,7 @@ bool DUNE::ChartsDatabase::ChartsDBMotionValidator::checkMotion(const ob::State 
     }
 }
 
-bool DUNE::ChartsDatabase::ChartsDBMotionValidator::transectSafety(const ob::State *s1, const ob::State *s2) const {
+bool MotionPlanners::OMPL::ChartsDBMotionValidator::transectSafety(const ob::State *s1, const ob::State *s2) const {
 
     const auto *state1 = static_cast<const ob::RealVectorStateSpace::StateType *>(s1);
     const auto *state2 = static_cast<const ob::RealVectorStateSpace::StateType *>(s2);

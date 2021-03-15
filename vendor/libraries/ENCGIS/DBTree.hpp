@@ -13,7 +13,7 @@
 #include <string>
 
 // DUNE headers.
-#include "Connection.hpp"
+#include "DBconnection.hpp"
 namespace ENCGIS
 {
   //! A class with functions for creating and modifying a tree in a Spatialite database.
@@ -23,7 +23,7 @@ namespace ENCGIS
       public:
       //! Constructor
       //! @param[in] dbcon A connection to the Spatialite database where changes are done.
-      DBTree(ENCGIS::ChartsDBConnection* dbcon);
+      DBTree(ENCGIS::DBconnection* dbcon);
 
       //! Creates a table for storing a tree structure in the database.
       //! @param[in] dbTreeName The table in the database to use.
@@ -46,7 +46,6 @@ namespace ENCGIS
       //! @param[in] lat The longitudinal position of the node.
       //! @param[in] lon The latitudinal position of the node.
       //! @param[in] ID A unique ID for the node. Auto-increments if ID=0
-      //! @return TODO: true if success, false if not.
       bool insertNode(std::string dbTreeName, unsigned ParentID,double lat, double lon, unsigned ID=0);
 
       //! Gets the location of a node in the tree stored in the database.
@@ -56,7 +55,7 @@ namespace ENCGIS
       std::pair<double, double> getNodeLocation(std::string dbTreeName, unsigned ID);
 
       protected:
-      ENCGIS::ChartsDBConnection* m_con;
+      ENCGIS::DBconnection* m_con;
   };
 }
 

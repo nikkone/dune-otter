@@ -27,13 +27,14 @@
 // Author: Nikolai Lauvås                                                   *
 //***************************************************************************
 
-#include <USER/ChartsDatabase/OMPLfunctions.hpp>
+#include "OMPLfunctions.hpp"
 
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 
-namespace DUNE
+namespace MotionPlanners
 {
-  namespace ChartsDatabase
+  //! @author Nikolai Lauvås
+  namespace OMPL
   {
     void printPath(og::PathGeometric states) {
         for(unsigned i=0;i<states.getStateCount();i++) {
@@ -42,13 +43,13 @@ namespace DUNE
         }
     }
 
-    void pathToTree(og::PathGeometric states, std::string treeName, ChartsDatabase::DBTree* tree) {
+    void pathToTree(og::PathGeometric states, std::string treeName, ENCGIS::DBTree* tree) {
         //try{
             tree->resetTree(treeName);
-        /*} catch(...) {
-            err("treeName cant be reset");
-            return;
-        }*/
+        //} catch(...) {
+        //    err("treeName cant be reset");
+        //    return;
+        //}
         for(unsigned i=0;i<states.getStateCount();i++) {
             const auto state= static_cast<const ompl::base::RealVectorStateSpace::StateType *>(states.getState(i));
             if(i!=0)
@@ -61,18 +62,18 @@ namespace DUNE
     }
 //////////////////////////////////////////// Plan Generation
       void
-      sequentialPlan(std::string plan_id, const IMC::MessageList<IMC::Maneuver>* maneuvers, IMC::PlanSpecification& result)
+      sequentialPlan(std::string plan_id, const DUNE::IMC::MessageList<DUNE::IMC::Maneuver>* maneuvers, DUNE::IMC::PlanSpecification& result)
       {
-        IMC::PlanManeuver last_man;
+        DUNE::IMC::PlanManeuver last_man;
 
-        IMC::MessageList<IMC::Maneuver>::const_iterator itr;
+        DUNE::IMC::MessageList<DUNE::IMC::Maneuver>::const_iterator itr;
         unsigned i = 0;
         for (itr = maneuvers->begin(); itr != maneuvers->end(); itr++, i++)
         {
           if (*itr == NULL)
             continue;
 
-          IMC::PlanManeuver man_spec;
+          DUNE::IMC::PlanManeuver man_spec;
 
           man_spec.data.set(*(*itr));
           man_spec.maneuver_id = DUNE::Utils::String::str(i + 1);
@@ -82,7 +83,7 @@ namespace DUNE
           }
           else
           {
-            IMC::PlanTransition trans;
+            DUNE::IMC::PlanTransition trans;
             trans.conditions = "ManeuverIsDone";
             trans.dest_man = man_spec.maneuver_id;
             trans.source_man = last_man.maneuver_id;
@@ -101,27 +102,27 @@ namespace DUNE
 
 
 
-    IMC::PlanDB createPlanDBEntry(og::PathGeometric paths, std::string plan_id, fp32_t speed) {
+    DUNE::IMC::PlanDB createPlanDBEntry(og::PathGeometric paths, std::string plan_id, fp32_t speed) {
 
-    IMC::MessageList<IMC::Maneuver> maneuvers; //Define list of meneuvers
+    DUNE::IMC::MessageList<DUNE::IMC::Maneuver> maneuvers; //Define list of meneuvers
         // Make maneuvers
         for(unsigned i=0;i<paths.getStateCount();i++) {
             const auto state= static_cast<const ompl::base::RealVectorStateSpace::StateType *>(paths.getState(i));
-            IMC::Goto* go_near = new IMC::Goto();
+            DUNE::IMC::Goto* go_near = new DUNE::IMC::Goto();
             go_near->lat = DUNE::Math::Angles::radians(state->values[1]);
             go_near->lon = DUNE::Math::Angles::radians(state->values[0]);
-            go_near->speed_units = IMC::SUNITS_METERS_PS;
+            go_near->speed_units = DUNE::IMC::SUNITS_METERS_PS;
             go_near->speed = speed;//m_args.speed_rpms;
             maneuvers.push_back(*go_near);
 
             delete go_near;
             //std::cout << "State " << i << ": " << state->values[0] << " " << state->values[1] << std::endl;
         }
-        IMC::PlanSpecification pspec;
+        DUNE::IMC::PlanSpecification pspec;
         sequentialPlan(plan_id, &maneuvers, pspec);
-        IMC::PlanDB pdb;
-        pdb.op = IMC::PlanDB::DBOP_SET;
-        pdb.type = IMC::PlanDB::DBT_REQUEST;
+        DUNE::IMC::PlanDB pdb;
+        pdb.op = DUNE::IMC::PlanDB::DBOP_SET;
+        pdb.type = DUNE::IMC::PlanDB::DBT_REQUEST;
         pdb.plan_id = pspec.plan_id;
         pdb.arg.set(pspec);
         pdb.request_id = 0;
@@ -129,7 +130,7 @@ namespace DUNE
         return pdb;
     }
 
-    bool isStateValid(const ompl::base::State *state, ChartsDatabase::ChartsDBConnection *dbCon)
+    bool isStateValid(const ompl::base::State *state,  ENCGIS::DBconnection *dbCon)
     {
         if (state != nullptr)
         {
