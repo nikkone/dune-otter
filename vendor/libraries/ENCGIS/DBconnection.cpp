@@ -2,7 +2,7 @@
 
 namespace ENCGIS {
 
-      isPointInLayer2::isPointInLayer2(std::string layer, sqlite3 *db) {
+      isPointInLayerStatement::isPointInLayerStatement(std::string layer, sqlite3 *db) {
         /*std::string query = "select sum(intersects(MakePoint(?1,?2, 4326), geom)) as c from (SELECT geom FROM " + layer + " "
       "WHERE ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
@@ -16,12 +16,12 @@ namespace ENCGIS {
         sqlite3_prepare_v3(db, query.c_str(), -1, SQLITE_PREPARE_PERSISTENT, &m_handle, 0);
       }
 
-      isPointInLayer2::~isPointInLayer2() {
+      isPointInLayerStatement::~isPointInLayerStatement() {
         if (m_handle)
           sqlite3_finalize(m_handle);
       }
 
-      int isPointInLayer2::run(double lat, double lon) {
+      int isPointInLayerStatement::run(double lat, double lon) {
         sqlite3_bind_double(m_handle,1,lon);
         sqlite3_bind_double(m_handle,2,lat);
         // Execute
@@ -36,7 +36,7 @@ namespace ENCGIS {
         }
       }
 
-      checkTransectLanding2::checkTransectLanding2(std::string layer, sqlite3 *db) {
+      lineIntersectLayerStatement::lineIntersectLayerStatement(std::string layer, sqlite3 *db) {
      std::string query = "select sum(intersects(makeline(makepoint(?1,?2, 4326), makepoint(?3,?4, 4326)), geom)) FROM " + layer + " "
       "WHERE ROWID IN ("
       "SELECT ROWID FROM SpatialIndex "
@@ -46,12 +46,12 @@ namespace ENCGIS {
         sqlite3_prepare_v3(db, query.c_str(), -1, SQLITE_PREPARE_PERSISTENT, &m_handle, 0);
       }
 
-      checkTransectLanding2::~checkTransectLanding2() {
+      lineIntersectLayerStatement::~lineIntersectLayerStatement() {
         if (m_handle)
           sqlite3_finalize(m_handle);
       }
 
-      int checkTransectLanding2::run(double startLat, double startLon, double endLat, double endLon) {
+      int lineIntersectLayerStatement::run(double startLat, double startLon, double endLat, double endLon) {
         sqlite3_bind_double(m_handle,1,startLon);
         sqlite3_bind_double(m_handle,2,startLat);
         sqlite3_bind_double(m_handle,3,endLon);
@@ -120,9 +120,9 @@ namespace ENCGIS {
     runQuery("select spatialite_version();");
   }
 
-    DBconnection::DBconnection(std::string filename) {
+    DBconnection::DBconnection(std::string filename, int flag) {
 
-      int rc = sqlite3_open_v2(filename.c_str(), &db,SQLITE_OPEN_READONLY,0);
+      int rc = sqlite3_open_v2(filename.c_str(), &db,flag,0);
       if( rc ){
         Error("Can't open database: %s\n", sqlite3_errmsg(db));
         sqlite3_close(db);

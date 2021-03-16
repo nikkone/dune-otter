@@ -7,7 +7,6 @@
 //***************************************************************************
 
 #include "DBTree.hpp"
-#include <DUNE/Database/Statement.hpp>
 
 namespace ENCGIS
 {
@@ -34,7 +33,6 @@ namespace ENCGIS
     std::string c_stmt = "select DropGeoTable('" + dbTreeName + "');";
     return m_con->runNoOutputQuery(c_stmt);
   }
-
   bool DBTree::insertNode(std::string tableName, unsigned ParentID,double lat, double lon, unsigned ID) {
     std::string IDStr;
     if(ID==0) {

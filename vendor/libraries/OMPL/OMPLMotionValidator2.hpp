@@ -19,13 +19,13 @@ namespace MotionPlanners
         {
         public:
             /** \brief Constructor */
-            ChartsDBMotionValidator2(ob::SpaceInformation *si, ENCGIS::checkTransectLanding2* dbConIn, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), binDepth(binDepthIn)
+            ChartsDBMotionValidator2(ob::SpaceInformation *si, ENCGIS::lineIntersectLayerStatement* dbConIn, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), binDepth(binDepthIn)
             {
                 defaultSettings();
             }
 
             /** \brief Constructor */
-            ChartsDBMotionValidator2(const ob::SpaceInformationPtr &si, ENCGIS::checkTransectLanding2* dbConIn, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), binDepth(binDepthIn)
+            ChartsDBMotionValidator2(const ob::SpaceInformationPtr &si, ENCGIS::lineIntersectLayerStatement* dbConIn, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), binDepth(binDepthIn)
             {
                 defaultSettings();
             }
@@ -64,7 +64,7 @@ namespace MotionPlanners
             ob::StateSpace *stateSpace_;
             //! The database containing the layer to check for intersections
             //ENCGIS::DBconnection* dbcon;
-            ENCGIS::checkTransectLanding2 *dbcon;//2("lndaretable", m_con->db);
+            ENCGIS::lineIntersectLayerStatement *dbcon;//2("lndaretable", m_con->db);
             //! Defines how many halvings of the line should be done before being content.
             unsigned binDepth;
             //! Helperfunction used by constructors to check if there is a state space and set pointer variable
