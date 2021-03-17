@@ -62,7 +62,7 @@ namespace ENCGIS
   };
       class isPointInLayerStatement {
       public:
-      isPointInLayerStatement(std::string layer, sqlite3 *db);
+      isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db);
       ~isPointInLayerStatement();
         int run(double lat, double lon);
       private:
@@ -72,7 +72,7 @@ namespace ENCGIS
 
       class lineIntersectLayerStatement {
       public:
-      lineIntersectLayerStatement(std::string layer, sqlite3 *db);
+      lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db);
       ~lineIntersectLayerStatement();
         int run(double startLat, double startLon, double endLat, double endLon);
       private:

@@ -152,8 +152,8 @@ namespace MotionPlanners
       {
         try{
           m_con = new ENCGIS::DBconnection(m_args.dbPath, SQLITE_OPEN_READONLY);
-          pointCheck =  new ENCGIS::isPointInLayerStatement("deparetable", m_con->db);
-          lineCheck = new ENCGIS::lineIntersectLayerStatement("lndaretable", m_con->db);
+          pointCheck =    new ENCGIS::isPointInLayerStatement("deparepolygon", "geometry", m_con->db);
+          lineCheck = new ENCGIS::lineIntersectLayerStatement("lndarepolygon", "geometry", m_con->db);
         } catch(std::runtime_error& e) {
           err(DTR("Problem opening charts database: %s"), e.what());
           // Set task state to failure
