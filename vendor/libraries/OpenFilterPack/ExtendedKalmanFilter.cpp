@@ -2,13 +2,13 @@
 #include <iostream>
 namespace OFP
 {
-  void ExtendedKalmanFilter::updateCmatrix(Eigen::Matrix<double, 3, 1> zk, Eigen::Matrix<double, 3, 1> position_previous, Eigen::Matrix<double, 3, 1> position_current) {
+  void ExtendedKalmanFilter::updateCmatrix(Eigen::Matrix<double, 9, 1> zk) {
   // Start calculate Jacobian of measurement model at X_k
     if(active) {
 
       // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
-      Eigen::Matrix<double, 3, 1> distance1 = xHat-position_previous; // X_e-X_rx0
-      Eigen::Matrix<double, 3, 1> distance2 = xHat-position_current;  // X_e-X_rx1
+      Eigen::Matrix<double, 3, 1> distance1 = xHat-zk.block(0,0,3,1); // X_e-X_rx0
+      Eigen::Matrix<double, 3, 1> distance2 = xHat-zk.block(3,0,3,1);  // X_e-X_rx1
       double r1 = distance1.norm();//  ||X_e-X_rx0||
       double r2 = distance2.norm();// ||X_e-X_rx1||
 
@@ -24,7 +24,7 @@ namespace OFP
       C.row(2) = Hdepth;  
 
       // TODO: Move this to another place
-      yk = zk;
+      yk = zk.block(6,0,3,1);
     }
   }
   /*Eigen::Matrix<double, 3, 1> ExtendedKalmanFilter::getEstimateOfMeasurment() {

@@ -133,7 +133,7 @@ namespace SourceEstimators
       int m_salinity_eid;
 
       OFP::ExtendedKalmanFilter m_ekf;
-      OFP::AlgebraicSolver<double, 5, 3> m_aslv;
+      OFP::AlgebraicSolver<double, 5, 9> m_aslv;
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
       //! Reference coordinate used to calculate NED frame
@@ -502,22 +502,37 @@ namespace SourceEstimators
               double rangeSNR = (tagBuffer->rbegin()->snr - P[1])/P[0];
               double depth = i->trans_data*0.392;
               //Eigen::Matrix<double, 2, 1> ranging = {rdoa,rangeSNR};
-              Eigen::Matrix<double, 3, 1> measurements = {rdoa,rangeSNR, depth};
+
+              Eigen::Matrix<double, 3, 1> measurements = {rdoa, rangeSNR, depth};
 
               double NED1[3];
               double NED2[3];
 
               toNEDframe(*tagBuffer->rbegin(), m_refCoord, NED1);
-              Eigen::Matrix<double, 3, 1> position_current;
-              position_current << NED1[0] ,NED1[1] ,NED1[2];
               toNEDframe(*i, m_refCoord, NED2);
-              Eigen::Matrix<double, 3, 1> position_previous;
-              position_previous << NED2[0] ,NED2[1] ,NED2[2];
-              position_current(2) = altitude;
-              position_previous(2) = altitude;
+
+              //Eigen::Matrix<double, 3, 1> position_current;
+              //position_current << NED1[0] ,NED1[1] ,NED1[2];
+              //Eigen::Matrix<double, 3, 1> position_previous;
+              //position_previous << NED2[0] ,NED2[1] ,NED2[2];
+              //position_current(2) = altitude;
+              //position_previous(2) = altitude;
+
+              Eigen::Matrix<double, 3, 3> allMeasurements;
+              allMeasurements << NED2[0], NED1[0], rdoa,
+                                 NED2[1], NED1[1], rangeSNR,
+                                 altitude, altitude, depth;
+              Eigen::Matrix<double, 9, 1> allMeasurements1;
+              allMeasurements1 << NED2[0] ,NED2[1] ,NED2[2], NED1[0] ,NED1[1] ,NED1[2], rdoa, rangeSNR, depth;//NED2[0], NED1[0], rdoa,
+                                  //NED2[1], NED1[1], rangeSNR,
+                                  //altitude, altitude, depth;
+
+
               //std::cout << "prevpos" << position_previous << std::endl;
               //std::cout << "curpos" << position_current << std::endl;
-              if (m_aslv.addMeasurement(measurements,position_previous,position_current)) {
+              //if (m_aslv.addMeasurement(measurements,position_previous,position_current)) {
+              if (m_aslv.addMeasurement(allMeasurements1)) {
+              
                 double result[3] = {m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)};
                 //Eigen::Matrix<double, 3, 1> X0;
                 //X0 << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)
@@ -535,8 +550,10 @@ namespace SourceEstimators
                   logOutStream.close();
                 }
               }
-              m_ekf.updateCmatrix(measurements,position_previous,position_current);
-              m_ekf.update(measurements);//,position_previous,position_current);
+
+
+              m_ekf.updateCmatrix(allMeasurements1);
+              m_ekf.update(measurements);
               return;
               
               /*

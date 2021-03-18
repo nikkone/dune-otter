@@ -8,32 +8,32 @@ namespace OFP
   template <typename T, int states, int measurements>  AlgebraicSolver<T, states, measurements>::AlgebraicSolver() {
     depth=0.0;
     neededMeasurements = states;
-    posi = Eigen::Matrix<T, measurements, states>::Zero();
+    posi = Eigen::Matrix<T, 3, states>::Zero();
     ToA = Eigen::Matrix<T, states, 1>::Zero();
     receivedMeasurements = 0;
   }
       template <typename T, int states, int measurements>  
-      bool AlgebraicSolver<T, states, measurements>::addMeasurement(Eigen::Matrix<T, measurements, 1> z, Eigen::Matrix<T, 3, 1> position_previous, Eigen::Matrix<T, 3, 1> position_current) {
-        depth = z(2);
-        T rtoa = z(0);
+      bool AlgebraicSolver<T, states, measurements>::addMeasurement(Eigen::Matrix<T, measurements, 1> z) {
+        depth =  z(8,0);
+        T rtoa = z(6,0);
     if (rtoa == 0) {
         rtoa = 0.00000001;
     }
       ////std::cout << "prePosi = " << std::endl << posi << std::endl;
       ////std::cout << "PreToA = " << std::endl << ToA << std::endl;
-    //position_current(2) += ((double) std::rand() / RAND_MAX)/100;
+    //zk.block(3,0,3,1)(2) += ((double) std::rand() / RAND_MAX)/100;
     if (receivedMeasurements == 0) {
         ToA(receivedMeasurements) = 0.0;
-        ////std::cout << position_previous << std::endl;
-        posi.col(receivedMeasurements) = position_previous;
+        ////std::cout << zk.block(0,0,3,1) << std::endl;
+        posi.col(receivedMeasurements) = z.block(0,0,3,1);
         ToA(receivedMeasurements) = 0.0;
         receivedMeasurements++;
-        posi.col(receivedMeasurements) = position_current;
+        posi.col(receivedMeasurements) = z.block(3,0,3,1);
         ToA(receivedMeasurements) = ToA(receivedMeasurements-1) + rtoa;
         receivedMeasurements++;
     } else {
         ////std::cout << "Measurements" << ((measurements % neededMeasurements) -1) % neededMeasurements << std::endl;
-        posi.col(receivedMeasurements % neededMeasurements) = position_current;
+        posi.col(receivedMeasurements % neededMeasurements) = z.block(3,0,3,1);
         int prevMeasurement = ((receivedMeasurements % neededMeasurements) -1) % neededMeasurements;
         if(prevMeasurement < 0 ) prevMeasurement=neededMeasurements-1;
         ToA(receivedMeasurements % neededMeasurements) = rtoa + ToA(prevMeasurement);
