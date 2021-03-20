@@ -16,17 +16,18 @@ namespace OFP
     //const int nu = measurements;              // Num inputs
     Eigen::Matrix<T, states, states> A;       // State transition matrix
     Eigen::Matrix<T, states, states> B;       // Input matrix
-    Eigen::Matrix<T, states, states> C;       // Observation matrix
+    Eigen::Matrix<T, measurements, states> C;       // Observation matrix
     Eigen::Matrix<T, states, states> D;       // unknown input matrix
-    Eigen::Matrix<T, states, states> K;       // State Covariance estimate matric
+    Eigen::Matrix<T, states, measurements> K;       // State Covariance estimate matric
     Eigen::Matrix<T, states, states> PHat;    // State Covariance estimate matric
     Eigen::Matrix<T, states, states> Q;       // Process noise covariance matrix
-    Eigen::Matrix<T, states, states> R;       // Measurement noise covariance matrix
-    Eigen::Matrix<T, states, 1> innov;        // Time varying innovation vector
-    Eigen::Matrix<T, states, 1> yk;           // Measurement vector
-    Eigen::Matrix<T, states, 1> ykest;        // Estimate of the measurements
+    Eigen::Matrix<T, measurements, measurements> R;       // Measurement noise covariance matrix
+    Eigen::Matrix<T, measurements, 1> innov;        // Time varying innovation vector
+    Eigen::Matrix<T, measurements, 1> yk;           // Measurement vector
+    Eigen::Matrix<T, measurements, 1> ykest;        // Estimate of the measurements
     Eigen::Matrix<T, states, 1> xHat;         // State estimate vector
     KalmanFilter() {
+      active = false;
     }
 
     void update(Eigen::Matrix<T, states, 1> zk) {

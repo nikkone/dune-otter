@@ -31,14 +31,14 @@
 #include <DUNE/DUNE.hpp>
 #include <boost/circular_buffer.hpp>
 #include <OpenFilterPack/AlgebraicSolution.hpp>
-#include <OpenFilterPack/ExtendedKalmanFilter.hpp>
+#include <OpenFilterPack/UnscentedKalmanFilter.hpp>
 namespace SourceEstimators
 {
   //! TODO: Implement altitude in TBR and use this. More todos in code.
   //! TODO: Implement use preassure/depth from tag. 
   //! Insert explanation on task behaviour here.
   //! @author Nikolai Lauvås
-  namespace SingleSourceOFP
+  namespace SingleSourceUnscented
   {
     using DUNE_NAMESPACES;
 
@@ -132,7 +132,7 @@ namespace SourceEstimators
       //! Salinity provider entity label.
       int m_salinity_eid;
 
-      OFP::ExtendedKalmanFilter m_ekf;
+      OFP::UnscentedKalmanFilter m_ukf;
       OFP::AlgebraicSolver<double, 5, 9> m_aslv;
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
@@ -365,7 +365,7 @@ namespace SourceEstimators
       consume(const IMC::TBRFishTag* msg)
       {
       std::ofstream logOutStream;
-      logOutStream.open(("log/tag.log"), std::fstream::app);
+      logOutStream.open(("log/tagukf.log"), std::fstream::app);
       if (logOutStream.good()) {
         logOutStream.precision(15);
           logOutStream << DUNE::Math::Angles::degrees(msg->lat) << "," << DUNE::Math::Angles::degrees(msg->lon) << "," << msg->unix_timestamp << "," << msg->millis<< std::endl;
@@ -433,16 +433,17 @@ namespace SourceEstimators
       void
       onResourceInitialization(void)
       {
-          m_ekf.A << 1.0, 0.0, 0.0,
+          m_ukf.A << 1.0, 0.0, 0.0,
                     0.0, 1.0, 0.0,
                     0.0, 0.0, 1.0;
-          m_ekf.Q = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_Qm.data());
-          m_ekf.R = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_Rm.data());
-          m_ekf.PHat = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_P0.data());
-          m_ekf.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.ekf_x0.data());
+          m_ukf.Q = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_Qm.data());
+          m_ukf.R = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_Rm.data());
+          m_ukf.PHat = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_P0.data());
+          m_ukf.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.ekf_x0.data());
         //! Set timer for periodic part of filter
         m_filter_timer.setTop(m_args.filter_timestep);
-        m_ekf.dt = m_args.filter_timestep;
+        m_ukf.dt = m_args.filter_timestep;
+
       }
 
       //! Release resources.
@@ -450,7 +451,7 @@ namespace SourceEstimators
       onResourceRelease(void)
       {
         Memory::clear(tagBuffer);
-        //Memory::clear(m_ekf);
+        //Memory::clear(m_ukf);
         //Memory::clear(m_pf);
       }
 
@@ -515,14 +516,15 @@ namespace SourceEstimators
               if (m_aslv.addMeasurement(allMeasurements)) {
               
                 double result[3] = {m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)};
-                if(!m_ekf.active) {
-                  m_ekf.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
-                  m_ekf.active = true;
+                if(!m_ukf.active) {
+                  m_ukf.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
+                  m_ukf.active = true;
+                  m_ukf.predict();
                 }
                 double latLon[3];
                 fromNEDframe(result, m_refCoord, latLon);
                 std::ofstream logOutStream;
-                logOutStream.open(("log/aslvofp.log"), std::fstream::app);
+                logOutStream.open(("log/aslvofpukf.log"), std::fstream::app);
                 if (logOutStream.good()) {
                   logOutStream.precision(15);
                   logOutStream << m_aslv.x(0) << "," << m_aslv.x(1) << "," << m_aslv.x(2) << "," << DUNE::Math::Angles::degrees(latLon[0]) << "," << DUNE::Math::Angles::degrees(latLon[1]) << std::endl;
@@ -531,8 +533,8 @@ namespace SourceEstimators
               }
 
 
-              m_ekf.updateCmatrix(allMeasurements);
-              m_ekf.update(allMeasurements.block(6,0,3,1));
+              //m_ukf.updateCmatrix(allMeasurements);
+              m_ukf.update(allMeasurements);
               return;
               
               /*
@@ -572,10 +574,11 @@ namespace SourceEstimators
         {
           if(m_filter_timer.overflow()) {
             m_filter_timer.reset();
-            if(m_ekf.active) {
-              m_ekf.predict(); // Filter time update
+            
+            if(m_ukf.active) {
+              m_ukf.predict(); // Filter time update
                   double lati,longi;
-                  double result[3] = {m_ekf.xHat(0),m_ekf.xHat(1),m_ekf.xHat(2)};
+                  double result[3] = {m_ukf.xHat(0),m_ukf.xHat(1),m_ukf.xHat(2)};
                 double latLon[3];
                 fromNEDframe(result, m_refCoord, latLon);
                 lati=latLon[0], longi=latLon[1];
@@ -583,18 +586,18 @@ namespace SourceEstimators
                   IMC::RemoteSensorInfo tagPosition;
                   tagPosition.lat = lati;
                   tagPosition.lon = longi;
-                  tagPosition.alt = -m_ekf.xHat(2);
-                  tagPosition.data = std::to_string(m_ekf.xHat(0)) + std::to_string(m_ekf.xHat(1)) + "," + std::to_string(m_ekf.xHat(2));
-                  tagPosition.id = "OFPEKF" + std::to_string(m_args.receiver_serial);
+                  tagPosition.alt = -m_ukf.xHat(2);
+                  tagPosition.data = std::to_string(m_ukf.xHat(0)) + std::to_string(m_ukf.xHat(1)) + "," + std::to_string(m_ukf.xHat(2));
+                  tagPosition.id = "UKF" + std::to_string(m_args.receiver_serial);
                   dispatch(tagPosition);
                   std::ofstream logOutStream;
-                  logOutStream.open(("log/ofpeigen.log"), std::fstream::app);
+                  logOutStream.open(("log/ukf.log"), std::fstream::app);
                   if (logOutStream.good()) {
                     logOutStream.precision(15);
-                      logOutStream << m_ekf.xHat(0) << "," << m_ekf.xHat(1) << "," << m_ekf.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+                      logOutStream << m_ukf.xHat(0) << "," << m_ukf.xHat(1) << "," << m_ukf.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
                       logOutStream.close();
                   }   
-                  spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ekf.xHat(0), m_ekf.xHat(1), m_ekf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+                  spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ukf.xHat(0), m_ukf.xHat(1), m_ukf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
               
             }
           }
