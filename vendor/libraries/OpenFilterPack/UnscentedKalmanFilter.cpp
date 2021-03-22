@@ -5,10 +5,13 @@
 namespace OFP
 {
   UnscentedKalmanFilter::UnscentedKalmanFilter() {
-    alpha = 0.001;
-    beta = 2; // Optmal for gaussian
-    kappa = 0;
     n = 3;
+    setUnscentedParameters(0.001,2,0);
+  }
+  void UnscentedKalmanFilter::setUnscentedParameters(double alpha_in, double beta_in, double kappa_in) {
+    alpha = alpha_in;
+    beta = beta_in; // Optmal for gaussian
+    kappa = kappa_in;
     lambda = alpha*alpha * (n +kappa) - n;
     computeWeights();
   }
@@ -53,7 +56,7 @@ namespace OFP
   void UnscentedKalmanFilter::update(Eigen::Matrix<double, 9, 1> yk_inn) {
     if(active) {
       // Update sigma points to reflect the prediction 
-      std::cout << "Unscented update!" << std::endl;
+      //std::cout << "Unscented update!" << std::endl;
       sigmaPoints = generateSigmaPoints(xHat, PHat);
       for(int s = 0;s<7; s++) {
         sigmaPoints_h.col(s) =  h(sigmaPoints.col(s), yk_inn);
@@ -64,13 +67,13 @@ namespace OFP
       Eigen::Matrix<double, 3, 3> Pxy = calculate_cross_variance(xHat, yk_est, sigmaPoints, sigmaPoints_h, Wc);
 
       K = Pxy * Py.inverse();
-      std::cout << "Py: " << std::endl << Py << std::endl;
-      std::cout << "Pxy: " << std::endl << Pxy << std::endl;
-      std::cout << "K: " << std::endl << K << std::endl;
-    std::cout << "xHat_inn_up: " << std::endl << xHat << std::endl;
+      //std::cout << "Py: " << std::endl << Py << std::endl;
+      //std::cout << "Pxy: " << std::endl << Pxy << std::endl;
+      //std::cout << "K: " << std::endl << K << std::endl;
+    //std::cout << "xHat_inn_up: " << std::endl << xHat << std::endl;
 
       xHat = xHat + K*(yk_inn.block(6,0,3,1) - yk_est);
-    std::cout << "xHat_ut_up: " << std::endl << xHat << std::endl;
+    //std::cout << "xHat_ut_up: " << std::endl << xHat << std::endl;
 
       PHat = PHat - K*Pxy.transpose();
     }
@@ -82,9 +85,9 @@ namespace OFP
       sigmaPoints_f.col(s) =  f(sigmaPoints.col(s));
     }
     // Unscented transform
-    std::cout << "xHat_inn_pred: " << std::endl << xHat << std::endl;
+    //std::cout << "xHat_inn_pred: " << std::endl << xHat << std::endl;
     PHat = unscented_transform<3>(sigmaPoints_f, Wm, Wc, xHat) + Q;
-    std::cout << "xHat_ut_pred: " << std::endl << xHat << std::endl;
+    //std::cout << "xHat_ut_pred: " << std::endl << xHat << std::endl;
 
   }
 
@@ -93,10 +96,10 @@ namespace OFP
 
     sigmas_f = sigmas_f.colwise() - x_inn;
     sigmas_h = sigmas_h.colwise() - z_inn;
-    //std::cout << "x_inn: " << std::endl << x_inn << std::endl;
-    //std::cout << "y_inn: " << std::endl << z_inn << std::endl;
-    //std::cout << "sigmas_f: " << std::endl << sigmas_f << std::endl;
-    //std::cout << "sigmas_h: " << std::endl << sigmas_h << std::endl;
+    ////std::cout << "x_inn: " << std::endl << x_inn << std::endl;
+    ////std::cout << "y_inn: " << std::endl << z_inn << std::endl;
+    ////std::cout << "sigmas_f: " << std::endl << sigmas_f << std::endl;
+    ////std::cout << "sigmas_h: " << std::endl << sigmas_h << std::endl;
     Eigen::Matrix<double, 3, 3> Pxz = Eigen::Matrix<double, 3, 3>::Zero();
     for(int s = 0;s<7; s++) {
         Pxz += Wc_inn(1,s) * sigmas_f.col(s) * sigmas_h.col(s).transpose();
