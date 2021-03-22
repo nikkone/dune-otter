@@ -31,6 +31,7 @@
 #include <DUNE/DUNE.hpp>
 #include <boost/circular_buffer.hpp>
 #include <OpenFilterPack/AlgebraicSolution.hpp>
+//#include <OpenFilterPack/UnscentedKalmanFilter.hpp>
 #include <OpenFilterPack/UnscentedKalmanFilter.hpp>
 namespace SourceEstimators
 {
@@ -116,7 +117,8 @@ namespace SourceEstimators
       //! Salinity provider entity label.
       int m_salinity_eid;
 
-      OFP::UnscentedKalmanFilter m_ukf;
+      //OFP::UnscentedKalmanFilter m_ukf;
+      OFP::UnscentedKalmanFilter<double,3,3> m_ukf;
       OFP::AlgebraicSolver<double, 5, 9> m_aslv;
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
@@ -126,7 +128,8 @@ namespace SourceEstimators
       //! @param[in] name task name.
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx):
-        DUNE::Tasks::Task(name, ctx)
+        DUNE::Tasks::Task(name, ctx),
+        m_ukf(0.001, 2.0, 0.0)
       {
         param("Ranging - SNR Fit", m_args.ranging_snr_fit)
         .size(2)
@@ -314,14 +317,15 @@ namespace SourceEstimators
       void
       onResourceInitialization(void)
       {
-        m_ukf.A << 1.0, 0.0, 0.0,
+        /*m_ukf.A << 1.0, 0.0, 0.0,
                   0.0, 1.0, 0.0,
-                  0.0, 0.0, 1.0;
+                  0.0, 0.0, 1.0;*/
         m_ukf.Q = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Qm.data());
         m_ukf.R = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Rm.data());
         m_ukf.PHat = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.P0.data());
         m_ukf.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.x0.data());
         m_ukf.setUnscentedParameters(m_args.alpha, m_args.beta, m_args.kappa);
+
 
         //! Set timer for periodic part of filter
         m_filter_timer.setTop(m_args.filter_timestep);
@@ -432,6 +436,29 @@ namespace SourceEstimators
       void
       onMain(void)
       {
+        m_ukf.h = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 9, 1> z) {
+          // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
+          Eigen::Matrix<double, 3, 1> distance1 = x-z.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-z.block(3,0,3,1);  // X_e-X_rx1
+          double r1 = distance1.norm();//  ||X_e-X_rx0||
+          double r2 = distance2.norm();// ||X_e-X_rx1||
+
+          // Calculate estimated measurements
+          Eigen::Matrix<double, 3, 1> ykest;
+          ykest(0) = r2 - r1; // h is eq (2.16) in masters
+          ykest(1) = r2; // Eq (2.19) in masters
+          ykest(2) = x(2); // Depth estimate
+          return ykest;
+        };
+
+          Eigen::Matrix<double, 3, 3> A;
+          A << 1.0, 0.0, 0.0,
+          0.0, 1.0, 0.0,
+          0.0, 0.0, 1.0;
+        m_ukf.f = [A](Eigen::Matrix<double, 3, 1> x) {
+
+          return A*x;
+        };
 
         while (!stopping())
         {
@@ -467,6 +494,7 @@ namespace SourceEstimators
                   #endif
                   spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ukf.xHat(0), m_ukf.xHat(1), m_ukf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
             }
+
           }
           waitForMessages(m_args.message_wait_time);
         }
