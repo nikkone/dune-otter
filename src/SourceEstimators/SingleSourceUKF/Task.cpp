@@ -118,7 +118,7 @@ namespace SourceEstimators
       int m_salinity_eid;
 
       //OFP::UnscentedKalmanFilter m_ukf;
-      OFP::UnscentedKalmanFilter<double,3,3> m_ukf;
+      OFP::UnscentedKalmanFilter<double, 3, 9> m_ukf;
       OFP::AlgebraicSolver<double, 5, 9> m_aslv;
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
@@ -321,7 +321,16 @@ namespace SourceEstimators
                   0.0, 1.0, 0.0,
                   0.0, 0.0, 1.0;*/
         m_ukf.Q = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Qm.data());
-        m_ukf.R = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Rm.data());
+        m_ukf.R << 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                   0.0, 5e6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
+        //m_ukf.R = Eigen::Map<Eigen::Matrix<double, 9, 9> >(m_args.Rm.data());
         m_ukf.PHat = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.P0.data());
         m_ukf.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.x0.data());
         m_ukf.setUnscentedParameters(m_args.alpha, m_args.beta, m_args.kappa);
@@ -444,7 +453,7 @@ namespace SourceEstimators
           double r2 = distance2.norm();// ||X_e-X_rx1||
 
           // Calculate estimated measurements
-          Eigen::Matrix<double, 3, 1> ykest;
+          Eigen::Matrix<double, 9, 1> ykest = z;
           ykest(0) = r2 - r1; // h is eq (2.16) in masters
           ykest(1) = r2; // Eq (2.19) in masters
           ykest(2) = x(2); // Depth estimate
@@ -455,8 +464,7 @@ namespace SourceEstimators
           A << 1.0, 0.0, 0.0,
           0.0, 1.0, 0.0,
           0.0, 0.0, 1.0;
-        m_ukf.f = [A](Eigen::Matrix<double, 3, 1> x) {
-
+          m_ukf.f = [A](Eigen::Matrix<double, 3, 1> x) {
           return A*x;
         };
 
