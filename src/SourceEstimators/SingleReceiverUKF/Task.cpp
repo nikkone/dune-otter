@@ -26,21 +26,19 @@
 //***************************************************************************
 // Author: Nikolai Lauvås                                                   *
 //***************************************************************************
-
-#define SingleSourceEKFLog 1
-
+#define SingleReceiverUKFLog 1
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <boost/circular_buffer.hpp>
 #include <OpenFilterPack/AlgebraicSolution.hpp>
-#include <OpenFilterPack/ExtendedKalmanFilter.hpp>
+#include <OpenFilterPack/UnscentedKalmanFilter.hpp>
 namespace SourceEstimators
 {
   //! TODO: Implement altitude in TBR and use this. More todos in code.
   //! TODO: Implement use preassure/depth from tag. 
   //! Insert explanation on task behaviour here.
   //! @author Nikolai Lauvås
-  namespace SingleSourceEKF
+  namespace SingleReceiverUKF
   {
     using DUNE_NAMESPACES;
 
@@ -63,30 +61,35 @@ namespace SourceEstimators
       //! How deep the receiver is mounted in altitude
       float receiver_depth;
 
-// Initial Parameters for calculating Speed of Sound
+      uint32_t receiver_serial;
+      //! How far back into the buffer to attempt period matching.
+      int max_correction_attempts;
+
+// Parameters for calculating Speed of Sound
       //! Initial Speed of Sound in water
       float init_c_sound;
-// Parameters for updating Speed of Sound
-
       //! Should the Speed of Sound in water be updated from measurement
       bool update_c_sound;
       //! Entity providing the Speed of Sound in water
       std::string entity_c_sound;
 
-      //! How far back into the buffer to attempt period matching.
-      int max_correction_attempts;
 // Kalman Filter
-      //! Extended Kalman filter - Qm
-      std::vector<double> ekf_Qm;      
-      //! Extended Kalman filter - Rm
-      std::vector<double> ekf_Rm; 
-      //! Extended Kalman filter - P0
-      std::vector<double> ekf_P0;
-      //! Extended Kalman filter - x0
-      std::vector<double> ekf_x0;
-// Location settings
+      //! Unscented Kalman filter - Qm
+      std::vector<double> Qm;      
+      //! Unscented Kalman filter - Rm
+      std::vector<double> Rm; 
+      //! Unscented Kalman filter - P0
+      std::vector<double> P0;
+      //! Unscented Kalman filter - x0
+      std::vector<double> x0;
+      //! Unscented Kalman filter - Alpha
+      double alpha;
+      //! Unscented Kalman filter - Beta
+      double beta;
+      //! Unscented Kalman filter - Kappa
+      double kappa;
 
-      uint32_t receiver_serial;
+// Location settings
       //! Reference coordinate position (degrees)
       std::vector<double> reference;
     };
@@ -100,10 +103,21 @@ namespace SourceEstimators
       Time::Counter<float> m_filter_timer;
       //! Current Speed of sound in water
       float m_c_speed;
+      //! Current temperature used for calculating Speed of sound in water
+      float m_c_speed_temp;
+      //! Current salinity used for calculating Speed of sound in water
+      float m_c_speed_salinity;
+      //! Current depth used for calculating Speed of sound in water
+      float m_c_speed_depth;      
+      //! Temperature entity label.
+      int m_temp_eid;
       //! Speed of sound provider entity label.
       int m_c_sound_eid;
+      //! Salinity provider entity label.
+      int m_salinity_eid;
 
-      OFP::ExtendedKalmanFilter m_ekf;
+      OFP::UnscentedKalmanFilter<double,3,3> m_ukf;
+      
       OFP::AlgebraicSolver<double, 5, 9> m_aslv;
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
@@ -113,7 +127,8 @@ namespace SourceEstimators
       //! @param[in] name task name.
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx):
-        DUNE::Tasks::Task(name, ctx)
+        DUNE::Tasks::Task(name, ctx),
+        m_ukf(0.001, 2.0, 0.0)
       {
         param("Ranging - SNR Fit", m_args.ranging_snr_fit)
         .size(2)
@@ -172,24 +187,36 @@ namespace SourceEstimators
 
 
 // Kalman Filter Parameters
-        param("x0", m_args.ekf_x0)
+        param("x0", m_args.x0)
         .size(3)
-        .description("Initial X value for the extended Kalman filter")
+        .description("Initial X value for the unscented Kalman filter")
         .defaultValue("0.0, 0.0, 0.0");
 
-        param("P0", m_args.ekf_P0)
+        param("P0", m_args.P0)
         .size(9)
-        .description("Initial P matrix value for the extended Kalman filter, first row")
+        .description("Initial P matrix value for the unscented Kalman filter, first row")
         .defaultValue("66458, -26820, 0, -26820, 12116, 0, 0, 0, 0");
 
-        param("Rm", m_args.ekf_Rm)
-        .description("Initial X value for the extended Kalman filter")
+        param("Rm", m_args.Rm)
+        .description("Initial X value for the unscented Kalman filter")
         .defaultValue("1.5*3.8706, 0, 0, 2.1638e6");
 
-        param("Qm", m_args.ekf_Qm)
+        param("Qm", m_args.Qm)
         .size(9)
-        .description("Initial X value for the extended Kalman filter")
+        .description("Initial X value for the unscented Kalman filter")
         .defaultValue("0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.00001");
+
+        param("Alpha", m_args.alpha)
+        .description("If speed of sound is provided through IMC messages.")
+        .defaultValue("0.001");
+
+        param("Beta", m_args.beta)
+        .description("If speed of sound is provided through IMC messages.")
+        .defaultValue("2");
+
+        param("Kappa", m_args.kappa)
+        .description("If speed of sound is provided through IMC messages.")
+        .defaultValue("0");
 // Others
         param("Reference Coordinate", m_args.reference)
         .units(Units::Degree)
@@ -253,7 +280,7 @@ namespace SourceEstimators
       void
       consume(const IMC::TBRFishTag* msg)
       {
-      #if SingleSourceEKFLog  
+      #if SingleReceiverUKFLog
       std::ofstream logOutStream;
       std::string filename = "log/tag-";
                   filename += getEntityLabel();
@@ -263,8 +290,8 @@ namespace SourceEstimators
         logOutStream.precision(15);
           logOutStream << DUNE::Math::Angles::degrees(msg->lat) << "," << DUNE::Math::Angles::degrees(msg->lon) << "," << msg->unix_timestamp << "," << msg->millis<< std::endl;
           logOutStream.close();
+      }
       #endif
-      }   
         if (m_args.receiver_serial == msg->serial_no) {
           if(msg->trans_id == m_args.tag_id) {
             tagBuffer->push_back(*msg);
@@ -289,16 +316,40 @@ namespace SourceEstimators
       void
       onResourceInitialization(void)
       {
-          m_ekf.A << 1.0, 0.0, 0.0,
-                    0.0, 1.0, 0.0,
-                    0.0, 0.0, 1.0;
-          m_ekf.Q = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_Qm.data());
-          m_ekf.R = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_Rm.data());
-          m_ekf.PHat = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_P0.data());
-          m_ekf.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.ekf_x0.data());
+        // Unscented KF
+        m_ukf.h = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 9, 1> z) {
+          // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
+          Eigen::Matrix<double, 3, 1> distance1 = x-z.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-z.block(3,0,3,1);  // X_e-X_rx1
+          double r1 = distance1.norm();//  ||X_e-X_rx0||
+          double r2 = distance2.norm();// ||X_e-X_rx1||
+
+          // Calculate estimated measurements
+          Eigen::Matrix<double, 3, 1> ykest;
+          ykest(0) = r2 - r1; // h is eq (2.16) in masters
+          ykest(1) = r2; // Eq (2.19) in masters
+          ykest(2) = x(2); // Depth estimate
+          return ykest;
+        };
+
+          Eigen::Matrix<double, 3, 3> A;
+          A << 1.0, 0.0, 0.0,
+          0.0, 1.0, 0.0,
+          0.0, 0.0, 1.0;
+        m_ukf.f = [A](Eigen::Matrix<double, 3, 1> x) {
+
+          return A*x;
+        };
+        m_ukf.dt = m_args.filter_timestep;
+
+        m_ukf.Q = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Qm.data());
+        m_ukf.R = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Rm.data());
+        m_ukf.PHat = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.P0.data());
+        m_ukf.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.x0.data());
+        m_ukf.dt = m_args.filter_timestep;
+
         //! Set timer for periodic part of filter
         m_filter_timer.setTop(m_args.filter_timestep);
-        m_ekf.dt = m_args.filter_timestep;
       }
 
       //! Release resources.
@@ -306,7 +357,7 @@ namespace SourceEstimators
       onResourceRelease(void)
       {
         Memory::clear(tagBuffer);
-        //Memory::clear(m_ekf);
+        //Memory::clear(m_ukf);
         //Memory::clear(m_pf);
       }
 
@@ -369,13 +420,13 @@ namespace SourceEstimators
               allMeasurements << NED2[0] ,NED2[1] ,m_args.receiver_depth, NED1[0] ,NED1[1] ,m_args.receiver_depth, rdoa, rangeSNR, depth;
 
               if (m_aslv.addMeasurement(allMeasurements)) {
-              
-                double result[3] = {m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)};
-                if(!m_ekf.active) {
-                  m_ekf.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
-                  m_ekf.active = true;
+                if(!m_ukf.active) {
+                  m_ukf.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
+                  m_ukf.active = true;
+                  m_ukf.predict();
                 }
-                #if SingleSourceEKFLog
+                #if SingleReceiverUKFLog
+                double result[3] = {m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)};
                 double latLon[3];
                 fromNEDframe(result, m_refCoord, latLon);
                 std::ofstream logOutStream;
@@ -391,10 +442,9 @@ namespace SourceEstimators
                 #endif
               }
 
-
-              m_ekf.updateCmatrix(allMeasurements);
-              m_ekf.update(allMeasurements.block(6,0,3,1));
+              m_ukf.update(allMeasurements);
               return;
+              
           }
         }
         war("No good TDOA value found");
@@ -404,15 +454,15 @@ namespace SourceEstimators
       void
       onMain(void)
       {
-
         while (!stopping())
         {
           if(m_filter_timer.overflow()) {
             m_filter_timer.reset();
-            if(m_ekf.active) {
-              m_ekf.predict(); // Filter time update
+            
+            if(m_ukf.active) {
+              m_ukf.predict(); // Filter time update
                   double lati,longi;
-                  double result[3] = {m_ekf.xHat(0),m_ekf.xHat(1),m_ekf.xHat(2)};
+                  double result[3] = {m_ukf.xHat(0),m_ukf.xHat(1),m_ukf.xHat(2)};
                 double latLon[3];
                 fromNEDframe(result, m_refCoord, latLon);
                 lati=latLon[0], longi=latLon[1];
@@ -420,11 +470,11 @@ namespace SourceEstimators
                   IMC::RemoteSensorInfo tagPosition;
                   tagPosition.lat = lati;
                   tagPosition.lon = longi;
-                  tagPosition.alt = -m_ekf.xHat(2);
-                  tagPosition.data = std::to_string(m_ekf.xHat(0)) + std::to_string(m_ekf.xHat(1)) + "," + std::to_string(m_ekf.xHat(2));
-                  tagPosition.id = "OFPEKF" + std::to_string(m_args.receiver_serial);
+                  tagPosition.alt = -m_ukf.xHat(2);
+                  tagPosition.data = std::to_string(m_ukf.xHat(0)) + std::to_string(m_ukf.xHat(1)) + "," + std::to_string(m_ukf.xHat(2));
+                  tagPosition.id = "UKF" + std::to_string(m_args.receiver_serial);
                   dispatch(tagPosition);
-                  #if SingleSourceEKFLog
+                  #if SingleReceiverUKFLog
                   std::string filename = "log/predict-";
                   filename += getEntityLabel();
                   filename += ".log";
@@ -432,12 +482,11 @@ namespace SourceEstimators
                   logOutStream.open(filename, std::fstream::app);
                   if (logOutStream.good()) {
                     logOutStream.precision(15);
-                      logOutStream << m_ekf.xHat(0) << "," << m_ekf.xHat(1) << "," << m_ekf.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+                      logOutStream << m_ukf.xHat(0) << "," << m_ukf.xHat(1) << "," << m_ukf.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
                       logOutStream.close();
                   }   
                   #endif
-                  spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ekf.xHat(0), m_ekf.xHat(1), m_ekf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
-              
+                  spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ukf.xHat(0), m_ukf.xHat(1), m_ukf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
             }
           }
           waitForMessages(m_args.message_wait_time);
