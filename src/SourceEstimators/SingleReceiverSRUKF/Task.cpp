@@ -116,7 +116,8 @@ namespace SourceEstimators
       int m_salinity_eid;
 
       OFP::SquareRootUnscentedKalmanFilter<double,3,3> m_srukf;
-
+      Eigen::Matrix<double, 3, 1> pos_current;
+      Eigen::Matrix<double, 3, 1> pos_previous;
       
       OFP::AlgebraicSolver<double, 5, 9> m_aslv;
       //! How far back into the buffer to attempt period matching.
@@ -321,12 +322,11 @@ namespace SourceEstimators
         A << 1.0, 0.0, 0.0,
         0.0, 1.0, 0.0,
         0.0, 0.0, 1.0;
-
         // Square Root Unscented KF
-        m_srukf.h = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 9, 1> z) {
+        m_srukf.h = [this](Eigen::Matrix<double, 3, 1> x) {
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
-          Eigen::Matrix<double, 3, 1> distance1 = x-z.block(0,0,3,1); // X_e-X_rx0
-          Eigen::Matrix<double, 3, 1> distance2 = x-z.block(3,0,3,1);  // X_e-X_rx1
+          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_current;//z.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_previous;//z.block(3,0,3,1);  // X_e-X_rx1
           double r1 = distance1.norm();//  ||X_e-X_rx0||
           double r2 = distance2.norm();// ||X_e-X_rx1||
 
@@ -415,6 +415,8 @@ namespace SourceEstimators
               Eigen::Matrix<double, 9, 1> allMeasurements;
               allMeasurements << NED2[0] ,NED2[1] ,m_args.receiver_depth, NED1[0] ,NED1[1] ,m_args.receiver_depth, rdoa, rangeSNR, depth;
 
+              Eigen::Matrix<double, 3, 1> allMeasurements2;
+              allMeasurements2 << rdoa, rangeSNR, depth;
               if (m_aslv.addMeasurement(allMeasurements)) {
               
 
@@ -439,8 +441,9 @@ namespace SourceEstimators
                 }
                 #endif
               }
-
-              m_srukf.update(allMeasurements);
+              pos_current <<  NED1[0] ,NED1[1] ,m_args.receiver_depth;
+              pos_previous << NED2[0] ,NED2[1] ,m_args.receiver_depth;
+              m_srukf.update(allMeasurements2);
               return;
               
           }

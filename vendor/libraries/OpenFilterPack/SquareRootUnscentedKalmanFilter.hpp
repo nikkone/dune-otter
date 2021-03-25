@@ -28,7 +28,7 @@ namespace OFP
       Eigen::Matrix<T, 1, 2*states+1> Wc;                    // Sigma point weights for the Unscented transform covariance.
       Eigen::Matrix<T, 1, 2*states+1> Wm;                    // Sigma point weights for the Unscented transform mean.
       std::function<Eigen::Matrix<T, states, 1>(Eigen::Matrix<T, states, 1> x)> f;
-      std::function<Eigen::Matrix<T, states, 1>(Eigen::Matrix<T, measurements, 1> x, Eigen::Matrix<T, 9, 1> z)> h;
+      std::function<Eigen::Matrix<T, states, 1>(Eigen::Matrix<T, measurements, 1> x)> h;
 
       SquareRootUnscentedKalmanFilter(T alpha_in, T beta_in, T kappa_in) {
         alpha = alpha_in;
@@ -69,15 +69,15 @@ namespace OFP
         return sigmaPoints_ret;
       }
 
-      void update(Eigen::Matrix<T, 9, 1> yk_inn) {
+      void update(Eigen::Matrix<T, measurements, 1> yk_inn) {
         if(active) {
           // Update sigma points to reflect the prediction
           sigmaPoints = generateSigmaPoints(xHat, S);
           // Propagate the sigma points through the measurment model. 
           for(int s = 0;s<size_sigmaPoints; s++) {
-            sigmaPoints_h.col(s) =  h(sigmaPoints.col(s), yk_inn);
+            sigmaPoints_h.col(s) =  h(sigmaPoints.col(s));
           }
-          Eigen::Matrix<T, 3, 1> yk_est;
+          Eigen::Matrix<T, measurements, 1> yk_est;
           // Unscented transform - Calculate the a priori estimate mean
           yk_est = (Wm*sigmaPoints_h.transpose()).colwise().sum();
           // Unscented transform - Calculate the a priori estimate Covariance
@@ -90,10 +90,10 @@ namespace OFP
 
           Eigen::internal::llt_inplace<T, Eigen::Upper>::rankUpdate(Sy, sigmaDelta.col(0), Wc(0));
           Sy.transposeInPlace();
-          Eigen::Matrix<T, 3, 3> Pxy = calculate_cross_variance(xHat, yk_est, sigmaPoints, sigmaPoints_h, Wc);
+          Eigen::Matrix<T, states, measurements> Pxy = calculate_cross_variance(xHat, yk_est, sigmaPoints, sigmaPoints_h, Wc);
 
           K = (Pxy * Sy.inverse().transpose())*Sy.inverse();
-          xHat = xHat + K*(yk_inn.block(6,0,3,1) - yk_est);
+          xHat = xHat + K*(yk_inn - yk_est);
           auto U = K*Sy;
           //Eigen::internal::llt_inplace<T, Eigen::Upper>::rankUpdate(S, U, -1);
 
