@@ -14,23 +14,19 @@ namespace OFP
     public:
       bool active;
       T dt; // Timestep
-      const int nx = states;                          // Num states
-      const int ny = measurements;                    // Num outputs
-      const int size_sigmaPoints = 2*states+1;
-      Eigen::Matrix<T, states, measurements> K;       // State Covariance estimate matrix
-      Eigen::Matrix<T, states, states> PHat;          // State Covariance estimate matrix
-      Eigen::Matrix<T, states, states> S;             // Square-Root of Covariance estimate matrix
-      Eigen::Matrix<T, states, states> Q;             // Process noise covariance matrix
-      Eigen::Matrix<T, states, states> Q_sqrt;        // Square-Root of Covariance estimate matrix
-      Eigen::Matrix<T, measurements, measurements> R; // Measurement noise covariance matrix
-      Eigen::Matrix<T, measurements, measurements> R_sqrt;        // Square-Root of Covariance estimate matrix
-      Eigen::Matrix<T, measurements, 1> innov;        // Time varying innovation vector
-      Eigen::Matrix<T, states, 1> xHat;               // State estimate vector
+      const int nx = states;                                 // Num states
+      const int ny = measurements;                           // Num outputs
+      const int size_sigmaPoints = 2*states+1;               // Num columns of sigmaPoints
+      Eigen::Matrix<T, states, measurements> K;              // State Covariance estimate matrix
+      Eigen::Matrix<T, states, states> S;                    // Square-Root of Covariance estimate matrix
+      Eigen::Matrix<T, states, states> Q_sqrt;               // Square-Root of Covariance estimate matrix
+      Eigen::Matrix<T, measurements, measurements> R_sqrt;   // Square-Root of Covariance estimate matrix
+      Eigen::Matrix<T, states, 1> xHat;                      // State estimate vector
       Eigen::Matrix<T, states, 2*states+1> sigmaPoints;      // Sigma points for the Unscented transform.
       Eigen::Matrix<T, states, 2*states+1> sigmaPoints_f;    // Sigma points for the Unscented transform.
       Eigen::Matrix<T, states, 2*states+1> sigmaPoints_h;    // Sigma points for the Unscented transform.
-      Eigen::Matrix<T, 1, 2*states+1> Wc;                          // Sigma point weights for the Unscented transform covariance.
-      Eigen::Matrix<T, 1, 2*states+1> Wm;                          // Sigma point weights for the Unscented transform mean.
+      Eigen::Matrix<T, 1, 2*states+1> Wc;                    // Sigma point weights for the Unscented transform covariance.
+      Eigen::Matrix<T, 1, 2*states+1> Wm;                    // Sigma point weights for the Unscented transform mean.
       std::function<Eigen::Matrix<T, states, 1>(Eigen::Matrix<T, states, 1> x)> f;
       std::function<Eigen::Matrix<T, states, 1>(Eigen::Matrix<T, measurements, 1> x, Eigen::Matrix<T, 9, 1> z)> h;
 
@@ -41,7 +37,6 @@ namespace OFP
         lambda = alpha*alpha * (nx +kappa) - nx;
         gamma = std::sqrt(nx+lambda);
         computeWeights();
-        //dt=0.1;
       }
 
       void setInitialCovariance(Eigen::Matrix<T, states, states> P0) {
@@ -49,16 +44,11 @@ namespace OFP
       }
 
       void setMeasurmentCovariance(Eigen::Matrix<T, states, states> R_in) {
-        R=R_in;
         R_sqrt = R_in.llt().matrixL(); //Upper triangular cholesky
-        std::cout << "R" << std::endl << R << std::endl;  
-        std::cout << "R_sqrt" << std::endl << R_sqrt << std::endl;  
       }
 
       void setProcessCovariance(Eigen::Matrix<T, states, states> Q_in) {
-        Q=Q_in;
         Q_sqrt = Q_in.llt().matrixL(); //Upper triangular cholesky
-
       }
       void computeWeights() {
         T c = 1 / (nx + lambda);
@@ -81,7 +71,7 @@ namespace OFP
 
       void update(Eigen::Matrix<T, 9, 1> yk_inn) {
         if(active) {
-          // Update sigma points to reflect the prediction ;
+          // Update sigma points to reflect the prediction
           sigmaPoints = generateSigmaPoints(xHat, S);
           // Propagate the sigma points through the measurment model. 
           for(int s = 0;s<size_sigmaPoints; s++) {
@@ -96,7 +86,8 @@ namespace OFP
 
           QR << (std::sqrt(Wc(1))*sigmaDelta.block(0,1,states, 2*states)), R_sqrt;
           
-          Eigen::Matrix<T, 3, 3> Sy = QR.transpose().householderQr().matrixQR().topLeftCorner(states, states).template triangularView<Eigen::Upper>();
+          Eigen::Matrix<T, measurements, measurements> Sy = QR.transpose().householderQr().matrixQR().topLeftCorner(states, states).template triangularView<Eigen::Upper>();
+
           Eigen::internal::llt_inplace<T, Eigen::Upper>::rankUpdate(Sy, sigmaDelta.col(0), Wc(0));
           Sy.transposeInPlace();
           Eigen::Matrix<T, 3, 3> Pxy = calculate_cross_variance(xHat, yk_est, sigmaPoints, sigmaPoints_h, Wc);
@@ -110,12 +101,6 @@ namespace OFP
             Eigen::internal::llt_inplace<T, Eigen::Lower>::rankUpdate(
                 S, U.col(i), T(-1.0));
           }
-/*
-          S = QR.transpose().householderQr().matrixQR().topLeftCorner(states,states).template  triangularView<Eigen::Upper>();
-      // Cholesky update
-      Eigen::internal::llt_inplace<T, Eigen::Upper>::rankUpdate(S, sigmaDelta.col(0), Wc(0));
-      S.transposeInPlace();
-*/
         }
       }
 
@@ -166,24 +151,6 @@ namespace OFP
     }
     return Pxz;
   }
-
-      /*template<int dimensions>
-      Eigen::Matrix<T, dimensions, dimensions> unscented_transform(Eigen::Matrix<T, dimensions, 2*states+1> sigmas, Eigen::Matrix<T, 1, 2*states+1> Wm_inn, Eigen::Matrix<T, 1, 2*states+1> Wc_inn, Eigen::Matrix<T, dimensions, 1> &x_inn) {
-        // Mean
-        x_inn = (Wm_inn*sigmas.transpose()).colwise().sum();
-        // Covariance
-        //Eigen::Matrix<T, dimensions, dimensions> S = Eigen::Matrix<T, dimensions, dimensions>::Zero();
-
-        //QR.matrixQR().triangularView<Eigen::Upper>();
-        sigmas = sigmas.colwise() - x_inn;
-        Eigen::Matrix<T, dimensions, dimensions> S = Eigen::Matrix<T, dimensions, dimensions>::Zero();
-        for(int s = 0;s<size_sigmaPoints; s++) {
-          S += Wc_inn(1,s) * sigmas.col(s) * sigmas.col(s).transpose();
-        }
-
-        return S;
-      }
-*/
     private:
       T lambda;
       T alpha;
