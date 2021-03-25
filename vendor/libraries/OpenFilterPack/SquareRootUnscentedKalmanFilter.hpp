@@ -114,12 +114,10 @@ namespace OFP
       for(int s = 0;s<size_sigmaPoints; s++) {
         sigmaPoints_f.col(s) =  f(sigmaPoints.col(s));
       }
-      std::cout << "Wc" << std::endl << Wc << std::endl;   
       // Unscented transform - Calculate the a priori estimate mean
       xHat = (Wm*sigmaPoints_f.transpose()).colwise().sum();
       // Unscented transform - Calculate the a priori estimate Covariance 
       Eigen::Matrix<T, states, 2*states+1> sigmaDelta = sigmaPoints_f.colwise() - xHat;
-
 
       Eigen::Matrix<T, states, 3*states>  QR;
       QR << (std::sqrt(Wc(1))*sigmaDelta.block(0,1,states, 2*states)), Q_sqrt;
