@@ -117,8 +117,10 @@ namespace SourceEstimators
       int m_salinity_eid;
 
       OFP::UnscentedKalmanFilter<double,3,3> m_ukf;
-      
+      OFP::UnscentedKalmanFilter<double,3,1> m_ukf2;
       OFP::AlgebraicSolver<double, 5, 9> m_aslv;
+      Eigen::Matrix<double, 3, 1> pos_current;
+      Eigen::Matrix<double, 3, 1> pos_previous;
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
       //! Reference coordinate used to calculate NED frame
@@ -128,7 +130,8 @@ namespace SourceEstimators
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
-        m_ukf(0.001, 2.0, 0.0)
+        m_ukf(0.001, 2.0, 0.0),
+        m_ukf2(0.001, 2.0, 0.0)
       {
         param("Ranging - SNR Fit", m_args.ranging_snr_fit)
         .size(2)
@@ -316,19 +319,21 @@ namespace SourceEstimators
       void
       onResourceInitialization(void)
       {
+
         // Unscented KF
-        m_ukf.h = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 9, 1> z) {
+        m_ukf.h = [this](Eigen::Matrix<double, 3, 1> x) {
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
-          Eigen::Matrix<double, 3, 1> distance1 = x-z.block(0,0,3,1); // X_e-X_rx0
-          Eigen::Matrix<double, 3, 1> distance2 = x-z.block(3,0,3,1);  // X_e-X_rx1
+          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
           double r1 = distance1.norm();//  ||X_e-X_rx0||
           double r2 = distance2.norm();// ||X_e-X_rx1||
-
+          
           // Calculate estimated measurements
           Eigen::Matrix<double, 3, 1> ykest;
           ykest(0) = r2 - r1; // h is eq (2.16) in masters
           ykest(1) = r2; // Eq (2.19) in masters
           ykest(2) = x(2); // Depth estimate
+          //std::cout << this->pos_current << std::endl;
           return ykest;
         };
 
@@ -348,8 +353,36 @@ namespace SourceEstimators
         m_ukf.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.x0.data());
         m_ukf.dt = m_args.filter_timestep;
 
+
+        // Unscented KF2
+       m_ukf2.h = [this](Eigen::Matrix<double, 3, 1> x) {
+          // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
+          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
+          double r1 = distance1.norm();//  ||X_e-X_rx0||
+          double r2 = distance2.norm();// ||X_e-X_rx1||
+          
+          // Calculate estimated measurements
+          Eigen::Matrix<double, 1, 1> ykest;
+          ykest(0) = r2 - r1; // h is eq (2.16) in masters
+          //std::cout << this->pos_current << std::endl;
+          return ykest;
+        };
+
+        m_ukf2.f = [A](Eigen::Matrix<double, 3, 1> x) {
+
+          return A*x;
+        };
+        m_ukf2.dt = m_args.filter_timestep;
+
+        m_ukf2.Q = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Qm.data());
+        m_ukf2.R << m_args.Rm[0];
+        m_ukf2.PHat = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.P0.data());
+        m_ukf2.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.x0.data());
+        m_ukf2.dt = m_args.filter_timestep;
         //! Set timer for periodic part of filter
         m_filter_timer.setTop(m_args.filter_timestep);
+
       }
 
       //! Release resources.
@@ -357,8 +390,6 @@ namespace SourceEstimators
       onResourceRelease(void)
       {
         Memory::clear(tagBuffer);
-        //Memory::clear(m_ukf);
-        //Memory::clear(m_pf);
       }
 
           //! Turns the latitude and longtitude of the input to a NED representation with refCoord as origin.
@@ -425,6 +456,11 @@ namespace SourceEstimators
                   m_ukf.active = true;
                   m_ukf.predict();
                 }
+                if(!m_ukf2.active) {
+                  m_ukf2.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
+                  m_ukf2.active = true;
+                  m_ukf2.predict();
+                }
                 #if SingleReceiverUKFLog
                 double result[3] = {m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)};
                 double latLon[3];
@@ -441,8 +477,10 @@ namespace SourceEstimators
                 }
                 #endif
               }
-
-              m_ukf.update(allMeasurements);
+              pos_current <<  NED1[0], NED1[1], m_args.receiver_depth;
+              pos_previous << NED2[0], NED2[1], m_args.receiver_depth;
+              m_ukf.update(allMeasurements.block(6,0,3,1));
+              m_ukf2.update(allMeasurements.block(6,0,1,1));
               return;
               
           }
@@ -487,6 +525,35 @@ namespace SourceEstimators
                   }   
                   #endif
                   spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ukf.xHat(0), m_ukf.xHat(1), m_ukf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+            }
+            if(m_ukf2.active) {
+              m_ukf2.predict(); // Filter time update
+                  double lati,longi;
+                  double result[3] = {m_ukf2.xHat(0),m_ukf2.xHat(1),m_ukf2.xHat(2)};
+                double latLon[3];
+                fromNEDframe(result, m_refCoord, latLon);
+                lati=latLon[0], longi=latLon[1];
+                  // Send output to Neptus/DUNE log
+                  IMC::RemoteSensorInfo tagPosition;
+                  tagPosition.lat = lati;
+                  tagPosition.lon = longi;
+                  tagPosition.alt = -m_ukf2.xHat(2);
+                  tagPosition.data = std::to_string(m_ukf2.xHat(0)) + std::to_string(m_ukf2.xHat(1)) + "," + std::to_string(m_ukf2.xHat(2));
+                  tagPosition.id = "UKF2" + std::to_string(m_args.receiver_serial);
+                  dispatch(tagPosition);
+                  #if SingleReceiverUKFLog
+                  std::string filename = "log/predict2-";
+                  filename += getEntityLabel();
+                  filename += ".log";
+                  std::ofstream logOutStream;
+                  logOutStream.open(filename, std::fstream::app);
+                  if (logOutStream.good()) {
+                    logOutStream.precision(15);
+                      logOutStream << m_ukf2.xHat(0) << "," << m_ukf2.xHat(1) << "," << m_ukf2.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+                      logOutStream.close();
+                  }   
+                  #endif
+                  spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ukf2.xHat(0), m_ukf2.xHat(1), m_ukf2.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
             }
           }
           waitForMessages(m_args.message_wait_time);

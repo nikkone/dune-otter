@@ -1,5 +1,5 @@
-#ifndef OFP_SquareRootUnscentedKalmanFilter
-#define OFP_SquareRootUnscentedKalmanFilter
+#ifndef OFP_SquareRootUnscentedKalmanFilter2
+#define OFP_SquareRootUnscentedKalmanFilter2
 #include <Eigen/Core>
 #include <Eigen/Cholesky>
 #include <Eigen/Dense>
@@ -9,7 +9,7 @@ namespace OFP
 {
   // Based on Van der Merwe an WAN - 2001 - The square-root unscented Kalman Filter for state and parameter-estimation
   template <class T, int states, int measurements>
-  class SquareRootUnscentedKalmanFilter
+  class SquareRootUnscentedKalmanFilter2
   {
     public:
       bool active;
@@ -24,13 +24,13 @@ namespace OFP
       Eigen::Matrix<T, states, 1> xHat;                      // State estimate vector
       Eigen::Matrix<T, states, 2*states+1> sigmaPoints;      // Sigma points for the Unscented transform.
       Eigen::Matrix<T, states, 2*states+1> sigmaPoints_f;    // Sigma points for the Unscented transform.
-      Eigen::Matrix<T, measurements, 2*states+1> sigmaPoints_h;    // Sigma points for the Unscented transform.
+      Eigen::Matrix<T, states, 2*states+1> sigmaPoints_h;    // Sigma points for the Unscented transform.
       Eigen::Matrix<T, 1, 2*states+1> Wc;                    // Sigma point weights for the Unscented transform covariance.
       Eigen::Matrix<T, 1, 2*states+1> Wm;                    // Sigma point weights for the Unscented transform mean.
       std::function<Eigen::Matrix<T, states, 1>(Eigen::Matrix<T, states, 1> x)> f;
-      std::function<Eigen::Matrix<T, measurements, 1>(Eigen::Matrix<T, states, 1> x)> h;
+      std::function<Eigen::Matrix<T, states, 1>(Eigen::Matrix<T, measurements, 1> x)> h;
 
-      SquareRootUnscentedKalmanFilter(T alpha_in, T beta_in, T kappa_in) {
+      SquareRootUnscentedKalmanFilter2(T alpha_in, T beta_in, T kappa_in) {
         alpha = alpha_in;
         beta = beta_in;
         kappa = kappa_in;
@@ -43,7 +43,7 @@ namespace OFP
         S = P0.llt().matrixL(); //Upper triangular cholesky
       }
 
-      void setMeasurmentCovariance(Eigen::Matrix<T, measurements, measurements> R_in) {
+      void setMeasurmentCovariance(Eigen::Matrix<T, states, states> R_in) {
         R_sqrt = R_in.llt().matrixL(); //Upper triangular cholesky
       }
 
@@ -71,7 +71,6 @@ namespace OFP
 
       void update(Eigen::Matrix<T, measurements, 1> yk_inn) {
         if(active) {
-          
           // Update sigma points to reflect the prediction
           sigmaPoints = generateSigmaPoints(xHat, S);
           // Propagate the sigma points through the measurment model. 
@@ -82,23 +81,22 @@ namespace OFP
           // Unscented transform - Calculate the a priori estimate mean
           yk_est = (Wm*sigmaPoints_h.transpose()).colwise().sum();
           // Unscented transform - Calculate the a priori estimate Covariance
-          Eigen::Matrix<T, measurements, 2*states+1> sigmaDelta = sigmaPoints_h.colwise() - yk_est;
-          Eigen::Matrix<T, measurements, (2*states)+measurements> QR;
+          Eigen::Matrix<T, states, 2*states+1> sigmaDelta = sigmaPoints_h.colwise() - yk_est;
+          Eigen::Matrix<T, states, 3*states> QR;
 
-          QR << (std::sqrt(Wc(1))*sigmaDelta.block(0,1,measurements, 2*states)), R_sqrt;
+          QR << (std::sqrt(Wc(1))*sigmaDelta.block(0,1,states, 2*states)), R_sqrt;
           
-          Eigen::Matrix<T, measurements, measurements> Sy = QR.transpose().householderQr().matrixQR().topLeftCorner(measurements, measurements).template triangularView<Eigen::Upper>();
+          Eigen::Matrix<T, measurements, measurements> Sy = QR.transpose().householderQr().matrixQR().topLeftCorner(states, states).template triangularView<Eigen::Upper>();
 
           Eigen::internal::llt_inplace<T, Eigen::Upper>::rankUpdate(Sy, sigmaDelta.col(0), Wc(0));
           Sy.transposeInPlace();
           Eigen::Matrix<T, states, measurements> Pxy = calculate_cross_variance(xHat, yk_est, sigmaPoints, sigmaPoints_h, Wc);
-          std::cout << "Pxy" << std::endl << Pxy << std::endl;
+
           K = (Pxy * Sy.inverse().transpose())*Sy.inverse();
-          std::cout << "K" << std::endl << K << std::endl;
           xHat = xHat + K*(yk_inn - yk_est);
           auto U = K*Sy;
-          std::cout << "yk_inn" << std::endl << yk_inn << std::endl;
-          std::cout << "yk_est" << std::endl << yk_est << std::endl;
+          //Eigen::internal::llt_inplace<T, Eigen::Upper>::rankUpdate(S, U, -1);
+
           for(std::ptrdiff_t i = 0; i < states; i++) {
             Eigen::internal::llt_inplace<T, Eigen::Lower>::rankUpdate(
                 S, U.col(i), T(-1.0));
@@ -139,13 +137,13 @@ namespace OFP
     computeWeights();
   }
 
-  Eigen::Matrix<T, states, measurements> calculate_cross_variance(Eigen::Matrix<T, states, 1>  x_inn, Eigen::Matrix<T, measurements, 1>  z_inn, Eigen::Matrix<T, states, 2*states+1> sigmas_f, Eigen::Matrix<T, measurements, 2*states+1> sigmas_h, Eigen::Matrix<T, 1, 2*states+1> Wc_inn) {
+  Eigen::Matrix<T, states, measurements> calculate_cross_variance(Eigen::Matrix<T, states, 1>  x_inn, Eigen::Matrix<T, measurements, 1>  z_inn, Eigen::Matrix<T, states, 2*states+1> sigmas_f, Eigen::Matrix<T, states, 2*states+1> sigmas_h, Eigen::Matrix<T, 1, 2*states+1> Wc_inn) {
     //Compute cross variance of the state x_inn and measurement z_inn.
 
     sigmas_f = sigmas_f.colwise() - x_inn;
     sigmas_h = sigmas_h.colwise() - z_inn;
 
-    Eigen::Matrix<T,states,measurements> Pxz = Eigen::Matrix<T,states,measurements>::Zero();
+    Eigen::Matrix<T,states,states> Pxz = Eigen::Matrix<T,states,states>::Zero();
     for(int s = 0;s<size_sigmaPoints; s++) {
         Pxz += Wc_inn(1,s) * sigmas_f.col(s) * sigmas_h.col(s).transpose();
     }

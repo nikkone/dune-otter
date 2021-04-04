@@ -15,18 +15,12 @@ namespace OFP
     T dt; // Timestep
     const int nx = states;                          // Num states
     const int ny = measurements;                    // Num outputs
-    //const int nu = measurements;                  // Num inputs
-    //Eigen::Matrix<T, states, states> A;             // State transition matrix
-    //Eigen::Matrix<T, states, states> B;             // Input matrix
-    //Eigen::Matrix<T, measurements, states> C;       // Observation matrix
-    //Eigen::Matrix<T, states, states> D;             // unknown input matrix
+
     Eigen::Matrix<T, states, measurements> K;       // State Covariance estimate matric
     Eigen::Matrix<T, states, states> PHat;          // State Covariance estimate matric
     Eigen::Matrix<T, states, states> Q;             // Process noise covariance matrix
     Eigen::Matrix<T, measurements, measurements> R; // Measurement noise covariance matrix
     Eigen::Matrix<T, measurements, 1> innov;        // Time varying innovation vector
-    //Eigen::Matrix<T, measurements, 1> yk;           // Measurement vector
-    //Eigen::Matrix<T, measurements, 1> ykest;        // Estimate of the measurements
     Eigen::Matrix<T, states, 1> xHat;               // State estimate vector
 
       UnscentedKalmanFilter(T alpha_in, T beta_in, T kappa_in) {
@@ -35,20 +29,16 @@ namespace OFP
         beta = beta_in;
         kappa = kappa_in;
         lambda = alpha*alpha * (n +kappa) - n;
-        computeWeights();
-        //dt=0.1;
+        computeWeights(); 
       }
     const int size_sigmaPoints = 2*states+1;
-      Eigen::Matrix<T, measurements, 2*states+1> sigmaPoints;      // Sigma points for the Unscented transform.
-      Eigen::Matrix<T, measurements, 2*states+1> sigmaPoints_f;    // Sigma points for the Unscented transform.
+      Eigen::Matrix<T, states, 2*states+1> sigmaPoints;      // Sigma points for the Unscented transform.
+      Eigen::Matrix<T, states, 2*states+1> sigmaPoints_f;    // Sigma points for the Unscented transform.
       Eigen::Matrix<T, measurements, 2*states+1> sigmaPoints_h;    // Sigma points for the Unscented transform.
       Eigen::Matrix<T, 1, 2*states+1> Wc;                          // Sigma point weights for the Unscented transform covariance.
       Eigen::Matrix<T, 1, 2*states+1> Wm;                          // Sigma point weights for the Unscented transform mean.
       std::function<Eigen::Matrix<T, states, 1>(Eigen::Matrix<T, states, 1> x)> f;
-      std::function<Eigen::Matrix<T, states, 1>(Eigen::Matrix<T, measurements, 1> x, Eigen::Matrix<T, 9, 1> z)> h;
-      //Eigen::Matrix<double, STATES_UKF, 1> f(Eigen::Matrix<double, STATES_UKF, 1> x);
-      //Eigen::Matrix<double, STATES_UKF, 1> h(Eigen::Matrix<double, MEASUREMENTS_UKF, 1> x, Eigen::Matrix<double, 9, 1> z);
-
+      std::function<Eigen::Matrix<T, measurements, 1>(Eigen::Matrix<T, states, 1> x)> h;
 
       void computeWeights() {
         T c = 1 / (n + lambda);
@@ -70,23 +60,31 @@ namespace OFP
         return sigmaPoints_ret;
       }
 
-      void update(Eigen::Matrix<double, 9, 1> yk_inn) {
+      void update(Eigen::Matrix<double, measurements, 1> yk_inn) {
         if(active) {
           // Update sigma points to reflect the prediction 
           //std::cout << "Unscented update!" << std::endl;
-          sigmaPoints = generateSigmaPoints(xHat, PHat);
-          for(int s = 0;s<size_sigmaPoints; s++) {
-            sigmaPoints_h.col(s) =  h(sigmaPoints.col(s), yk_inn);
-          }
-          Eigen::Matrix<double, 3, 1> yk_est;
-          Eigen::Matrix<double, 3, 3> Py = unscented_transform<measurements>(sigmaPoints_h, Wm, Wc, yk_est) + R;
           
-          Eigen::Matrix<double, 3, 3> Pxy = calculate_cross_variance(xHat, yk_est, sigmaPoints, sigmaPoints_h, Wc);
+          sigmaPoints = generateSigmaPoints(xHat, PHat);
+          std::cout << "sigmaPoints" << std::endl << sigmaPoints << std::endl;
+          for(int s = 0;s<size_sigmaPoints; s++) {
+            sigmaPoints_h.col(s) =  h(sigmaPoints.col(s));
+          }
+          
+          std::cout << "ukf_sigmaPoints_h" << std::endl << sigmaPoints_h << std::endl;
+          std::cout << "ukf_Wm" << std::endl << Wm << std::endl;
+          Eigen::Matrix<double, measurements, 1> yk_est;
+          Eigen::Matrix<double, measurements, measurements> Py = unscented_transform<measurements>(sigmaPoints_h, Wm, Wc, yk_est) + R;
+          
+          Eigen::Matrix<double, states, measurements> Pxy = calculate_cross_variance(xHat, yk_est, sigmaPoints, sigmaPoints_h, Wc);
 
           K = Pxy * Py.inverse();
-          xHat = xHat + K*(yk_inn.block(6,0,3,1) - yk_est);
-
+          xHat = xHat + K*(yk_inn - yk_est);
+          std::cout << "PHat_inn_update: " << std::endl << PHat << std::endl;
           PHat = PHat - K*Pxy.transpose();
+          //PHat = PHat - K*Py*K.transpose();
+
+          std::cout << "PHat_ut_update: " << std::endl << PHat << std::endl;
         }
       }
 
@@ -97,9 +95,9 @@ namespace OFP
       sigmaPoints_f.col(s) =  f(sigmaPoints.col(s));
     }
     // Unscented transform
-    //std::cout << "xHat_inn_pred: " << std::endl << xHat << std::endl;
+    std::cout << "PHat_inn_pred: " << std::endl << PHat << std::endl;
     PHat = unscented_transform<states>(sigmaPoints_f, Wm, Wc, xHat) + Q;
-    //std::cout << "xHat_ut_pred: " << std::endl << xHat << std::endl;
+    std::cout << "PHat_ut_pred: " << std::endl << PHat << std::endl;
 
   }
 
@@ -111,13 +109,13 @@ namespace OFP
     computeWeights();
   }
 
-  Eigen::Matrix<T, states, measurements> calculate_cross_variance(Eigen::Matrix<T, states, 1>  x_inn, Eigen::Matrix<T, measurements, 1>  z_inn, Eigen::Matrix<T, states, 2*states+1> sigmas_f, Eigen::Matrix<T, states, 2*states+1> sigmas_h, Eigen::Matrix<T, 1, 2*states+1> Wc_inn) {
+  Eigen::Matrix<T, states, measurements> calculate_cross_variance(Eigen::Matrix<T, states, 1>  x_inn, Eigen::Matrix<T, measurements, 1>  z_inn, Eigen::Matrix<T, states, 2*states+1> sigmas_f, Eigen::Matrix<T, measurements, 2*states+1> sigmas_h, Eigen::Matrix<T, 1, 2*states+1> Wc_inn) {
     //Compute cross variance of the state x_inn and measurement z_inn.
 
     sigmas_f = sigmas_f.colwise() - x_inn;
     sigmas_h = sigmas_h.colwise() - z_inn;
 
-    Eigen::Matrix<T,states,states> Pxz = Eigen::Matrix<T,states,states>::Zero();
+    Eigen::Matrix<T,states,measurements> Pxz = Eigen::Matrix<T,states,measurements>::Zero();
     for(int s = 0;s<size_sigmaPoints; s++) {
         Pxz += Wc_inn(1,s) * sigmas_f.col(s) * sigmas_h.col(s).transpose();
     }
