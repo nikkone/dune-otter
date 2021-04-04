@@ -103,8 +103,11 @@ namespace SourceEstimators
       //! Speed of sound provider entity label.
       int m_c_sound_eid;
 
-      OFP::ExtendedKalmanFilter m_ekf;
+      OFP::ExtendedKalmanFilter<double, 3, 3> m_ekf;
+      OFP::ExtendedKalmanFilter<double, 3, 1> m_ekf2;
       OFP::AlgebraicSolver<double, 5, 9> m_aslv;
+      Eigen::Matrix<double, 3, 1> pos_current;
+      Eigen::Matrix<double, 3, 1> pos_previous;
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
       //! Reference coordinate used to calculate NED frame
@@ -289,6 +292,7 @@ namespace SourceEstimators
       void
       onResourceInitialization(void)
       {
+        // m_ekf
           m_ekf.A << 1.0, 0.0, 0.0,
                     0.0, 1.0, 0.0,
                     0.0, 0.0, 1.0;
@@ -299,6 +303,75 @@ namespace SourceEstimators
         //! Set timer for periodic part of filter
         m_filter_timer.setTop(m_args.filter_timestep);
         m_ekf.dt = m_args.filter_timestep;
+        m_ekf.h = [this](Eigen::Matrix<double, 3, 1> x) {
+          // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
+          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
+          double r1 = distance1.norm();//  ||X_e-X_rx0||
+          double r2 = distance2.norm();// ||X_e-X_rx1||
+          
+          // Calculate estimated measurements
+          Eigen::Matrix<double, 3, 1> ykest;
+          ykest(0) = r2 - r1; // h is eq (2.16) in masters
+          ykest(1) = r2; // Eq (2.19) in masters
+          ykest(2) = x(2); // Depth estimate
+          return ykest;
+        };
+
+        m_ekf.calculateJacobian = [this](Eigen::Matrix<double, 3, 1> x) {
+
+          // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
+          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
+          double r1 = distance1.norm();//  ||X_e-X_rx0||
+          double r2 = distance2.norm();// ||X_e-X_rx1||
+
+          // Calculate Jacobian with RDOA, SNR and Depth
+          Eigen::Matrix<double, 3, 3> C;       // Observation matrix
+          C.row(0) = (distance2/r2) - (distance1/r1); // Eq (2.18)
+          C.row(1) = (distance2/r2); // Exends the Jacobian with eq (2.20)
+          Eigen::Matrix<double, 1, 3> Hdepth= {0.0,0.0,1.0};
+          C.row(2) = Hdepth;  
+
+          return C;
+        };
+        // m_ekf2
+          m_ekf2.A << 1.0, 0.0, 0.0,
+                    0.0, 1.0, 0.0,
+                    0.0, 0.0, 1.0;
+          m_ekf2.Q = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_Qm.data());
+          m_ekf2.R << m_args.ekf_Rm[0];
+          m_ekf2.PHat = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_P0.data());
+          m_ekf2.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.ekf_x0.data());
+        //! Set timer for periodic part of filter
+        m_filter_timer.setTop(m_args.filter_timestep);
+        m_ekf2.dt = m_args.filter_timestep;
+        m_ekf2.h = [this](Eigen::Matrix<double, 3, 1> x) {
+          // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
+          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
+          double r1 = distance1.norm();//  ||X_e-X_rx0||
+          double r2 = distance2.norm();// ||X_e-X_rx1||
+          
+          // Calculate estimated measurements
+          Eigen::Matrix<double, 1, 1> ykest;
+          ykest(0) = r2 - r1; // h is eq (2.16) in masters
+          return ykest;
+        };
+
+        m_ekf2.calculateJacobian = [this](Eigen::Matrix<double, 3, 1> x) {
+
+          // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
+          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
+          double r1 = distance1.norm();//  ||X_e-X_rx0||
+          double r2 = distance2.norm();// ||X_e-X_rx1||
+
+          // Calculate Jacobian with RDOA, SNR and Depth
+          Eigen::Matrix<double, 1, 3> C;       // Observation matrix
+          C.row(0) = (distance2/r2) - (distance1/r1); // Eq (2.18)
+          return C;
+        };
       }
 
       //! Release resources.
@@ -306,8 +379,6 @@ namespace SourceEstimators
       onResourceRelease(void)
       {
         Memory::clear(tagBuffer);
-        //Memory::clear(m_ekf);
-        //Memory::clear(m_pf);
       }
 
           //! Turns the latitude and longtitude of the input to a NED representation with refCoord as origin.
@@ -375,6 +446,10 @@ namespace SourceEstimators
                   m_ekf.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
                   m_ekf.active = true;
                 }
+                if(!m_ekf2.active) {
+                  m_ekf2.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
+                  m_ekf2.active = true;
+                }
                 #if SingleReceiverEKFLog
                 double latLon[3];
                 fromNEDframe(result, m_refCoord, latLon);
@@ -391,9 +466,10 @@ namespace SourceEstimators
                 #endif
               }
 
-
-              m_ekf.updateCmatrix(allMeasurements);
+              pos_current <<  NED1[0], NED1[1], m_args.receiver_depth;
+              pos_previous << NED2[0], NED2[1], m_args.receiver_depth;
               m_ekf.update(allMeasurements.block(6,0,3,1));
+              m_ekf2.update(allMeasurements.block(6,0,1,1));
               return;
           }
         }
@@ -437,6 +513,36 @@ namespace SourceEstimators
                   }   
                   #endif
                   spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ekf.xHat(0), m_ekf.xHat(1), m_ekf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+              
+            }
+            if(m_ekf2.active) {
+              m_ekf2.predict(); // Filter time update
+                  double lati,longi;
+                  double result[3] = {m_ekf2.xHat(0),m_ekf2.xHat(1),m_ekf2.xHat(2)};
+                double latLon[3];
+                fromNEDframe(result, m_refCoord, latLon);
+                lati=latLon[0], longi=latLon[1];
+                  // Send output to Neptus/DUNE log
+                  IMC::RemoteSensorInfo tagPosition;
+                  tagPosition.lat = lati;
+                  tagPosition.lon = longi;
+                  tagPosition.alt = -m_ekf2.xHat(2);
+                  tagPosition.data = std::to_string(m_ekf2.xHat(0)) + std::to_string(m_ekf2.xHat(1)) + "," + std::to_string(m_ekf2.xHat(2));
+                  tagPosition.id = "OFPEKF2" + std::to_string(m_args.receiver_serial);
+                  dispatch(tagPosition);
+                  #if SingleReceiverEKFLog
+                  std::string filename = "log/predict2-";
+                  filename += getEntityLabel();
+                  filename += ".log";
+                  std::ofstream logOutStream;
+                  logOutStream.open(filename, std::fstream::app);
+                  if (logOutStream.good()) {
+                    logOutStream.precision(15);
+                      logOutStream << m_ekf2.xHat(0) << "," << m_ekf2.xHat(1) << "," << m_ekf2.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+                      logOutStream.close();
+                  }   
+                  #endif
+                  spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ekf2.xHat(0), m_ekf2.xHat(1), m_ekf2.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
               
             }
           }

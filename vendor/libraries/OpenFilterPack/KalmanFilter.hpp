@@ -30,7 +30,7 @@ namespace OFP
       active = false;
     }
 
-    void update(Eigen::Matrix<T, states, 1> zk) {
+    void update(Eigen::Matrix<T, measurements, 1> zk) {
 
       // Compute Kalman gain
       K = PHat * C.transpose() * (C*PHat*C.transpose() + R).inverse();
