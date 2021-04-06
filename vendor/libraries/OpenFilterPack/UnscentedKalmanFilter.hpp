@@ -83,13 +83,11 @@ namespace OFP
           // Update sigma points to reflect the prediction 
           
           sigmaPoints = generateSigmaPoints(xHat, PHat);
-          std::cout << "sigmaPoints" << std::endl << sigmaPoints << std::endl;
           for(int s = 0;s<size_sigmaPoints; s++) {
             sigmaPoints_h.col(s) =  h(sigmaPoints.col(s));
           }
           
-          std::cout << "ukf_sigmaPoints_h" << std::endl << sigmaPoints_h << std::endl;
-          std::cout << "ukf_Wm" << std::endl << Wm << std::endl;
+
           Eigen::Matrix<T, measurements, 1> yk_est;
           Eigen::Matrix<T, measurements, measurements> Py = unscented_transform<measurements>(sigmaPoints_h, Wm, Wc, yk_est) + R;
           
@@ -97,11 +95,9 @@ namespace OFP
 
           K = Pxy * Py.inverse();
           xHat = xHat + K*(yk_in - yk_est);
-          std::cout << "PHat_inn_update: " << std::endl << PHat << std::endl;
           PHat = PHat - K*Pxy.transpose();
           //PHat = PHat - K*Py*K.transpose();
 
-          std::cout << "PHat_ut_update: " << std::endl << PHat << std::endl;
           return true;
         }
         return false;
@@ -117,9 +113,7 @@ namespace OFP
             sigmaPoints_f.col(s) =  f(sigmaPoints.col(s));
           }
           // Unscented transform
-          std::cout << "PHat_inn_pred: " << std::endl << PHat << std::endl;
           PHat = unscented_transform<states>(sigmaPoints_f, Wm, Wc, xHat) + Q;
-          std::cout << "PHat_ut_pred: " << std::endl << PHat << std::endl;
           return true;
         }
         return false;
@@ -173,7 +167,7 @@ namespace OFP
 
         Eigen::Matrix<T,states,measurements> Pxz = Eigen::Matrix<T,states,measurements>::Zero();
         for(int s = 0;s<size_sigmaPoints; s++) {
-            Pxz += wc_in(1,s) * sigmas_f.col(s) * sigmas_h.col(s).transpose();
+            Pxz += wc_in(0,s) * sigmas_f.col(s) * sigmas_h.col(s).transpose();
         }
         return Pxz;
       }
@@ -190,7 +184,8 @@ namespace OFP
         sigmas_in = sigmas_in.colwise() - x_out;
         Eigen::Matrix<T, dimensions, dimensions> P = Eigen::Matrix<T, dimensions, dimensions>::Zero();
         for(int s = 0;s<size_sigmaPoints; s++) {
-          P += wc_in(1,s) * sigmas_in.col(s) * sigmas_in.col(s).transpose();
+          //P += sigmas_in.col(s) * sigmas_in.col(s).transpose();
+          P += wc_in(0,s) * sigmas_in.col(s) * sigmas_in.col(s).transpose();
         }
         return P;
       }

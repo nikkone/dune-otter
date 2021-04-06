@@ -5,15 +5,15 @@
 
 namespace OFP
 {
-  template <typename T, int states, int measurements>  AlgebraicSolver<T, states, measurements>::AlgebraicSolver() {
+  template <typename T, int states, int measurements, int neededMeasurements>  AlgebraicSolver<T, states, measurements, neededMeasurements>::AlgebraicSolver() {
     depth=0.0;
-    neededMeasurements = states;
-    posi = Eigen::Matrix<T, 3, states>::Zero();
-    ToA = Eigen::Matrix<T, states, 1>::Zero();
+    posi = Eigen::Matrix<T, states, neededMeasurements>::Zero();
+    ToA = Eigen::Matrix<T, neededMeasurements, 1>::Zero();
     receivedMeasurements = 0;
   }
-      template <typename T, int states, int measurements>  
-      bool AlgebraicSolver<T, states, measurements>::addMeasurement(Eigen::Matrix<T, measurements, 1> z) {
+
+    template <typename T, int states, int measurements, int neededMeasurements>  
+    bool AlgebraicSolver<T, states, measurements, neededMeasurements>::addMeasurement(Eigen::Matrix<T, measurements, 1> z) {
         depth =  z(8,0);
         T rtoa = z(6,0);
     if (rtoa == 0) {
@@ -41,7 +41,7 @@ namespace OFP
     }
       ////std::cout << "Posi = " << std::endl << posi << std::endl;
       ////std::cout << "ToA = " << std::endl << ToA << std::endl;
-    if (receivedMeasurements > 5-1) {
+    if (receivedMeasurements > neededMeasurements-1) {
       receivedMeasurements = 0;
         try {
             solve();
@@ -55,16 +55,17 @@ namespace OFP
     return false;
       
   }
-  template <typename T, int states, int measurements> 
-  bool AlgebraicSolver<T, states, measurements>::solve() {
+  template <typename T, int states, int measurements, int neededMeasurements>
+  bool AlgebraicSolver<T, states, measurements, neededMeasurements>::solve() {
 
-      Eigen::Matrix<T, 3, states+1> M = Eigen::Matrix<T, 3, states+1>::Zero();// arma::zeros<arma::mat>(3,neededMeasurements+1);
-      Eigen::Matrix<T, 3, 1> temp={0.0,0.0,1.0};
-      Eigen::Matrix<T, states+1,1> D = Eigen::Matrix<T, states+1,1>::Zero();
-      M.col(states) = temp;
-      D(states) = depth;
+      Eigen::Matrix<T, states, neededMeasurements+1> M = Eigen::Matrix<T, states, neededMeasurements+1>::Zero();// arma::zeros<arma::mat>(3,neededMeasurements+1);
+      Eigen::Matrix<T, states, 1> temp={0.0,0.0,1.0};
+      Eigen::Matrix<T, neededMeasurements+1,1> D = Eigen::Matrix<T, neededMeasurements+1,1>::Zero();
+      M.col(neededMeasurements) = temp;
+      D(neededMeasurements) = depth;
 
-      for (unsigned int m = 2; m < states; m++) {
+      for (unsigned int m = 2; m < neededMeasurements; m++) {
+        
           T ddm = ToA(m);
           T dd2 = ToA(1);
 
@@ -76,7 +77,7 @@ namespace OFP
 
           D(m) = ddm - dd2 + (off1-offm)/ddm - (off1-off2)/dd2;
       }
-      x = (M.block(0,2,3,states-1).transpose()).colPivHouseholderQr().solve(-D.block(2,0,states-1,1));
+      x = (M.block(0,2,states,neededMeasurements-1).transpose()).colPivHouseholderQr().solve(-D.block(2,0,neededMeasurements-1,1));
       return false;
   }
 

@@ -5,13 +5,12 @@
 
 namespace OFP
 {
-  template <typename T, int states, int measurements>
+  template <typename T, int states, int measurements, int neededMeasurements>
   class AlgebraicSolver {
-    Eigen::Matrix<T, 3, states> posi;
-    Eigen::Matrix<T, states, 1> ToA;
+    Eigen::Matrix<T, states, neededMeasurements> posi;
+    Eigen::Matrix<T, neededMeasurements, 1> ToA;
     T depth;
     int receivedMeasurements;
-    int neededMeasurements;
   public:
     AlgebraicSolver();
     Eigen::Matrix<T, states, 1> x; // State Estimation
@@ -19,7 +18,7 @@ namespace OFP
     bool addMeasurement(Eigen::Matrix<T, measurements, 1> z);
     bool solve();
   };
-  template class AlgebraicSolver<double, 5, 9>;
+  template class AlgebraicSolver<double, 3, 9, 5>;
 }
 
 #endif //OFP_ALGEBRAICSOLVER_H

@@ -118,7 +118,7 @@ namespace SourceEstimators
 
       OFP::UnscentedKalmanFilter<double,3,3> m_ukf;
       OFP::UnscentedKalmanFilter<double,3,1> m_ukf2;
-      OFP::AlgebraicSolver<double, 5, 9> m_aslv;
+      OFP::AlgebraicSolver<double, 3, 9, 5> m_aslv;
       Eigen::Matrix<double, 3, 1> pos_current;
       Eigen::Matrix<double, 3, 1> pos_previous;
       //! How far back into the buffer to attempt period matching.

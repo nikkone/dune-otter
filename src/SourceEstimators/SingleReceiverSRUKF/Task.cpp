@@ -31,8 +31,7 @@
 #include <DUNE/DUNE.hpp>
 #include <boost/circular_buffer.hpp>
 #include <OpenFilterPack/AlgebraicSolution.hpp>
-#include <OpenFilterPack/UnscentedKalmanFilter.hpp>
-#include <OpenFilterPack/SquareRootUnscentedKalmanFilter3.hpp>
+#include <OpenFilterPack/SquareRootUnscentedKalmanFilter.hpp>
 namespace SourceEstimators
 {
   //! Insert explanation on task behaviour here.
@@ -115,12 +114,12 @@ namespace SourceEstimators
       //! Salinity provider entity label.
       int m_salinity_eid;
 
-      OFP::UnscentedKalmanFilter<double,3,3> m_ukf;
-      OFP::SquareRootUnscentedKalmanFilter3<double,3,3> m_srukf;
+      OFP::SquareRootUnscentedKalmanFilter<double,3,3> m_srukf;
+      OFP::SquareRootUnscentedKalmanFilter<double,3,1> m_srukf2;
       Eigen::Matrix<double, 3, 1> pos_current;
       Eigen::Matrix<double, 3, 1> pos_previous;
       
-      OFP::AlgebraicSolver<double, 5, 9> m_aslv;
+      OFP::AlgebraicSolver<double, 3, 9, 5> m_aslv;
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
       //! Reference coordinate used to calculate NED frame
@@ -130,8 +129,8 @@ namespace SourceEstimators
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
-        m_ukf(0.001, 2.0, 0.0),
-        m_srukf(0.001, 2.0, 0.0)
+        m_srukf(0.001, 2.0, 0.0),
+        m_srukf2(0.001, 2.0, 0.0)
       {
         param("Ranging - SNR Fit", m_args.ranging_snr_fit)
         .size(2)
@@ -331,7 +330,6 @@ namespace SourceEstimators
           ykest(0) = r2 - r1; // h is eq (2.16) in masters
           ykest(1) = r2; // Eq (2.19) in masters
           ykest(2) = x(2); // Depth estimate
-          //std::cout << this->pos_current << std::endl;
           return ykest;
         };
         Eigen::Matrix<double, 3, 3> A;
@@ -344,15 +342,25 @@ namespace SourceEstimators
 
           return A*x;
         };
-        m_ukf.dt = m_args.filter_timestep;
 
-        m_ukf.Q = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Qm.data());
-        m_ukf.R = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Rm.data());
-        m_ukf.PHat = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.P0.data());
-        m_ukf.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.x0.data());
-        m_ukf.dt = m_args.filter_timestep;
 
-       /* m_srukf.h = [this](Eigen::Matrix<double, 3, 1> x) {
+        m_srukf.setInitialCovariance(Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.P0.data()));
+        m_srukf.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.x0.data());
+        m_srukf.setUnscentedParameters(m_args.alpha, m_args.beta, m_args.kappa);
+        m_srukf.setProcessCovariance(Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Qm.data()));
+        m_srukf.setMeasurmentCovariance(Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Rm.data()));
+        m_srukf.dt = m_args.filter_timestep;
+
+        m_srukf2.dt = m_args.filter_timestep;
+
+        m_srukf2.setInitialCovariance(Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.P0.data()));
+        m_srukf2.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.x0.data());
+        m_srukf2.setUnscentedParameters(m_args.alpha, m_args.beta, m_args.kappa);
+        m_srukf2.setProcessCovariance(Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Qm.data()));
+        m_srukf2.setMeasurmentCovariance(Eigen::Matrix<double, 1, 1>(m_args.Rm[0]));
+        m_srukf2.dt = m_args.filter_timestep;
+        m_srukf2.f = m_srukf.f;
+        m_srukf2.h = [this](Eigen::Matrix<double, 3, 1> x) {
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
           Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
           Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
@@ -360,22 +368,11 @@ namespace SourceEstimators
           double r2 = distance2.norm();// ||X_e-X_rx1||
           
           // Calculate estimated measurements
-          Eigen::Matrix<double, 3, 1> ykest;
+          Eigen::Matrix<double, 1, 1> ykest;
           ykest(0) = r2 - r1; // h is eq (2.16) in masters
-          ykest(1) = r2; // Eq (2.19) in masters
-          ykest(2) = x(2); // Depth estimate
-          std::cout << this->pos_current << std::endl;
           return ykest;
-        };*/
+        };
 
-        m_ukf.f = m_srukf.f;
-        m_ukf.h = m_srukf.h;
-        m_srukf.setInitialCovariance(Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.P0.data()));
-        m_srukf.xHat = Eigen::Map<Eigen::Matrix<double, 3, 1> >(m_args.x0.data());
-        //m_srukf.setUnscentedParameters(m_args.alpha, m_args.beta, m_args.kappa);
-        m_srukf.setProcessCovariance(Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Qm.data()));
-        m_srukf.setMeasurmentCovariance(Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.Rm.data()));
-        m_srukf.dt = m_args.filter_timestep;
         //! Set timer for periodic part of filter
         m_filter_timer.setTop(m_args.filter_timestep);
       }
@@ -455,10 +452,10 @@ namespace SourceEstimators
                   m_srukf.active = true;
                   //m_srukf.predict();
                 }
-                if(!m_ukf.active) {
-                  m_ukf.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
-                  m_ukf.active = true;
-                  //m_ukf.predict();
+                if(!m_srukf2.active) {
+                  m_srukf2.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
+                  m_srukf2.active = true;
+                  //m_srukf2.predict();
                 }
                 #if SingleReceiverSRUKFLog
                 double result[3] = {m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)};
@@ -479,7 +476,7 @@ namespace SourceEstimators
               pos_current <<  NED1[0], NED1[1], m_args.receiver_depth;
               pos_previous << NED2[0], NED2[1], m_args.receiver_depth;
               m_srukf.update(allMeasurements.block(6,0,3,1));
-              m_ukf.update(allMeasurements.block(6,0,3,1));
+              m_srukf2.update(allMeasurements.block(6,0,1,1));
               return;
               
           }
@@ -525,10 +522,10 @@ namespace SourceEstimators
                   #endif
                   spew("New SRKalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_srukf.xHat(0), m_srukf.xHat(1), m_srukf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
             }
-            if(m_ukf.active) {
-              m_ukf.predict(); // Filter time update
+            if(m_srukf2.active) {
+              m_srukf2.predict(); // Filter time update
                   double lati,longi;
-                  double result[3] = {m_ukf.xHat(0),m_ukf.xHat(1),m_ukf.xHat(2)};
+                  double result[3] = {m_srukf2.xHat(0),m_srukf2.xHat(1),m_srukf2.xHat(2)};
                 double latLon[3];
                 fromNEDframe(result, m_refCoord, latLon);
                 lati=latLon[0], longi=latLon[1];
@@ -536,8 +533,8 @@ namespace SourceEstimators
                   IMC::RemoteSensorInfo tagPosition;
                   tagPosition.lat = lati;
                   tagPosition.lon = longi;
-                  tagPosition.alt = -m_ukf.xHat(2);
-                  tagPosition.data = std::to_string(m_ukf.xHat(0)) + std::to_string(m_ukf.xHat(1)) + "," + std::to_string(m_ukf.xHat(2));
+                  tagPosition.alt = -m_srukf2.xHat(2);
+                  tagPosition.data = std::to_string(m_srukf2.xHat(0)) + std::to_string(m_srukf2.xHat(1)) + "," + std::to_string(m_srukf2.xHat(2));
                   tagPosition.id = "UKF" + std::to_string(m_args.receiver_serial);
                   dispatch(tagPosition);
                   #if SingleReceiverSRUKFLog
@@ -548,11 +545,11 @@ namespace SourceEstimators
                   logOutStream.open(filename, std::fstream::app);
                   if (logOutStream.good()) {
                     logOutStream.precision(15);
-                      logOutStream << m_ukf.xHat(0) << "," << m_ukf.xHat(1) << "," << m_ukf.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+                      logOutStream << m_srukf2.xHat(0) << "," << m_srukf2.xHat(1) << "," << m_srukf2.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
                       logOutStream.close();
                   }   
                   #endif
-                  spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ukf.xHat(0), m_ukf.xHat(1), m_ukf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+                  spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_srukf2.xHat(0), m_srukf2.xHat(1), m_srukf2.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
             }
           }
           waitForMessages(m_args.message_wait_time);

@@ -105,7 +105,7 @@ namespace SourceEstimators
 
       OFP::ExtendedKalmanFilter<double, 3, 3> m_ekf;
       OFP::ExtendedKalmanFilter<double, 3, 1> m_ekf2;
-      OFP::AlgebraicSolver<double, 5, 9> m_aslv;
+      OFP::AlgebraicSolver<double, 3, 9, 5> m_aslv;
       Eigen::Matrix<double, 3, 1> pos_current;
       Eigen::Matrix<double, 3, 1> pos_previous;
       //! How far back into the buffer to attempt period matching.
@@ -438,7 +438,6 @@ namespace SourceEstimators
 
               Eigen::Matrix<double, 9, 1> allMeasurements;
               allMeasurements << NED2[0] ,NED2[1] ,m_args.receiver_depth, NED1[0] ,NED1[1] ,m_args.receiver_depth, rdoa, rangeSNR, depth;
-
               if (m_aslv.addMeasurement(allMeasurements)) {
               
                 double result[3] = {m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)};
