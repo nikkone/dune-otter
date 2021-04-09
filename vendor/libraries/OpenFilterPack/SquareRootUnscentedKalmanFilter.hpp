@@ -107,8 +107,6 @@ namespace OFP
           Eigen::Matrix<T, measurements, 2*states+1> sigmaDelta = sigmaPoints_h.colwise() - yk_est;
 
           Eigen::Matrix<T, measurements, 2*states+measurements> QR;
-          std::cout << "std::sqrt(Wc(0,1))*sigmaDelta.block(0,1,measurements, 2*states))" << std::endl << std::sqrt(Wc(0,1))*sigmaDelta.block(0,1,measurements, 2*states) << std::endl;
-          std::cout << "R_sqrt" << std::endl << R_sqrt << std::endl;
           QR << (std::sqrt(Wc(0,1))*sigmaDelta.block(0,1,measurements, 2*states)), R_sqrt;
 
           Eigen::Matrix<T, measurements, measurements> Sy = QR.transpose().householderQr().matrixQR().topLeftCorner(measurements, measurements).template triangularView<Eigen::Upper>();
