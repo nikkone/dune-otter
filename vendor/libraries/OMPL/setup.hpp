@@ -1,7 +1,7 @@
 #ifndef OMPL_FOR_DUNE_LIBRARY
 #define OMPL_FOR_DUNE_LIBRARY
 
-#define OMPL_BENCHMARK 1
+#define OMPL_BENCHMARK 0
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <ENCGIS/DBconnection.hpp>
@@ -9,7 +9,6 @@
 #include <OMPL/OMPLfunctions.hpp>
 #include <OMPL/OMPLMotionValidator.hpp>
 #include <OMPL/OMPLMotionValidator2.hpp>
-#include <OMPL/LatLonOptimizationObjective.hpp>
 
 // OMPL headers
 #include <ompl/base/SpaceInformation.h>

@@ -28,7 +28,7 @@ namespace ENCGIS
         std::runtime_error("Error (" + op + "): " + msg)
       { }
     };
-    DBconnection(std::string filename, int flag);
+    DBconnection(std::string filename, int flag, int epsgIn);
     ~DBconnection();
 
 
@@ -58,11 +58,11 @@ namespace ENCGIS
     int checkTransectLanding(double startLat, double startLon, double endLat, double endLon, std::string table="lndaretable", bool useSpatialIndex=true);
 
     sqlite3 *db;
-
+    int epsg;
   };
       class isPointInLayerStatement {
       public:
-      isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db);
+      isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg);
       ~isPointInLayerStatement();
         int run(double lat, double lon);
       private:
@@ -72,7 +72,7 @@ namespace ENCGIS
 
       class lineIntersectLayerStatement {
       public:
-      lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db);
+      lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg);
       ~lineIntersectLayerStatement();
         int run(double startLat, double startLon, double endLat, double endLon);
       private:

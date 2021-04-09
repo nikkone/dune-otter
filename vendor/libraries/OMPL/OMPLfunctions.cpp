@@ -30,7 +30,7 @@
 #include "OMPLfunctions.hpp"
 
 #include <ompl/base/spaces/RealVectorStateSpace.h>
-
+#include <DUNE/Coordinates/UTM.hpp>
 namespace MotionPlanners
 {
   //! @author Nikolai Lauvås
@@ -102,15 +102,16 @@ namespace MotionPlanners
 
 
 
-    DUNE::IMC::PlanDB createPlanDBEntry(og::PathGeometric paths, std::string plan_id, fp32_t speed) {
+    DUNE::IMC::PlanDB createPlanDBEntryUTM(og::PathGeometric paths, std::string plan_id, fp32_t speed, int zone) {
 
-    DUNE::IMC::MessageList<DUNE::IMC::Maneuver> maneuvers; //Define list of meneuvers
+      DUNE::IMC::MessageList<DUNE::IMC::Maneuver> maneuvers; //Define list of meneuvers
         // Make maneuvers
         for(unsigned i=0;i<paths.getStateCount();i++) {
             const auto state= static_cast<const ompl::base::RealVectorStateSpace::StateType *>(paths.getState(i));
             DUNE::IMC::Goto* go_near = new DUNE::IMC::Goto();
-            go_near->lat = DUNE::Math::Angles::radians(state->values[1]);
-            go_near->lon = DUNE::Math::Angles::radians(state->values[0]);
+            DUNE::Coordinates::UTM::toWGS84(state->values[0], state->values[1], zone, true, &(go_near->lat), &(go_near->lon));
+            //go_near->lat = DUNE::Math::Angles::radians(state->values[1]);
+            //go_near->lon = DUNE::Math::Angles::radians(state->values[0]);
             go_near->speed_units = DUNE::IMC::SUNITS_METERS_PS;
             go_near->speed = speed;//m_args.speed_rpms;
             maneuvers.push_back(*go_near);

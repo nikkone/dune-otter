@@ -2,13 +2,13 @@
 
 namespace ENCGIS {
 
-      isPointInLayerStatement::isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db) {
-        /*std::string query = "select sum(intersects(MakePoint(?1,?2, 4326), geom)) as c from (SELECT geom FROM " + layer + " "
+      isPointInLayerStatement::isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg) {
+        /*std::string query = "select sum(intersects(MakePoint(?1,?2, " + epsg + " ), geom)) as c from (SELECT geom FROM " + layer + " "
       "WHERE ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = '" + layer + "' AND "
-          "search_frame = BuildMbr(?1,?2,?1,?2, 4326)));"; */
-      std::string query = "select sum(intersects(MakePoint(?1,?2, 4326), " + geometry_column + ")) FROM " + layer + " "
+          "search_frame = BuildMbr(?1,?2,?1,?2, " + epsg + " )));"; */
+      std::string query = "select sum(intersects(MakePoint(?1,?2, " + std::to_string(geometry_epsg) + " ), " + geometry_column + ")) FROM " + layer + " "
       "WHERE ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = '" + layer + "' AND "
@@ -21,9 +21,9 @@ namespace ENCGIS {
           sqlite3_finalize(m_handle);
       }
 
-      int isPointInLayerStatement::run(double lat, double lon) {
-        sqlite3_bind_double(m_handle,1,lon);
-        sqlite3_bind_double(m_handle,2,lat);
+      int isPointInLayerStatement::run(double X, double Y) {
+        sqlite3_bind_double(m_handle,1,X);
+        sqlite3_bind_double(m_handle,2,Y);
         // Execute
         if(sqlite3_step(m_handle) == SQLITE_ROW) {
           statusLastResult = sqlite3_column_int(m_handle, 0);
@@ -36,8 +36,8 @@ namespace ENCGIS {
         }
       }
 
-      lineIntersectLayerStatement::lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db) {
-     std::string query = "select sum(intersects(makeline(makepoint(?1,?2, 4326), makepoint(?3,?4, 4326)), " + geometry_column + ")) FROM " + layer + " "
+      lineIntersectLayerStatement::lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg) {
+     std::string query = "select sum(intersects(makeline(makepoint(?1,?2, " + std::to_string(geometry_epsg) + " ), makepoint(?3,?4, " + std::to_string(geometry_epsg) + ")), " + geometry_column + ")) FROM " + layer + " "
       "WHERE ROWID IN ("
       "SELECT ROWID FROM SpatialIndex "
       "WHERE f_table_name = '" + layer + "' AND "
@@ -51,11 +51,11 @@ namespace ENCGIS {
           sqlite3_finalize(m_handle);
       }
 
-      int lineIntersectLayerStatement::run(double startLat, double startLon, double endLat, double endLon) {
-        sqlite3_bind_double(m_handle,1,startLon);
-        sqlite3_bind_double(m_handle,2,startLat);
-        sqlite3_bind_double(m_handle,3,endLon);
-        sqlite3_bind_double(m_handle,4,endLat);
+      int lineIntersectLayerStatement::run(double startX, double startY, double endX, double endY) {
+        sqlite3_bind_double(m_handle,1,startX);
+        sqlite3_bind_double(m_handle,2,startY);
+        sqlite3_bind_double(m_handle,3,endX);
+        sqlite3_bind_double(m_handle,4,endY);
         // Execute
         if(sqlite3_step(m_handle) == SQLITE_ROW) {
           statusLastResult = sqlite3_column_int(m_handle, 0);
@@ -69,16 +69,16 @@ namespace ENCGIS {
       }
 
 
-  bool DBconnection::isPointInLayer(double lat, double lon, std::string table, bool useSpatialIndex) {
+  bool DBconnection::isPointInLayer(double X, double Y, std::string table, bool useSpatialIndex) {
       std::string sql_stmt;
     if(useSpatialIndex) {
-        sql_stmt = "select sum(intersects(MakePoint(" + std::to_string(lon) + ", " + std::to_string(lat) + ", 4326), geom)) as c from (SELECT geom FROM " + table + " "
+        sql_stmt = "select sum(intersects(MakePoint(" + std::to_string(Y) + ", " + std::to_string(X) + ", " + std::to_string(epsg) + " ), geom)) as c from (SELECT geom FROM " + table + " "
       "WHERE ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = '" + table + "' AND "
-          "search_frame = BuildMbr(" + std::to_string(lon) + ", " + std::to_string(lat) + "," + std::to_string(lon) + ", " + std::to_string(lat) + ", 4326)));"; 
+          "search_frame = BuildMbr(" + std::to_string(Y) + ", " + std::to_string(X) + "," + std::to_string(Y) + ", " + std::to_string(X) + ", " + std::to_string(epsg) + " )));"; 
     } else {
-        sql_stmt = "select count(*) from " + table + " as d where intersects(MakePoint(" + std::to_string(lon) + ", " + std::to_string(lat) + ", 4326), d.geom) limit 1";
+        sql_stmt = "select count(*) from " + table + " as d where intersects(MakePoint(" + std::to_string(Y) + ", " + std::to_string(X) + ", " + std::to_string(epsg) + " ), d.geom) limit 1";
     }
     //std::cout << sql_stmt << std::endl;
     //Setup
@@ -120,7 +120,7 @@ namespace ENCGIS {
     runQuery("select spatialite_version();");
   }
 
-    DBconnection::DBconnection(std::string filename, int flag) {
+    DBconnection::DBconnection(std::string filename, int flag, int epsgIn): epsg(epsgIn) {
 
       int rc = sqlite3_open_v2(filename.c_str(), &db,flag,0);
       if( rc ){
@@ -134,17 +134,17 @@ namespace ENCGIS {
       sqlite3_close(db);
     }
 
-  int DBconnection::checkTransectLanding(double startLat, double startLon, double endLat, double endLon, std::string table, bool useSpatialIndex) {
+  int DBconnection::checkTransectLanding(double startX, double startY, double endX, double endY, std::string table, bool useSpatialIndex) {
     std::string sql_stmt;
     if(useSpatialIndex) {
       // WARNING: This needs rtree module in sqlite, can be enabled by adding set(SQLITE3_C_FLAGS "${SQLITE3_C_FLAGS} -DSQLITE_ENABLE_RTREE=1") to vendor/libraries/sqlite3/Library.cmake
-      sql_stmt = "select sum(intersects(makeline(makepoint(" + std::to_string(startLon) + ", " + std::to_string(startLat) + ", 4326), makepoint(" + std::to_string(endLon) + ", " + std::to_string(endLat) + ", 4326)), geom)) as s from (SELECT geom FROM " + table + " "
+      sql_stmt = "select sum(intersects(makeline(makepoint(" + std::to_string(startX) + ", " + std::to_string(startY) + ", " + std::to_string(epsg) + " ), makepoint(" + std::to_string(endX) + ", " + std::to_string(endY) + ", " + std::to_string(epsg) + " )), geom)) as s from (SELECT geom FROM " + table + " "
       "WHERE ROWID IN ("
       "SELECT ROWID FROM SpatialIndex "
       "WHERE f_table_name = '" + table + "' AND "
-      "search_frame = BuildMbr(" + std::to_string(startLon) + ", " + std::to_string(startLat) + ", " + std::to_string(endLon) + ", " + std::to_string(endLat) + ", 4326)))";
+      "search_frame = BuildMbr(" + std::to_string(startX) + ", " + std::to_string(startY) + ", " + std::to_string(endX) + ", " + std::to_string(endY) + ", " + std::to_string(epsg) + " )))";
     } else {
-      sql_stmt = "select count(*) from " + table + " as l where intersects(GeomFromText(\"LineString(" + std::to_string(startLon) + " " + std::to_string(startLat) + ", " + std::to_string(endLon) + " " + std::to_string(endLat) + ")\", 4326), l.geom)";
+      sql_stmt = "select count(*) from " + table + " as l where intersects(GeomFromText(\"LineString(" + std::to_string(startX) + " " + std::to_string(startY) + ", " + std::to_string(endX) + " " + std::to_string(endY) + ")\", " + std::to_string(epsg) + " ), l.geom)";
     }
     /*
     std::pair<bool, int> DBDepth;

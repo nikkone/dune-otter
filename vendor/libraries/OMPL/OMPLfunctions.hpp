@@ -48,7 +48,7 @@ namespace MotionPlanners
         //! @param[in] paths The geometric path to be add to create a plan from.
         //! @param[in] plan_id A unique ID/name for the plan. To activate the task. To activate the path, a IMC::PlanControl message using this name needs to be sent
         //! @param[in] speed The speed to set in the meneuvers.
-        DUNE::IMC::PlanDB createPlanDBEntry(og::PathGeometric paths, std::string plan_id, fp32_t speed);
+        DUNE::IMC::PlanDB createPlanDBEntryUTM(og::PathGeometric paths, std::string plan_id, fp32_t speed, int zone);
 
 
         //! Function to be used as a state validator in OMPL. 

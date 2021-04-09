@@ -82,9 +82,6 @@ namespace OMPLintegrationDUNE
   ss.setStateValidityChecker([pointCheck](const ompl::base::State *state) { return isStateValid(state, pointCheck); });
   //ss.setStateValidityChecker([&](const ompl::base::State *state) { return MotionPlanners::OMPL::isStateValid(state, m_con); });
 
-  // Set optimization objective to strive for if optimizing planner is used
-  ss.setOptimizationObjective(std::make_shared<MotionPlanners::OMPL::LatLonDist>(ss.getSpaceInformation()));
-
   // Create the start state
   ompl::base::ScopedState<> start(space);
   start[0]=startLon;

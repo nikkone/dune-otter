@@ -46,7 +46,7 @@ namespace ENCGIS
       //! @param[in] lat The longitudinal position of the node.
       //! @param[in] lon The latitudinal position of the node.
       //! @param[in] ID A unique ID for the node. Auto-increments if ID=0
-      bool insertNode(std::string dbTreeName, unsigned ParentID,double lat, double lon, unsigned ID=0);
+      bool insertNode(std::string dbTreeName, unsigned ParentID,double X, double Y, unsigned ID=0);
 
       //! Gets the location of a node in the tree stored in the database.
       //! @param[in] dbTreeName The table in the database to use.

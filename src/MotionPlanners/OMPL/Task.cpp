@@ -102,12 +102,12 @@ namespace MotionPlanners
 
         param("Planning Bounds", m_args.planningBounds)
         .size(4)
-        .defaultValue("63.407093, 10.369549, 63.463678, 10.426469")
+        .defaultValue("568399.476507, 7031678.685762, 571101.488332, 7038044.467683")
         .description("Define the area searched for a solution (minLat, minLon, maxLat, maxLon)");
 
         param("Start and Goal", m_args.startAndEnd)
         .size(4)
-        .defaultValue("63.44540, 10.38627, 63.41434, 10.38903")
+        .defaultValue("569142.113652, 7035964.208531, 569354.798021, 7032506.975707")
         .description("A starting point and end point to use while developing");   
 #if OMPL_BENCHMARK
         param("Benchmark Name", m_args.benchmark_name)
@@ -151,9 +151,9 @@ namespace MotionPlanners
       onResourceAcquisition(void)
       {
         try{
-          m_con = new ENCGIS::DBconnection(m_args.dbPath, SQLITE_OPEN_READONLY);
-          pointCheck =    new ENCGIS::isPointInLayerStatement("deparepolygon", "geometry", m_con->db);
-          lineCheck = new ENCGIS::lineIntersectLayerStatement("lndarepolygon", "geometry", m_con->db);
+          m_con = new ENCGIS::DBconnection(m_args.dbPath, SQLITE_OPEN_READONLY, 32632);
+          pointCheck = new ENCGIS::isPointInLayerStatement("deparepolygon", "geometry", m_con->db, 32632);
+          lineCheck = new ENCGIS::lineIntersectLayerStatement("lndarepolygon", "geometry", m_con->db,32632);
         } catch(std::runtime_error& e) {
           err(DTR("Problem opening charts database: %s"), e.what());
           // Set task state to failure
@@ -215,20 +215,16 @@ namespace MotionPlanners
         #else
           og::PathGeometric states = OMPLintegrationDUNE::findPath(setup, m_args.maxPlaningTime);
           //// Dispatch and activate returned path
-          IMC::PlanDB pdb = MotionPlanners::OMPL::createPlanDBEntry(states, "autoPlan", 1.0);
+          IMC::PlanDB pdb = MotionPlanners::OMPL::createPlanDBEntryUTM(states, "autoPlan", 1.0, 32);
           dispatch(pdb);
           activatePlan("autoPlan");
           //MotionPlanners::OMPL::printPath(states);
           // Write path to DB for visualization purposes
-          ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE);
+          ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 32632);
           ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_writable);
           m_writable->runNoOutputQuery("select InitSpatialMetadata(1);");
           tree->resetTree("tree");
-          //tree->deleteTree("tree");
           tree->createTree("tree");
-          //tree->resetTree("tree");
-          //m_con->runNoOutputQuery("delete from tree;");
-          //m_con->runNoOutputQuery("delete from sqlite_sequence where name=tree;");
           MotionPlanners::OMPL::pathToTree(states, "tree", tree);
           inf("Wrote to tree");
           Memory::clear(tree);
