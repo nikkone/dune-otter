@@ -102,6 +102,34 @@ namespace MotionPlanners
 
 
 
+    DUNE::IMC::PlanDB createPlanDBEntry(og::PathGeometric paths, std::string plan_id, fp32_t speed) {
+
+    DUNE::IMC::MessageList<DUNE::IMC::Maneuver> maneuvers; //Define list of meneuvers
+        // Make maneuvers
+        for(unsigned i=0;i<paths.getStateCount();i++) {
+            const auto state= static_cast<const ompl::base::RealVectorStateSpace::StateType *>(paths.getState(i));
+            DUNE::IMC::Goto* go_near = new DUNE::IMC::Goto();
+            go_near->lat = DUNE::Math::Angles::radians(state->values[0]);
+            go_near->lon = DUNE::Math::Angles::radians(state->values[1]);
+            go_near->speed_units = DUNE::IMC::SUNITS_METERS_PS;
+            go_near->speed = speed;//m_args.speed_rpms;
+            maneuvers.push_back(*go_near);
+
+            delete go_near;
+            //std::cout << "State " << i << ": " << state->values[0] << " " << state->values[1] << std::endl;
+        }
+        DUNE::IMC::PlanSpecification pspec;
+        sequentialPlan(plan_id, &maneuvers, pspec);
+        DUNE::IMC::PlanDB pdb;
+        pdb.op = DUNE::IMC::PlanDB::DBOP_SET;
+        pdb.type = DUNE::IMC::PlanDB::DBT_REQUEST;
+        pdb.plan_id = pspec.plan_id;
+        pdb.arg.set(pspec);
+        pdb.request_id = 0;
+
+        return pdb;
+    }
+
     DUNE::IMC::PlanDB createPlanDBEntryUTM(og::PathGeometric paths, std::string plan_id, fp32_t speed, int zone) {
 
       DUNE::IMC::MessageList<DUNE::IMC::Maneuver> maneuvers; //Define list of meneuvers
