@@ -535,10 +535,10 @@ namespace SourceEstimators
                   tagPosition.lon = longi;
                   tagPosition.alt = -m_srukf2.xHat(2);
                   tagPosition.data = std::to_string(m_srukf2.xHat(0)) + std::to_string(m_srukf2.xHat(1)) + "," + std::to_string(m_srukf2.xHat(2));
-                  tagPosition.id = "UKF" + std::to_string(m_args.receiver_serial);
+                  tagPosition.id = "SRUKF2" + std::to_string(m_args.receiver_serial);
                   dispatch(tagPosition);
                   #if SingleReceiverSRUKFLog
-                  std::string filename = "log/predictukf-";
+                  std::string filename = "log/predict2-";
                   filename += getEntityLabel();
                   filename += ".log";
                   std::ofstream logOutStream;
