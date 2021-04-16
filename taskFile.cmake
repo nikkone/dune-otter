@@ -16,6 +16,7 @@ dune_add_task(${PROJECT_SOURCE_DIR}/src Simulators/Motor/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Simulators/VSIM/Task.cmake)
 
 dune_add_task(${PROJECT_SOURCE_DIR}/src Sensors/GPS/Task.cmake)
+dune_add_task(${PROJECT_SOURCE_DIR}/src Sensors/ThermalZone/Task.cmake)
 
 dune_add_task(${PROJECT_SOURCE_DIR}/src UserInterfaces/LEDs/Task.cmake)
 
