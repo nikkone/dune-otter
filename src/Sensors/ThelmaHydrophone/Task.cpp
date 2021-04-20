@@ -700,7 +700,8 @@ namespace Sensors
               timestamp_send_counter++;
             }
           }
-          consumeMessages();
+          //consumeMessages();
+          waitForMessages(1.0);
         }
       }
     };
