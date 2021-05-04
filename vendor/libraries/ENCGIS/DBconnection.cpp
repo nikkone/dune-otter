@@ -8,11 +8,22 @@ namespace ENCGIS {
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = '" + layer + "' AND "
           "search_frame = BuildMbr(?1,?2,?1,?2, " + epsg + " )));"; */
-      std::string query = "select sum(intersects(MakePoint(?1,?2, " + std::to_string(geometry_epsg) + " ), " + geometry_column + ")) FROM " + layer + " "
+
+      //OLD: Does not stop after one intersection is returned
+      /*std::string query = "select sum(intersects(MakePoint(?1,?2, " + std::to_string(geometry_epsg) + " ), " + geometry_column + ")) FROM " + layer + " "
       "WHERE ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = '" + layer + "' AND "
-          "search_frame = BuildMbr(?1,?2,?1,?2));"; 
+          "search_frame = BuildMbr(?1,?2,?1,?2));";*/
+          
+      // New: Stops at first intersection
+      std::string query = "select 1 from " + layer + " WHERE ROWID IN ("
+        "SELECT ROWID FROM SpatialIndex "
+        "WHERE f_table_name = '" + layer + "' AND "
+          "search_frame = BuildMbr(?1,?2,?1,?2)) and "
+		    "intersects(MakePoint(?1,?2, " + std::to_string(geometry_epsg) + " ), " + geometry_column + ") limit 1";
+
+
         sqlite3_prepare_v3(db, query.c_str(), -1, SQLITE_PREPARE_PERSISTENT, &m_handle, 0);
       }
 
@@ -37,12 +48,21 @@ namespace ENCGIS {
       }
 
       lineIntersectLayerStatement::lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg) {
-     std::string query = "select sum(intersects(makeline(makepoint(?1,?2, " + std::to_string(geometry_epsg) + " ), makepoint(?3,?4, " + std::to_string(geometry_epsg) + ")), " + geometry_column + ")) FROM " + layer + " "
+        //OLD: Does not stop after one polygon is returned
+     /*std::string query = "select sum(intersects(makeline(makepoint(?1,?2, " + std::to_string(geometry_epsg) + " ), makepoint(?3,?4, " + std::to_string(geometry_epsg) + ")), " + geometry_column + ")) FROM " + layer + " "
       "WHERE ROWID IN ("
       "SELECT ROWID FROM SpatialIndex "
       "WHERE f_table_name = '" + layer + "' AND "
-      "search_frame = BuildMbr(?1,?2,?3,?4))";
-      //printf("%s", query.c_str());
+      "search_frame = BuildMbr(?1,?2,?3,?4))";*/
+        // New: Stops at first intersection
+    std::string query = "select 1 FROM '" + layer + "' "
+	  "WHERE ROWID IN ("
+		"SELECT ROWID FROM SpatialIndex "
+		"WHERE f_table_name = '" + layer + "' AND "
+		"search_frame = BuildMbr(?1,?2,?3,?4)) AND "
+		"intersects(makeline(makepoint(?1,?2, " + std::to_string(geometry_epsg) + " ), makepoint(?3,?4, " + std::to_string(geometry_epsg) + ")), " + geometry_column + ") limit 1";
+
+      //printf("\n%s\n", query.c_str());
         sqlite3_prepare_v3(db, query.c_str(), -1, SQLITE_PREPARE_PERSISTENT, &m_handle, 0);
       }
 
@@ -61,9 +81,11 @@ namespace ENCGIS {
           statusLastResult = sqlite3_column_int(m_handle, 0);
           sqlite3_reset(m_handle);
           //return sqlite3_stmt_status(m_handle, SQLITE_STMTSTATUS_FULLSCAN_STEP, false);
+        //  printf("\nOne\n");
           return statusLastResult;
         } else {
           sqlite3_reset(m_handle);
+        //  printf("\nZero\n");
           return 0;
         }
       }

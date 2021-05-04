@@ -1,4 +1,37 @@
 #include "setup.hpp"
+#include <ompl/geometric/planners/informedtrees/ABITstar.h>
+
+#if OMPL_BENCHMARK
+  #include <ompl/geometric/planners/kpiece/LBKPIECE1.h>
+  #include <ompl/geometric/planners/informedtrees/BITstar.h>
+  #include <ompl/geometric/planners/informedtrees/AITstar.h>
+  #include <ompl/geometric/planners/rrt/RRTstar.h>
+  #include <ompl/geometric/planners/rrt/RRTsharp.h>
+  #include <ompl/geometric/planners/fmt/FMT.h>
+  #include <ompl/geometric/planners/cforest/CForest.h>
+  #include <ompl/geometric/planners/rrt/InformedRRTstar.h>
+  #include <ompl/geometric/planners/rrt/LBTRRT.h>
+  #include <ompl/geometric/planners/sst/SST.h>
+  #include <ompl/geometric/planners/rrt/TRRT.h>
+  #include <ompl/geometric/planners/rrt/RRTXstatic.h>
+  #include <ompl/geometric/planners/prm/SPARS.h>
+  #include <ompl/geometric/planners/prm/SPARStwo.h>
+
+
+
+#endif
+
+#include <algorithm> 
+#include <chrono> 
+#include <iostream> 
+#include <vector> 
+#include <utility>
+
+#include <ENCGIS/DBTree.hpp>
+#include <OMPL/OMPLfunctions.hpp>
+#include <OMPL/OMPLMotionValidator.hpp>
+#include <OMPL/OMPLMotionValidator2.hpp>
+
 namespace OMPLintegrationDUNE
 {
   /*
@@ -165,11 +198,12 @@ namespace OMPLintegrationDUNE
       {
           ompl::geometric::ABITstar *planner = new og::ABITstar(si);
           planner->setName(name);
-          planner->setPruning(false);
+          planner->setPruning(true);
           //planner->setUseKNearest(false);
           //planner->setStopOnSolnImprovement(true);
           return ompl::base::PlannerPtr(planner);
       }
+
 #if OMPL_BENCHMARK
       //! Function for performing benchmarks on a setup.
       void bmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount)
@@ -181,6 +215,51 @@ namespace OMPLintegrationDUNE
           // Planners to be tested
           b.addPlannerAllocator(std::bind(&kabitstar, std::placeholders::_1, "kABITstar"));
           
+          // Configure planner through the request class
+          ompl::tools::Benchmark::Request req = ompl::tools::Benchmark::Request();
+          req.maxTime = benchmark_maxTime;
+          req.maxMem = benchmark_maxMem;
+          req.runCount = benchmark_runCount;
+          req.displayProgress = true;
+
+          // Run the configured benchmark
+          b.benchmark(req);
+          
+          // Save result as ompl_host_time.log. This can be further transformed to a DB with ompl_benchmark_statistics.py
+          b.saveResultsToFile();
+      }
+
+      ompl::base::PlannerPtr kbitstar(const ompl::base::SpaceInformationPtr &si, std::string name)
+      {
+          ompl::geometric::BITstar *planner = new og::BITstar(si);
+          planner->setName(name);
+          planner->setPruning(true);
+          //planner->setUseKNearest(false);
+          //planner->setStopOnSolnImprovement(true);
+          return ompl::base::PlannerPtr(planner);
+      }
+
+      void multiBmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount)
+      {
+
+          // Bencmarking code
+          ompl::tools::Benchmark b(ss, benchmark_name);
+          // Planners to be tested
+//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::LBKPIECE1(ss.getSpaceInformation())));
+b.addPlannerAllocator(std::bind(&kbitstar, std::placeholders::_1, "kBITstar"));
+b.addPlannerAllocator(std::bind(&kabitstar, std::placeholders::_1, "kABITstar"));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::FMT(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTstar(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTsharp(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::AITstar(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::InformedRRTstar(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::TRRT(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::LBTRRT(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::SST(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTXstatic(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::SPARS(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::SPARStwo(ss.getSpaceInformation())));
+
           // Configure planner through the request class
           ompl::tools::Benchmark::Request req = ompl::tools::Benchmark::Request();
           req.maxTime = benchmark_maxTime;

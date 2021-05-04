@@ -37,6 +37,8 @@
 // OMPL integration for DUNE
 #include <OMPL/setup.hpp>
 
+#include <OMPL/OMPLfunctions.hpp>
+
 namespace MotionPlanners
 {
   //! This task demonstrates how OMPL is used in DUNE along with ENCGIS

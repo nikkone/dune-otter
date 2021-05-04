@@ -36,6 +36,7 @@
 
 // OMPL integration for DUNE
 #include <OMPL/setup.hpp>
+#include <OMPL/OMPLfunctions.hpp>
 
 namespace MotionPlanners
 {
@@ -50,6 +51,10 @@ namespace MotionPlanners
       //! The path of the database.
       std::string dbPath;
       std::string resultsDBpath;
+      //! Navigable Layer Name
+      std::string dbNavigableLayerName;
+      //! Innavigable Layer Name
+      std::string dbInnavigableLayerName;
       //! How long a planner is run before terminated.
       double maxPlaningTime;
       //! If a valid path is available, allow optimizing until the given time. If non-optimizing planner used, this is ignored.
@@ -89,6 +94,18 @@ namespace MotionPlanners
         param("Result DB Path", m_args.resultsDBpath)
         .defaultValue("")
         .description("If set, the results are written to trees in this db.");
+
+        param("DB Path", m_args.dbPath)
+        .defaultValue("")
+        .description("Path of the db");
+
+        param("Navigable Layer Name", m_args.dbNavigableLayerName)
+        .defaultValue("navigable")
+        .description("Navigable Layer Name");
+
+        param("Innavigable Layer Name", m_args.dbInnavigableLayerName)
+        .defaultValue("innavigable")
+        .description("Innavigable Layer Name");
 
         param("Max Planning Time", m_args.maxPlaningTime)
         .units(DUNE::Units::Second)
@@ -152,12 +169,26 @@ namespace MotionPlanners
       {
         try{
           m_con = new ENCGIS::DBconnection(m_args.dbPath, SQLITE_OPEN_READONLY, 32632);
-          pointCheck = new ENCGIS::isPointInLayerStatement("deparepolygon", "geometry", m_con->db, 32632);
-          lineCheck = new ENCGIS::lineIntersectLayerStatement("lndarepolygon", "geometry", m_con->db,32632);
         } catch(std::runtime_error& e) {
           err(DTR("Problem opening charts database: %s"), e.what());
           // Set task state to failure
         }
+        try{
+          pointCheck = new ENCGIS::isPointInLayerStatement(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632);
+        } catch(std::runtime_error& e) {
+          err(DTR("Problem creating query for navigable layer: %s"), e.what());
+          // Set task state to failure
+        }
+
+        try{
+          lineCheck = new ENCGIS::lineIntersectLayerStatement(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632);
+        } catch(std::runtime_error& e) {
+          err(DTR("Problem creating query for innavigable layer: %s"), e.what());
+          // Set task state to failure
+        }
+
+                  
+          
       }
 
       //! Initialize resources.
@@ -211,7 +242,7 @@ namespace MotionPlanners
 
         // Run/benchmark current setup
         #if OMPL_BENCHMARK
-          OMPLintegrationDUNE::bmarkPath(setup, m_args.benchmark_name, m_args.benchmark_maxTime, m_args.benchmark_maxMem, m_args.benchmark_runCount);
+          OMPLintegrationDUNE::multiBmarkPath(setup, m_args.benchmark_name, m_args.benchmark_maxTime, m_args.benchmark_maxMem, m_args.benchmark_runCount);
         #else
           og::PathGeometric states = OMPLintegrationDUNE::findPath(setup, m_args.maxPlaningTime);
           //// Dispatch and activate returned path

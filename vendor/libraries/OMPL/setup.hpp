@@ -1,42 +1,28 @@
 #ifndef OMPL_FOR_DUNE_LIBRARY
 #define OMPL_FOR_DUNE_LIBRARY
 
-#define OMPL_BENCHMARK 0
+#define OMPL_BENCHMARK 1
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+
 #include <ENCGIS/DBconnection.hpp>
-#include <ENCGIS/DBTree.hpp>
-#include <OMPL/OMPLfunctions.hpp>
-#include <OMPL/OMPLMotionValidator.hpp>
-#include <OMPL/OMPLMotionValidator2.hpp>
 
 // OMPL headers
 #include <ompl/base/SpaceInformation.h>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 #include <ompl/geometric/SimpleSetup.h>
-//#include "ompl/base/DiscreteMotionValidator.h"
 #include <ompl/config.h>
 
-#include <ompl/geometric/planners/informedtrees/ABITstar.h>
+
 
 #if OMPL_BENCHMARK
 #include <ompl/tools/benchmark/Benchmark.h> // Only used for benchmarking, remove before deployment
 #endif
 
  #include <ompl/util/Time.h>
- #include <utility>
-// #include <ctime>
-
-// CPP headers
-#include <iostream>
- 
+// CPP headers 
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
-
-#include <algorithm> 
-#include <chrono> 
-#include <iostream> 
-#include<vector> 
 
 namespace OMPLintegrationDUNE
 {
@@ -50,6 +36,8 @@ namespace OMPLintegrationDUNE
   ompl::base::ReportIntermediateSolutionFn intermediate(DUNE::Tasks::Task *inTask, double minPlaningTime);
   #if OMPL_BENCHMARK
   void bmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount);
+  void multiBmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount);
+
   #endif
 
 }
