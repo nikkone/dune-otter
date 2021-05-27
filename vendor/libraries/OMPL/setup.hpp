@@ -1,7 +1,7 @@
 #ifndef OMPL_FOR_DUNE_LIBRARY
 #define OMPL_FOR_DUNE_LIBRARY
 
-#define OMPL_BENCHMARK 1
+#define OMPL_BENCHMARK 0
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 

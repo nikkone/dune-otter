@@ -35,6 +35,7 @@ dune_add_task(${PROJECT_SOURCE_DIR}/src Control/ASV/HeadingAndSpeed/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Control/Path/ILOS/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Control/ASV/RemoteOperation/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Control/Path/VectorField/Task.cmake)
+dune_add_task(${PROJECT_SOURCE_DIR}/src Control/Path/PurePursuit/Task.cmake)
 
 dune_add_task(${PROJECT_SOURCE_DIR}/src Navigation/General/GPSNavigation/Task.cmake)
 

@@ -590,14 +590,26 @@ namespace Sensors
           trans_protocol = IMC::TBRFishTag::TBR_R256;
         else if(parts[3] == "R04K")
           trans_protocol = IMC::TBRFishTag::TBR_R04K;
-        else if(parts[3] == "S64K")
+        else if(parts[3] == "S64K") {
           trans_protocol = IMC::TBRFishTag::TBR_S64K;
+          if (readIntFromString(parts[5], trans_data))
+          {
+            // Tag raw data
+            spew(DTR("Tag raw data: %u"), trans_data);
+          }
+        }
         else if(parts[3] == "R64K")
           trans_protocol = IMC::TBRFishTag::TBR_R64K;
         else if(parts[3] == "R01M")
           trans_protocol = IMC::TBRFishTag::TBR_R01M;
-        else if(parts[3] == "S256")
+        else if(parts[3] == "S256") {
           trans_protocol = IMC::TBRFishTag::TBR_S256;
+          if (readIntFromString(parts[5], trans_data))
+          {
+            // Tag raw data
+            spew(DTR("Tag raw data: %u"), trans_data);
+          }
+        }
         else if(parts[3] == "HS256")
           trans_protocol = IMC::TBRFishTag::TBR_HS256;
         else if(parts[3] == "DS256")
@@ -610,11 +622,9 @@ namespace Sensors
           // Tag ID number
           spew(DTR("Tag ID: %u"), trans_id);
         }
-        if (readIntFromString(parts[5], trans_data))
-        {
-          // Tag raw data
-          spew(DTR("Tag raw data: %u"), trans_data);
-        }
+
+        // Only read sensor for tags with sensor, done in transmit protocol part
+
         if (readIntFromString(parts[6], SNR))
         {
           // Signal to noise ratio

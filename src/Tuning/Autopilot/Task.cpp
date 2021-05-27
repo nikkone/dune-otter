@@ -45,12 +45,15 @@ namespace Tuning
       //! 
       double desiredMPS;
       //! 
-      bool setHeading;
-      //!
-      bool setMPS;
+      bool active;
+      //! Reset Period;
+      double reset_period;
     };
     struct Task: public DUNE::Tasks::Task
     {
+      bool timer_active;
+      //! Timer.
+      Time::Counter<float> m_reset_timer;
       //! Task arguments.
       Arguments m_args;
       IMC::DesiredHeading m_heading;
@@ -70,13 +73,16 @@ namespace Tuning
         .defaultValue("0.0")
         .description("Value set");
 
-        param("SetHeading", m_args.setHeading)
+        param("SetActive", m_args.active)
         .defaultValue("false")
-        .description("Activate sending");
+        .description("Activate sending.");
 
-        param("SetMPS", m_args.setMPS)
-        .defaultValue("false")
-        .description("Activate sending");
+        param("Reset Period", m_args.reset_period)
+        .units(Units::Second)
+        .defaultValue("10.0")
+        .minimumValue("0.0")
+        .description("Period before automatically sending stop messages");
+
           // Initialize entity state.
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         m_speed.speed_units = IMC::SUNITS_METERS_PS;
@@ -90,61 +96,43 @@ namespace Tuning
             return;
 
           // This works as redundancy, in case everything else fails
-          reset();
+          disable();
           debug("disabling");
         }
 
-      void reset() {
-          m_control.enable = DUNE::IMC::ControlLoops::CL_DISABLE;
-          m_control.scope_ref +=1;
-          m_control.mask = IMC::CL_YAW;
-          dispatch(m_control);
-          m_control.enable = DUNE::IMC::ControlLoops::CL_DISABLE;
-          m_control.scope_ref +=1;
-          m_control.mask = IMC::CL_SPEED;
-          dispatch(m_control);
+      void disable() {
+          resetHeading();
+          resetSpeed();
+          reactivatePathController();
+          timer_active = false;
       }
       //! Update internal state with new parameter values.
       void
       onUpdateParameters(void)
       {
+        if(paramChanged(m_args.active)) {
+          if(!m_args.active) {
+            disable();
+          } else {
+              m_control.enable = DUNE::IMC::ControlLoops::CL_ENABLE;
+              m_control.mask = IMC::CL_YAW;
+              m_control.scope_ref +=1;
+              m_heading.value = m_args.desiredHeading;
+              dispatch(m_heading);
+              dispatch(m_control);
 
-        if(m_args.setHeading) {
-          m_control.enable = DUNE::IMC::ControlLoops::CL_ENABLE;
-          m_control.mask = IMC::CL_YAW;
-          m_control.scope_ref +=1;
-          m_heading.value = m_args.desiredHeading;
-          dispatch(m_heading);
-          dispatch(m_control);
-        } else {
-          m_control.enable = DUNE::IMC::ControlLoops::CL_DISABLE;
-          m_control.scope_ref +=1;
-          m_control.mask = IMC::CL_YAW;
-          dispatch(m_control);
+              m_control.enable = DUNE::IMC::ControlLoops::CL_ENABLE;
+              m_control.mask = IMC::CL_SPEED;
+              m_control.scope_ref +=1;
+              m_speed.value = m_args.desiredMPS;
+              dispatch(m_speed);
+              dispatch(m_control);
+              m_reset_timer.reset();
+              timer_active = true;
+          }
         }
-
-        if(m_args.setMPS) {
-          m_control.enable = DUNE::IMC::ControlLoops::CL_ENABLE;
-          m_control.mask = IMC::CL_SPEED;
-          m_control.scope_ref +=1;
-          m_speed.value = m_args.desiredMPS;
-          dispatch(m_speed);
-          dispatch(m_control);
-        } else {
-          m_speed.value = 0;
-          dispatch(m_speed);
-          m_control.enable = DUNE::IMC::ControlLoops::CL_DISABLE;
-          m_control.scope_ref +=1;
-          m_control.mask = IMC::CL_SPEED;
-          dispatch(m_control);
-        }
-        if(!m_args.setMPS && !m_args.setHeading) {
-          inf("reactivate path");
-          m_control.enable = DUNE::IMC::ControlLoops::CL_ENABLE;
-          m_control.mask = IMC::CL_PATH;
-          m_control.scope_ref +=1;
-          dispatch(m_control);
-        }
+        if(paramChanged(m_args.reset_period))
+          m_reset_timer.setTop(m_args.reset_period);
       }
 
       //! Reserve entity identifiers.
@@ -170,7 +158,7 @@ namespace Tuning
       void
       onResourceInitialization(void)
       {
-
+        timer_active = false;
       }
 
       //! Release resources.
@@ -179,7 +167,29 @@ namespace Tuning
       {
 
       }
+      void reactivatePathController() {
+          inf("Reactivate path controller");
+          m_control.enable = DUNE::IMC::ControlLoops::CL_ENABLE;
+          m_control.mask = IMC::CL_PATH;
+          m_control.scope_ref +=1;
+          dispatch(m_control);
+          timer_active = false;
+      }
 
+      void resetSpeed() {
+          m_speed.value = 0;
+          dispatch(m_speed);
+          m_control.enable = DUNE::IMC::ControlLoops::CL_DISABLE;
+          m_control.scope_ref +=1;
+          m_control.mask = IMC::CL_SPEED;
+          dispatch(m_control);
+      }
+      void resetHeading() {
+          m_control.enable = DUNE::IMC::ControlLoops::CL_DISABLE;
+          m_control.scope_ref +=1;
+          m_control.mask = IMC::CL_YAW;
+          dispatch(m_control);
+      }
 
       //! Main loop.
       void
@@ -187,6 +197,13 @@ namespace Tuning
       {
         while (!stopping())
         {
+          if(m_reset_timer.overflow() && timer_active)
+          {
+            war("Reset");
+            resetHeading();
+            resetSpeed();
+            timer_active = false;
+          }
           waitForMessages(1.0);
         }
       }
