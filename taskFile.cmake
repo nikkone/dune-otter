@@ -43,3 +43,5 @@ dune_add_task(${PROJECT_SOURCE_DIR}/src Plan/Engine/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Plan/DB/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Plan/Generator/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Autonomy/TextActions/Task.cmake)
+
+dune_add_task(${PROJECT_SOURCE_DIR}/src Supervisors/AUV/LostComms/Task.cmake)
