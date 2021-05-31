@@ -252,13 +252,15 @@ namespace Supervisors
           // is coming from a bad outcome plan
           if(m_args.requireBadOutcome) {
             if(m_pcs.last_outcome != IMC::PlanControlState::LPO_FAILURE) {
+              //spew("No Bad outcome!");
               return false;
             }
           }
 
           // is it not executing a plan
           if(m_args.requireIsIdle) {
-            if(m_pcs.last_outcome != (m_pcs.state == IMC::PlanControlState::PCS_BLOCKED) || (m_pcs.state == IMC::PlanControlState::PCS_READY)) {
+            if( !( (m_pcs.state == IMC::PlanControlState::PCS_BLOCKED) || (m_pcs.state == IMC::PlanControlState::PCS_READY) ) ) {
+              //spew("Not idle!");
               return false;
             }
           }
