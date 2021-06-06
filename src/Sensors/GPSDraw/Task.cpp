@@ -110,8 +110,8 @@ namespace Sensors
       //! Buffer forEntityState
       char m_bufer_entity[64];
 
-      struct gps_data_t gpsdata;
-      char message[GPS_JSON_RESPONSE_MAX];
+      struct gps_data_t m_gpsdata;
+      char m_message_buffer[GPS_JSON_RESPONSE_MAX];
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -143,20 +143,20 @@ namespace Sensors
       void
       onResourceAcquisition(void)
       {
-        gps_open("localhost", DEFAULT_GPSD_PORT, &gpsdata);
+        gps_open("localhost", DEFAULT_GPSD_PORT, &m_gpsdata);
       }
 
       void
       onResourceRelease(void)
       {
-        (void) gps_stream(&gpsdata, WATCH_DISABLE, NULL);
-        (void) gps_close (&gpsdata);
+        (void) gps_stream(&m_gpsdata, WATCH_DISABLE, NULL);
+        (void) gps_close (&m_gpsdata);
       }
 
       void
       onResourceInitialization(void)
       {
-        (void) gps_stream(&gpsdata, WATCH_ENABLE | WATCH_RAW, NULL);
+        (void) gps_stream(&m_gpsdata, WATCH_ENABLE | WATCH_RAW, NULL);
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
       }
 
@@ -267,7 +267,6 @@ namespace Sensors
       void
       processSentence(const std::string& line)
       {
-        spew("process"); //DELETE
         // Discard leading noise.
         size_t sidx = 0;
         for (sidx = 0; sidx < line.size(); ++sidx)
@@ -321,7 +320,6 @@ namespace Sensors
       void
       interpretSentence(std::vector<std::string>& parts)
       {
-        spew("Interpret"); //DELETE
         if (parts[0] == m_args.stn_order.front())
         {
           clearMessages();
@@ -642,15 +640,14 @@ namespace Sensors
       {
         while (!stopping())
         {
-          if (gps_waiting (&gpsdata, 500)) {
-            *message = '\0';
-            if (gps_read (&gpsdata, message, sizeof(message)) != -1) {
-              spew("%s", message);
-              std::string line(message);
-              spew("String: %s", line.c_str());
+          waitForMessages(0.01); // Needed because task status querys are consumed (inherrited from tasks)
+          if (gps_waiting (&m_gpsdata, 500)) {
+            *m_message_buffer = '\0';
+            if (gps_read (&m_gpsdata, m_message_buffer, sizeof(m_message_buffer)) != -1) {
+              std::string line(m_message_buffer);
               processSentence(line);
             } else {
-              spew("Could not read GPSD gpsdata");
+              spew("Could not read GPSD m_gpsdata");
             }
           }
         }
