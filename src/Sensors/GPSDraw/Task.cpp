@@ -640,7 +640,7 @@ namespace Sensors
       {
         while (!stopping())
         {
-          waitForMessages(0.01); // Needed because task status querys are consumed (inherrited from tasks)
+          consumeMessages(); // Needed because task status querys are consumed (inherrited from tasks)
           if (gps_waiting (&m_gpsdata, 500)) {
             *m_message_buffer = '\0';
             if (gps_read (&m_gpsdata, m_message_buffer, sizeof(m_message_buffer)) != -1) {
