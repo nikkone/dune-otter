@@ -30,6 +30,8 @@
 #include <ctime>       /* time_t, struct tm, time, mktime */
 
 //TODO: Add feature: position at 5s before tag registration in imc message.
+//TODO: May not work without PPS anymore.
+
 // ISO C++ 98 headers.
 #include <cstring>
 #include <algorithm>
@@ -90,10 +92,13 @@ namespace Sensors
       unsigned int timestamp_send_divider;
       //! Sync Period;
       double sync_period;
+      //! Sync Period ACK timeout
+      double sync_period_ack_timeout;
 
       unsigned transmission_time;
 
       bool usingPPS;
+
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -110,12 +115,22 @@ namespace Sensors
       unsigned int timestamp_send_counter;
       //! Timer.
       Time::Counter<float> m_sync_timer;
+      //! Timer.
+      Time::Counter<float> m_syncack_timer;
       //! Buffer storing recent GpsFix messages
       boost::circular_buffer<IMC::GpsFix> *m_GPSBuffer;
+      //!
+      bool waitingForAck3;
+      //! Filename for rawlog
+      std::string filename;
+      //! Most recent "Number of strings sent since power up" received
+      uint16_t recent_received_string_nr;
+
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
         m_handle(NULL),
-        m_TBRReader(NULL)
+        m_TBRReader(NULL),
+        recent_received_string_nr(0)
       {
         // Define configuration parameters.
         param("Serial Port - Device", m_args.uart_dev)
@@ -132,10 +147,16 @@ namespace Sensors
         .minimumValue("0.0")
         .description("Period between sync messages");
 
+        param("Sync Period Ack Timeout", m_args.sync_period_ack_timeout)
+        .units(Units::Second)
+        .defaultValue("5.0")
+        .minimumValue("0.0")
+        .description("Ack should return within before timeout, or error will be output.");
+
         param("Write full timestamp divider", m_args.timestamp_send_divider)
         .defaultValue("6")
         .minimumValue("1")
-        .description("Write full unix timestamp every timestamp_send_divider times task is run.");
+        .description("Write full unix timestamp every timestamp_send_divider times task is run. (Not used in PPS mode.)");
 
         param("Input Timeout", m_args.inp_tout)
         .units(Units::Second)
@@ -178,6 +199,11 @@ namespace Sensors
       {
         if(paramChanged(m_args.sync_period))
           m_sync_timer.setTop(m_args.sync_period);
+
+        if(paramChanged(m_args.sync_period_ack_timeout)) {
+          m_syncack_timer.setTop(m_args.sync_period_ack_timeout);
+          waitingForAck3 = false;
+        }
       }
       void
       onResourceAcquisition(void)
@@ -245,6 +271,7 @@ namespace Sensors
       void
       onResourceInitialization(void)
       {
+        filename = "log/tbr_ " + std::to_string(std::time(nullptr)) + ".thelma";
         bool configuration_mode = false;
         for (unsigned i = 0; i < c_max_init_cmds; ++i)
         {
@@ -307,6 +334,16 @@ namespace Sensors
 
         spew("%s", sanitize(msg->value).c_str());
 
+      std::ofstream logOutStream;
+      logOutStream.open(filename, std::fstream::app);
+      if (logOutStream.good()) {
+        logOutStream.precision(15);
+          logOutStream << msg->value << std::endl;
+          logOutStream.close();
+      } else {
+        war("Could not write to rawlog: %s", filename.c_str());
+      }
+
         if (getEntityState() == IMC::EntityState::ESTA_BOOT)
           m_init_line = msg->value;
         else
@@ -357,9 +394,11 @@ namespace Sensors
 
       void sendFullTimestamp() {
         std::time_t timestamp = std::time(nullptr);
-        // Remove last digit
         std::string UTCUnixTimestamp = std::to_string(timestamp);
         slowTbrSend("UT=" + UTCUnixTimestamp);
+        m_syncack_timer.reset();
+        waitingForAck3 = true;
+
       }
 
       uint8_t calcLuhnVerifDigit(uint32_t timestamp) // From TB Live datasheet, fw1.0.1 rev.1
@@ -437,7 +476,12 @@ namespace Sensors
         } if(line.find("ack02") != std::string::npos) {
           trace(DTR("Sensor timestamp set."));
         } if(line.find("ack03") != std::string::npos) {
-          trace(DTR("Sensor timestamp in PPS mode set."));
+          if(waitingForAck3) {
+            waitingForAck3 = false;
+            trace(DTR("Expected sensor timestamp in PPS mode set."));
+          } else {
+            war("Unexpected ack03 received.");
+          }
         } if (line.find("$") != std::string::npos) {
 
           // Discard leading noise.
@@ -460,6 +504,17 @@ namespace Sensors
 
           interpretSentence(parts);
         }
+      }
+
+
+      bool runningNrCheck(uint16_t running_nr) {
+        if(recent_received_string_nr+1 != running_nr) {
+          err("Unexpected message running number, expected: %u, reveived %u", recent_received_string_nr+1, running_nr);
+          recent_received_string_nr = running_nr;
+          return false;
+        }
+          recent_received_string_nr = running_nr;
+          return true;
       }
 
       //! Interpret given sentence.
@@ -536,6 +591,7 @@ namespace Sensors
         {
           // Receiver memory address
           spew(DTR("Receiver memory address: %u"), recv_mem_addr);
+          runningNrCheck(recv_mem_addr);
         }
         IMC::TBRSensor sensor_msg;
         sensor_msg.serial_no = serial_no;
@@ -639,6 +695,7 @@ namespace Sensors
         {
           // Receiver memory address
           spew(DTR("Receiver memory address: %u"), recv_mem_addr);
+          runningNrCheck(recv_mem_addr);
         }
         IMC::TBRFishTag tag_msg;
         tag_msg.serial_no = serial_no;
@@ -693,6 +750,7 @@ namespace Sensors
       onMain(void)
       {
         while(!stopping()) {
+
           if(m_sync_timer.overflow())
           {
             m_sync_timer.reset();
@@ -708,6 +766,12 @@ namespace Sensors
               //spew("C: %ld", std::time(0));
               spew("Sending duration: %f", m_sync_timer.getElapsed());
               timestamp_send_counter++;
+            }
+          }
+          if(waitingForAck3) {
+            if(m_syncack_timer.overflow()) {
+              err("ack03 not received within %f", m_args.sync_period_ack_timeout);
+              waitingForAck3 = false;
             }
           }
           //consumeMessages();
