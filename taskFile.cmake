@@ -28,6 +28,7 @@ dune_add_task(${PROJECT_SOURCE_DIR}/src Monitors/Entities/Task.cmake)
 
 dune_add_task(${PROJECT_SOURCE_DIR}/src Maneuver/RowsCoverage/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Maneuver/FollowReference/AUV/Task.cmake)
+dune_add_task(${PROJECT_SOURCE_DIR}/src Maneuver/FollowSystem/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Maneuver/Multiplexer/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Maneuver/Teleoperation/Task.cmake)
 
