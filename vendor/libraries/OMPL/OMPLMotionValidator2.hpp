@@ -14,7 +14,9 @@ namespace MotionPlanners
   //! @author Nikolai Lauvås
   namespace OMPL
   {
-        /** \brief A motion validator that ... */
+        /** \brief A motion validator based on a binary spatial intersection search between points using the intersect function in Spatialite that returns true/false.
+         * Uses a prepared statement to reduce statement prepare time.
+         */
         class ChartsDBMotionValidator2 : public ob::MotionValidator
         {
         public:

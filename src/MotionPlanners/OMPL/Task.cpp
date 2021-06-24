@@ -78,6 +78,7 @@ namespace MotionPlanners
       ENCGIS::DBconnection* m_con;
       ENCGIS::isPointInLayerStatement       *pointCheck;
       ENCGIS::lineIntersectLayerStatement *lineCheck;
+      ENCGIS::getClosestIntersectWithOffset *lineCheck2;
       bool m_intermediate;
 
       //! Constructor.
@@ -186,6 +187,12 @@ namespace MotionPlanners
           err(DTR("Problem creating query for innavigable layer: %s"), e.what());
           // Set task state to failure
         }
+        try{
+          lineCheck2 = new ENCGIS::getClosestIntersectWithOffset(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632, 0.99);
+        } catch(std::runtime_error& e) {
+          err(DTR("Problem creating query for innavigable layer: %s"), e.what());
+          // Set task state to failure
+        }
 
                   
           
@@ -237,8 +244,8 @@ namespace MotionPlanners
         bounds.setLow(1,m_args.planningBounds[0]);
         bounds.setHigh(1,m_args.planningBounds[2]);
 
-        //og::SimpleSetup setup = createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck, lineCheck); // Ned nidelven
-        og::SimpleSetup setup = OMPLintegrationDUNE::createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck, lineCheck); // Ned nidelven
+        //og::SimpleSetup setup = OMPLintegrationDUNE::createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck, lineCheck); // Ned nidelven
+        og::SimpleSetup setup = OMPLintegrationDUNE::createSetup2(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck,lineCheck, lineCheck2); // Ned nidelven
 
         // Run/benchmark current setup
         #if OMPL_BENCHMARK

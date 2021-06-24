@@ -1,6 +1,6 @@
 #include "setup.hpp"
-#include <ompl/geometric/planners/informedtrees/ABITstar.h>
-
+#include <ompl/geometric/planners/informedtrees/BITstar.h>
+#include <ompl/geometric/planners/fmt/FMT.h>
 #if OMPL_BENCHMARK
   #include <ompl/geometric/planners/kpiece/LBKPIECE1.h>
   #include <ompl/geometric/planners/informedtrees/BITstar.h>
@@ -31,7 +31,7 @@
 #include <OMPL/OMPLfunctions.hpp>
 #include <OMPL/OMPLMotionValidator.hpp>
 #include <OMPL/OMPLMotionValidator2.hpp>
-
+#include <OMPL/OMPLMotionValidator3.hpp>
 namespace OMPLintegrationDUNE
 {
   /*
@@ -73,10 +73,12 @@ namespace OMPLintegrationDUNE
       war("No solution found");
   }
 */
+
   //! Function searching for path, ends search once first valid path is available
   og::PathGeometric findPath(og::SimpleSetup &ss, double maxPlaningTime) {
     //ss.setPlanner(ob::PlannerPtr(new og::ABITstar(ss.getSpaceInformation())));
-    ob::PlannerPtr test= kabitstar( ss.getSpaceInformation(), "kABITstar");
+    //ob::PlannerPtr test= kbitstar2( ss.getSpaceInformation(), "kBITstar");
+    ob::PlannerPtr test= ompl::base::PlannerPtr();
     ss.setPlanner(test);
         // attempt to solve the problem within a given planning time
     ob::PlannerStatus solved = ss.solve(maxPlaningTime);
@@ -107,6 +109,7 @@ namespace OMPLintegrationDUNE
 
   // Define Motion validator for this space
   //ss.getSpaceInformation()->setMotionValidator(std::make_shared<ompl::base::DiscreteMotionValidator>(ss.getSpaceInformation()));
+  //ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator3>(ss.getSpaceInformation(), lineCheck, 4));
   ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator2>(ss.getSpaceInformation(), lineCheck, 4));
   //ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator>(ss.getSpaceInformation(), m_con, 6));
 
@@ -130,6 +133,46 @@ namespace OMPLintegrationDUNE
 
   return ss;
   }
+
+/////////////////////////////////////////////////////////////////////
+  //! Creates a simplesetup object using the ChartsDB polygons for state and motion validation.
+  ompl::geometric::SimpleSetup createSetup2(double startLat, double startLon, double goalLat, double goalLon, ob::RealVectorBounds &bounds, ENCGIS::isPointInLayerStatement* pointCheck, ENCGIS::lineIntersectLayerStatement* lineCheck, ENCGIS::getClosestIntersectWithOffset* lineCheck2) 
+  {
+  // Construct the state space
+  auto space(std::make_shared<ob::RealVectorStateSpace>(2));
+  // Define bounds of searching space
+  space->setBounds(bounds);
+
+  // Define a simple setup class
+  ompl::geometric::SimpleSetup ss(space);
+
+  // Define Motion validator for this space
+  //ss.getSpaceInformation()->setMotionValidator(std::make_shared<ompl::base::DiscreteMotionValidator>(ss.getSpaceInformation()));
+  ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator3>(ss.getSpaceInformation(), lineCheck, lineCheck2, 4));
+  //ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator2>(ss.getSpaceInformation(), lineCheck, 4));
+  //ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator>(ss.getSpaceInformation(), m_con, 6));
+
+
+  // Set state validity checking for this space
+  ss.setStateValidityChecker([pointCheck](const ompl::base::State *state) { return isStateValid(state, pointCheck); });
+  //ss.setStateValidityChecker([&](const ompl::base::State *state) { return MotionPlanners::OMPL::isStateValid(state, m_con); });
+
+  // Create the start state
+  ompl::base::ScopedState<> start(space);
+  start[0]=startLon;
+  start[1]=startLat;
+
+  // Create the goal state
+  ompl::base::ScopedState<> goal(space);
+  goal[0]=goalLon;
+  goal[1]=goalLat;
+
+  // Set the start and goal states
+  ss.setStartAndGoalStates(start, goal);
+
+  return ss;
+  }
+/////////////////////////////////////////////////////////////////////
 
     bool isStateValid(const ompl::base::State *state,  ENCGIS::isPointInLayerStatement *qry)
     {
@@ -193,17 +236,17 @@ namespace OMPLintegrationDUNE
 
         });
       }
-
-      ompl::base::PlannerPtr kabitstar(const ompl::base::SpaceInformationPtr &si, std::string name)
+/*
+      ompl::base::PlannerPtr kbitstar2(const ompl::base::SpaceInformationPtr &si, std::string name)
       {
-          ompl::geometric::ABITstar *planner = new og::ABITstar(si);
+          ompl::geometric::BITstar *planner = new og::BITstar(si);
           planner->setName(name);
           planner->setPruning(true);
           //planner->setUseKNearest(false);
           //planner->setStopOnSolnImprovement(true);
           return ompl::base::PlannerPtr(planner);
       }
-
+*/
 #if OMPL_BENCHMARK
       //! Function for performing benchmarks on a setup.
       void bmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount)

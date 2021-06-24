@@ -30,7 +30,9 @@ namespace OMPLintegrationDUNE
   //! @author Nikolai Lauvås
   void findPathExtended(og::SimpleSetup &ss);
   ompl::geometric::PathGeometric findPath(og::SimpleSetup &ss, double maxPlaningTime);
-  ompl::geometric::SimpleSetup createSetup(double startLat, double startLon, double goalLat, double goalLon, ob::RealVectorBounds &bounds, ENCGIS::isPointInLayerStatement* pointCheck, ENCGIS::lineIntersectLayerStatement* lineCheck);
+    ompl::geometric::SimpleSetup createSetup(double startLat, double startLon, double goalLat, double goalLon, ob::RealVectorBounds &bounds, ENCGIS::isPointInLayerStatement* pointCheck, ENCGIS::lineIntersectLayerStatement* lineCheck);
+
+  ompl::geometric::SimpleSetup createSetup2(double startLat, double startLon, double goalLat, double goalLon, ob::RealVectorBounds &bounds, ENCGIS::isPointInLayerStatement* pointCheck, ENCGIS::lineIntersectLayerStatement* lineCheck, ENCGIS::getClosestIntersectWithOffset* lineCheck2);
   ompl::base::PlannerPtr kabitstar(const ompl::base::SpaceInformationPtr &si, std::string name);
   ompl::base::PlannerTerminationCondition exactSolnPlannerTerminationCondition(const bool *stop, DUNE::Tasks::Task *inTask, double maxPlaningTime);
   ompl::base::ReportIntermediateSolutionFn intermediate(DUNE::Tasks::Task *inTask, double minPlaningTime);

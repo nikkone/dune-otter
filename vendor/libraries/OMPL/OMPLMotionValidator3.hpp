@@ -1,5 +1,5 @@
-#ifndef DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR_
-#define DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR_
+#ifndef DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR3_
+#define DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR3_
 
 #include <ompl/base/MotionValidator.h>
 #include <ompl/base/SpaceInformation.h>
@@ -14,24 +14,25 @@ namespace MotionPlanners
   //! @author Nikolai Lauvås
   namespace OMPL
   {
-        /** \brief A motion validator just calls the intersect check. This was my first attempt, and is slower than the others */
-        class ChartsDBMotionValidator : public ob::MotionValidator
+        /** \brief A motion validator based on the Intersection function in Spatialite that finds the intersection between geometries. 
+         * A constant is then added to this number to avoid rounding error making the point be in the invalid area.*/
+        class ChartsDBMotionValidator3 : public ob::MotionValidator
         {
         public:
             /** \brief Constructor */
-            ChartsDBMotionValidator(ob::SpaceInformation *si, ENCGIS::DBconnection* dbConIn, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), binDepth(binDepthIn)
+            ChartsDBMotionValidator3(ob::SpaceInformation *si, ENCGIS::lineIntersectLayerStatement* dbConIn, ENCGIS::getClosestIntersectWithOffset* dbConIn2, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), dbcon2(dbConIn2), binDepth(binDepthIn)
             {
                 defaultSettings();
             }
 
             /** \brief Constructor */
-            ChartsDBMotionValidator(const ob::SpaceInformationPtr &si, ENCGIS::DBconnection* dbConIn, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), binDepth(binDepthIn)
+            ChartsDBMotionValidator3(const ob::SpaceInformationPtr &si, ENCGIS::lineIntersectLayerStatement* dbConIn, ENCGIS::getClosestIntersectWithOffset* dbConIn2, unsigned binDepthIn) : ob::MotionValidator(si), dbcon(dbConIn), dbcon2(dbConIn2), binDepth(binDepthIn)
             {
                 defaultSettings();
             }
 
             /** \brief Destructor */
-            ~ChartsDBMotionValidator() override = default;
+            ~ChartsDBMotionValidator3() override = default;
 
             //! \brief Check if the path between two states (from \e s1 to \e s2) is valid. This function assumes \e s1
             //! is valid.
@@ -63,15 +64,17 @@ namespace MotionPlanners
             //! The OMPL representation of the stateSpace
             ob::StateSpace *stateSpace_;
             //! The database containing the layer to check for intersections
-            ENCGIS::DBconnection* dbcon;
+            //ENCGIS::DBconnection* dbcon;
+            ENCGIS::lineIntersectLayerStatement *dbcon;//2("lndaretable", m_con->db);
+            ENCGIS::getClosestIntersectWithOffset *dbcon2;//2("lndaretable", m_con->db);
             //! Defines how many halvings of the line should be done before being content.
             unsigned binDepth;
             //! Helperfunction used by constructors to check if there is a state space and set pointer variable
             void defaultSettings();
             //! Helperfunction checkMotion functions checking for intersection between two points. Does not update valid segments.
-            bool transectSafety(const ob::State *s1, const ob::State *s2) const;
+            double transectSafety(const ob::State *s1, const ob::State *s2, double &bestOptionX, double &bestOptionY) const;
         };
     }
 }
 
-#endif // DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR_
+#endif // DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR3_
