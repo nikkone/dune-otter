@@ -82,7 +82,7 @@ namespace Sensors
       //! GPSD host
       std::string gpsd_host;
       //! GPSD port
-      unsigned gpsd_port;
+      std::string gpsd_port;
       //! GPSD data timeout
       unsigned gpsd_data_timeout;
       //! Order of sentences.
@@ -143,7 +143,7 @@ namespace Sensors
       void
       onResourceAcquisition(void)
       {
-        gps_open("localhost", DEFAULT_GPSD_PORT, &m_gpsdata);
+        gps_open(m_args.gpsd_host.c_str(), m_args.gpsd_port.c_str(), &m_gpsdata);
       }
 
       void
