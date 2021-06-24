@@ -430,7 +430,7 @@ namespace Actuators
       void
       parseMSG_TEXT()
       {
-        inf("MSG_TEXT: %s", m_can_bfr);
+        debug("MSG_TEXT: %s", m_can_bfr);
       }
 
       //! Parses a received MSG_TQ_BATCTL from CAN bus buffer and makes it available for trace debug
@@ -595,7 +595,7 @@ namespace Actuators
       task(void)
       {
         if(m_can != NULL) {
-          waitForMessages(0.01); // Parametriser?
+          consumeMessages();
           motor_send_counter++;
           if(motor_send_counter >= m_args.motor_write_divider) {
             spew(DTR("Motor send: %d, %d"), motor0_throttle, motor1_throttle);
