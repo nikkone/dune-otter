@@ -1,6 +1,6 @@
 //***************************************************************************
-// Copyright 2007-2021 Norwegian University of Science and Technology (NTNU)*
-// Department of Engineering Cybernetics (ITK)                              *
+// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
+// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -24,20 +24,50 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Nikolai Lauvås                                                   *
+// Author: Ricardo Martins                                                  *
 //***************************************************************************
 
-#ifndef USER_HARDWARE_HPP_INCLUDED_
-#define USER_HARDWARE_HPP_INCLUDED_
+#ifndef USER_INTERFACES_LEDSOTTER_GPIO_HPP_INCLUDED_
+#define USER_INTERFACES_LEDSOTTER_GPIO_HPP_INCLUDED_
 
-namespace DUNE
+// DUNE headers.
+#include <USER/DUNE.hpp>
+
+// Local headers.
+#include "AbstractOutput.hpp"
+
+namespace UserInterfaces
 {
-  //! Low level hardware drivers.
-  namespace Hardware
-  { }
-}
+  namespace LEDsotter
+  {
+    using DUNE_NAMESPACES;
 
-#include <USER/Hardware/SocketCAN.hpp>
-#include <USER/Hardware/GPIOD.hpp>
+    class GPIO: public AbstractOutput
+    {
+    public:
+      GPIO(unsigned nr):
+        m_gpio(0)
+      {
+        m_gpio = new Hardware::GPIOD(nr);
+        m_gpio->setDirection(Hardware::GPIOD::GPIOD_DIR_OUTPUT);
+      }
+
+      ~GPIO(void)
+      {
+        if (m_gpio)
+          delete m_gpio;
+      }
+
+      void
+      setValue(bool value)
+      {
+        m_gpio->setValue(value);
+      }
+
+    private:
+      Hardware::GPIOD* m_gpio;
+    };
+  }
+}
 
 #endif

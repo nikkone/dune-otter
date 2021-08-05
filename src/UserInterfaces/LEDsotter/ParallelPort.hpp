@@ -1,6 +1,6 @@
 //***************************************************************************
-// Copyright 2007-2021 Norwegian University of Science and Technology (NTNU)*
-// Department of Engineering Cybernetics (ITK)                              *
+// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
+// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -24,20 +24,58 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Nikolai Lauvås                                                   *
+// Author: Ricardo Martins                                                  *
 //***************************************************************************
 
-#ifndef USER_HARDWARE_HPP_INCLUDED_
-#define USER_HARDWARE_HPP_INCLUDED_
+#ifndef USER_INTERFACES_LEDS_PARALLEL_PORT_HPP_INCLUDED_
+#define USER_INTERFACES_LEDS_PARALLEL_PORT_HPP_INCLUDED_
 
-namespace DUNE
+// DUNE headers.
+#include <DUNE/DUNE.hpp>
+
+// Local headers.
+#include "AbstractOutput.hpp"
+
+namespace UserInterfaces
 {
-  //! Low level hardware drivers.
-  namespace Hardware
-  { }
-}
+  namespace LEDsotter
+  {
+    using DUNE_NAMESPACES;
 
-#include <USER/Hardware/SocketCAN.hpp>
-#include <USER/Hardware/GPIOD.hpp>
+    class ParallelPort: public AbstractOutput
+    {
+    public:
+      ParallelPort(unsigned addr, unsigned nr):
+        m_nr(nr),
+        m_port(0)
+      {
+        m_port = new IOPort(addr, 1);
+      }
+
+      ~ParallelPort(void)
+      {
+        if (m_port)
+          delete m_port;
+      }
+
+      void
+      setValue(bool value)
+      {
+        uint8_t data = m_port->read();
+
+        if (value)
+          data |= 1 << m_nr;
+        else
+          data &= ~(1 << m_nr);
+
+        m_port->write(data);
+      }
+
+    private:
+      unsigned m_nr;
+      IOPort* m_port;
+    };
+  }
+}
 
 #endif

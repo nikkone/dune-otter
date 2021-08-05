@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2021 Norwegian University of Science and Technology (NTNU)*
+// Copyright 2013-2021 Norwegian University of Science and Technology (NTNU)*
 // Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -24,20 +24,85 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Nikolai Lauvås                                                   *
+// Author: Nikolai Lauvås (Based on old interface by Ricardo Martins)       *
 //***************************************************************************
 
-#ifndef USER_HARDWARE_HPP_INCLUDED_
-#define USER_HARDWARE_HPP_INCLUDED_
+#ifndef DUNE_HARDWARE_GPIOD_HPP_INCLUDED_
+#define DUNE_HARDWARE_GPIOD_HPP_INCLUDED_
+
+// ISO C++ 98 headers.
+#include <string>
+#include <gpiod.h>
+// DUNE headers.
+#include <DUNE/Config.hpp>
 
 namespace DUNE
 {
-  //! Low level hardware drivers.
   namespace Hardware
-  { }
-}
+  {
+    // Export symbol.
+    class DUNE_DLL_SYM GPIOD;
 
-#include <USER/Hardware/SocketCAN.hpp>
-#include <USER/Hardware/GPIOD.hpp>
+    class GPIOD
+    {
+    public:
+      enum Direction
+      {
+        //! GPIO is used as input.
+        GPIOD_DIR_INPUT,
+        //! GPIO is used as output.
+        GPIOD_DIR_OUTPUT
+      };
+
+      //! Initialize GPIO.
+      //! @param[in] number GPIO number.
+      GPIOD(unsigned int number, std::string chipname = "gpiochip0");
+      //! Default destructor.
+      ~GPIOD(void);
+
+      //! Set GPIO direction.
+      //! @param[in] direction GPIO direction.
+      void
+      setDirection(Direction direction);
+
+      //! Set GPIO direction.
+      //! @param[in] direction "input" or "output".
+      void
+      setDirection(const std::string& direction);
+
+      //! Set GPIO value.
+      //! @param[in] value pin value (false = off, true = on).
+      void
+      setValue(bool value);
+
+      //! Get GPIO value.
+      //! @return pin value (false = off, true = on).
+      bool
+      getValue(void);
+
+    private:
+      //! Disallow copy constructor.
+      GPIOD(const GPIOD&);
+
+      //! Disallow copy assignment.
+      GPIOD& operator=(const GPIOD&);
+
+      //! GPIO number.
+      //! GPIO direction.
+      Direction m_direction;
+
+#if defined(DUNE_OS_LINUX)
+      //! GPIO Chip.
+      std::string chipname;
+      //! GPIO number.
+      unsigned int line_num;
+      struct gpiod_chip *chip;
+      struct gpiod_line *line;
+
+
+#endif
+    };
+  }
+}
 
 #endif

@@ -1,6 +1,6 @@
 //***************************************************************************
-// Copyright 2007-2021 Norwegian University of Science and Technology (NTNU)*
-// Department of Engineering Cybernetics (ITK)                              *
+// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
+// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -24,20 +24,48 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Nikolai Lauvås                                                   *
+// Author: Ricardo Martins                                                  *
 //***************************************************************************
 
-#ifndef USER_HARDWARE_HPP_INCLUDED_
-#define USER_HARDWARE_HPP_INCLUDED_
+#ifndef USER_INTERFACES_LEDS_MESSAGE_HPP_INCLUDED_
+#define USER_INTERFACES_LEDS_MESSAGE_HPP_INCLUDED_
 
-namespace DUNE
+// ISO C++ 98 headers.
+#include <cstdio>
+
+// DUNE headers.
+#include <DUNE/DUNE.hpp>
+
+// Local headers.
+#include "AbstractOutput.hpp"
+
+namespace UserInterfaces
 {
-  //! Low level hardware drivers.
-  namespace Hardware
-  { }
-}
+  namespace LEDsotter
+  {
+    using DUNE_NAMESPACES;
 
-#include <USER/Hardware/SocketCAN.hpp>
-#include <USER/Hardware/GPIOD.hpp>
+    class Message: public AbstractOutput
+    {
+    public:
+      Message(const std::string& name, Tasks::Task& task):
+        m_task(task)
+      {
+        m_msg.name = name;
+      }
+
+      void
+      setValue(bool value)
+      {
+        m_msg.value = value;
+        m_task.dispatch(m_msg);
+      }
+
+    private:
+      IMC::SetLedBrightness m_msg;
+      Tasks::Task& m_task;
+    };
+  }
+}
 
 #endif

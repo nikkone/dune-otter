@@ -1,6 +1,6 @@
 //***************************************************************************
-// Copyright 2007-2021 Norwegian University of Science and Technology (NTNU)*
-// Department of Engineering Cybernetics (ITK)                              *
+// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
+// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -24,20 +24,30 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Nikolai Lauvås                                                   *
+// Author: Ricardo Martins                                                  *
 //***************************************************************************
 
-#ifndef USER_HARDWARE_HPP_INCLUDED_
-#define USER_HARDWARE_HPP_INCLUDED_
+#ifndef USER_INTERFACES_LEDS_ABSTRACT_OUTPUT_HPP_INCLUDED_
+#define USER_INTERFACES_LEDS_ABSTRACT_OUTPUT_HPP_INCLUDED_
 
-namespace DUNE
+// DUNE headers.
+#include <DUNE/DUNE.hpp>
+
+namespace UserInterfaces
 {
-  //! Low level hardware drivers.
-  namespace Hardware
-  { }
-}
+  namespace LEDsotter
+  {
+    class AbstractOutput
+    {
+    public:
+      virtual
+      ~AbstractOutput(void)
+      { }
 
-#include <USER/Hardware/SocketCAN.hpp>
-#include <USER/Hardware/GPIOD.hpp>
+      virtual void
+      setValue(bool value) = 0;
+    };
+  }
+}
 
 #endif

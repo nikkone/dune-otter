@@ -29,7 +29,7 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
-#include <DUNE/Hardware/GPIO.hpp>
+#include <USER/Hardware/GPIOD.hpp>
 
 namespace Safety
 {
@@ -50,10 +50,10 @@ namespace Safety
 
     struct Task: public DUNE::Tasks::Periodic
     {
-      Hardware::GPIO* m_gpio_activation_pin;
-      Hardware::GPIO* m_gpio_heartbeat_pin;
-      Hardware::GPIO* m_gpio_watchdog_timeout_pin;
-      Hardware::GPIO* m_gpio_watchdog_timeout_answer_pin;
+      Hardware::GPIOD* m_gpio_activation_pin;
+      Hardware::GPIOD* m_gpio_heartbeat_pin;
+      Hardware::GPIOD* m_gpio_watchdog_timeout_pin;
+      Hardware::GPIOD* m_gpio_watchdog_timeout_answer_pin;
       Arguments m_args;
       //! Constructor.
       //! @param[in] name task name.
@@ -95,10 +95,10 @@ namespace Safety
       void
       onResourceAcquisition(void)
       {
-        m_gpio_heartbeat_pin = new Hardware::GPIO(5);
-        m_gpio_activation_pin = new Hardware::GPIO(6);
-        m_gpio_watchdog_timeout_pin = new Hardware::GPIO(12);
-        m_gpio_watchdog_timeout_answer_pin = new Hardware::GPIO(16);
+        m_gpio_heartbeat_pin = new Hardware::GPIOD(5);
+        m_gpio_activation_pin = new Hardware::GPIOD(6);
+        m_gpio_watchdog_timeout_pin = new Hardware::GPIOD(12);
+        m_gpio_watchdog_timeout_answer_pin = new Hardware::GPIOD(16);
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
       }
 
@@ -106,10 +106,10 @@ namespace Safety
       void
       onResourceInitialization(void)
       {
-        m_gpio_heartbeat_pin->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
-        m_gpio_activation_pin->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
-        m_gpio_watchdog_timeout_pin->setDirection(Hardware::GPIO::GPIO_DIR_INPUT);
-        m_gpio_watchdog_timeout_answer_pin->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
+        m_gpio_heartbeat_pin->setDirection(Hardware::GPIOD::GPIOD_DIR_OUTPUT);
+        m_gpio_activation_pin->setDirection(Hardware::GPIOD::GPIOD_DIR_OUTPUT);
+        m_gpio_watchdog_timeout_pin->setDirection(Hardware::GPIOD::GPIOD_DIR_INPUT);
+        m_gpio_watchdog_timeout_answer_pin->setDirection(Hardware::GPIOD::GPIOD_DIR_OUTPUT);
 
         m_gpio_heartbeat_pin->setValue(0);
         m_gpio_activation_pin->setValue(1);
