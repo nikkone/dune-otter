@@ -26,6 +26,12 @@
 //***************************************************************************
 // Author: Nikolai Lauvås                                                   *
 //***************************************************************************
+// C++ program to find out execution time of
+// of functions
+#include <algorithm>
+#include <chrono>
+#include <iostream>
+#include<vector>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -37,12 +43,14 @@
 // OMPL integration for DUNE
 #include <OMPL/setup.hpp>
 #include <OMPL/OMPLfunctions.hpp>
+#include <OMPL/OMPLMotionValidator2.hpp>
+#include <OMPL/OMPLMotionValidator3.hpp>
 
 namespace MotionPlanners
 {
   //! This task demonstrates how OMPL is used in DUNE along with ENCGIS
   //! @author Nikolai Lauvås
-  namespace OMPL
+  namespace ENCGIStest
   {
     using DUNE_NAMESPACES;
 
@@ -63,14 +71,6 @@ namespace MotionPlanners
       std::vector<double> planningBounds;
       //! Defines the start and end point to use while developing
       std::vector<double> startAndEnd;
-      //! Search depth
-      unsigned searchDepth;
-#if OMPL_BENCHMARK
-      std::string benchmark_name;
-      double benchmark_maxTime;
-      double benchmark_maxMem;
-      int benchmark_runCount;
-#endif
     };
     struct Task: public DUNE::Tasks::Task
     {
@@ -128,30 +128,7 @@ namespace MotionPlanners
         param("Start and Goal", m_args.startAndEnd)
         .size(4)
         .defaultValue("569142.113652, 7035964.208531, 569354.798021, 7032506.975707")
-        .description("A starting point and end point to use while developing");
-
-        param("Search Depth", m_args.searchDepth)
-        .defaultValue("4")
-        .description("Search Depth");
-
-        
-#if OMPL_BENCHMARK
-        param("Benchmark Name", m_args.benchmark_name)
-        .defaultValue("")
-        .description("Path of the db");
-
-        param("Benchmark Runtime", m_args.benchmark_maxTime)
-        .defaultValue("")
-        .description("Path of the db");
-
-        param("Benchmark Max Memory", m_args.benchmark_maxMem)
-        .defaultValue("")
-        .description("Path of the db");
-
-        param("Benchmark Runs", m_args.benchmark_runCount)
-        .defaultValue("")
-        .description("Path of the db"); 
-#endif
+        .description("A starting point and end point to use while developing");   
       }
 
       //! Update internal state with new parameter values.
@@ -196,12 +173,11 @@ namespace MotionPlanners
           // Set task state to failure
         }
         try{
-          lineCheck2 = new ENCGIS::getClosestIntersectWithOffset(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632, 0.99);
+          lineCheck2 = new ENCGIS::getClosestIntersectWithOffset(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632);
         } catch(std::runtime_error& e) {
           err(DTR("Problem creating query for innavigable layer: %s"), e.what());
           // Set task state to failure
         }
-
                   
           
       }
@@ -228,19 +204,6 @@ namespace MotionPlanners
         }
       }
 
-      void activatePlan(std::string plan_id) {
-        bool ignore_errors = true;
-        IMC::PlanControl pcontrol;
-        pcontrol.type = IMC::PlanControl::PC_REQUEST;
-        pcontrol.op = IMC::PlanControl::PC_START;
-        pcontrol.plan_id = plan_id;
-        pcontrol.setDestination(m_ctx.resolver.id());
-        if (ignore_errors)
-          pcontrol.flags = IMC::PlanControl::FLG_IGNORE_ERRORS;
-        dispatch(pcontrol);
-        spew("Plan start request sent");
-      }
-
       //! Main loop.
       void
       onMain(void)
@@ -251,36 +214,56 @@ namespace MotionPlanners
         bounds.setHigh(0,m_args.planningBounds[3]);
         bounds.setLow(1,m_args.planningBounds[0]);
         bounds.setHigh(1,m_args.planningBounds[2]);
+        auto space(std::make_shared<ob::RealVectorStateSpace>(2));
+    // Define bounds of searching space
+        space->setBounds(bounds);
 
-        //og::SimpleSetup setup = OMPLintegrationDUNE::createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck, lineCheck); // Ned nidelven
-        og::SimpleSetup setup = OMPLintegrationDUNE::createSetup2(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck,lineCheck, lineCheck2, m_args.searchDepth); // Ned nidelven
+    // Define a simple setup class
+        ompl::geometric::SimpleSetup ss(space);
+        ompl::base::MotionValidatorPtr mp2 = std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator2>(ss.getSpaceInformation(), lineCheck, 4);
+        ompl::base::MotionValidatorPtr mp3 = std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator3>(ss.getSpaceInformation(), lineCheck,lineCheck2, 4);
 
-        // Run/benchmark current setup
-        #if OMPL_BENCHMARK
-          OMPLintegrationDUNE::multiBmarkPath(setup, m_args.benchmark_name, m_args.benchmark_maxTime, m_args.benchmark_maxMem, m_args.benchmark_runCount);
-        #else
-          og::PathGeometric states = OMPLintegrationDUNE::findPath(setup, m_args.maxPlaningTime);
-          //// Dispatch and activate returned path
-          IMC::PlanDB pdb = MotionPlanners::OMPL::createPlanDBEntryUTM(states, "autoPlan", 1.0, 32);
-          dispatch(pdb);
-          activatePlan("autoPlan");
-          //MotionPlanners::OMPL::printPath(states);
-          // Write path to DB for visualization purposes
-          ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 32632);
-          ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_writable);
-          m_writable->runNoOutputQuery("select InitSpatialMetadata(1);");
-          tree->resetTree("tree");
-          tree->createTree("tree");
-          MotionPlanners::OMPL::pathToTree(states, "tree", tree);
-          inf("Wrote to tree");
-          Memory::clear(tree);
-          Memory::clear(m_writable);
-        #endif
-        //findPathExtended(setup);
-        inf("findPath finnished");
+
+        ob::State *a = ss.getSpaceInformation()->allocState();
+        const auto statea= static_cast<ompl::base::RealVectorStateSpace::StateType *>(a);
+        statea->values[0] = m_args.startAndEnd[1];
+        statea->values[1] = m_args.startAndEnd[0];
+        std::cout << "State a: " << statea->values[0] << " " << statea->values[1] << std::endl;
+        ob::State *b = ss.getSpaceInformation()->allocState();
+        const auto stateb= static_cast<ompl::base::RealVectorStateSpace::StateType *>(b);
+        stateb->values[0] = m_args.startAndEnd[3];
+        stateb->values[1] = m_args.startAndEnd[2];
+        std::cout << "State b: " << stateb->values[0] << " " << stateb->values[1] << std::endl;
+
+
+        //    double X=0, Y = 0;
+        // Get starting timepoint
+        auto start = std::chrono::high_resolution_clock::now();
+        bool res = mp2->checkMotion(statea, stateb);
+        auto stop1 = std::chrono::high_resolution_clock::now();
+        bool res2 = mp3->checkMotion(statea, stateb);
+        //double result = lineCheck2->run(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], X, Y);
+        // Get ending timepoint
+        auto stop2 = std::chrono::high_resolution_clock::now();
+
+        ss.getSpaceInformation()->freeState(a);
+        ss.getSpaceInformation()->freeState(b);
+        if(res) {inf("acc");}
+        if(res2) {inf("acc2");}
+        // Get duration. Substart timepoints to 
+        // get durarion. To cast it to proper unit
+        // use duration cast method
+        auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start);
+        auto duration2 = std::chrono::duration_cast<std::chrono::microseconds>(stop2 - stop1);
+        std::cout << "Time taken by function1: "
+         << duration1.count() << " microseconds" << std::endl;// << "X,Y: " << X<< "," << Y << "," << result << std::endl;
+         std::cout << "Time taken by function2: "
+         << duration2.count() << " microseconds" << std::endl;
+
+
         while (!stopping())
         {
-          waitForMessages(1.0);
+          waitForMessages(1.5);
         }
       }
     };

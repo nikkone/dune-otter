@@ -15,7 +15,10 @@ namespace MotionPlanners
   namespace OMPL
   {
         /** \brief A motion validator based on the Intersection function in Spatialite that finds the intersection between geometries. 
-         * A constant is then added to this number to avoid rounding error making the point be in the invalid area.*/
+         * A constant is then added to this number to avoid rounding error making the point be in the invalid area.
+         * https://locationtech.github.io/jts/javadoc/org/locationtech/jts/algorithm/package-summary.html
+         * https://locationtech.github.io/jts/javadoc/org/locationtech/jts/algorithm/Intersection.html
+         * */
         class ChartsDBMotionValidator3 : public ob::MotionValidator
         {
         public:
