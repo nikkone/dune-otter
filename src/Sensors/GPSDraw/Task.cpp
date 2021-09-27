@@ -1,6 +1,6 @@
 //***************************************************************************
-// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
-// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
+// Copyright 2013-2021 Norwegian University of Science and Technology (NTNU)*
+// Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -24,7 +24,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Ricardo Martins                                                  *
+// Author: Nikolai Lauvås ( Based on GPS task by Ricardo Martins)           *
 //***************************************************************************
 #define GPS_JSON_RESPONSE_MAX   10240
 
@@ -391,7 +391,7 @@ namespace Sensors
             std::sprintf(m_bufer_entity, "wait gps fix - hdop: %.2f , Sat: %d", m_fix.hdop, m_fix.satellites);
             setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR(m_bufer_entity)));
           }
-          spew("Messages Sent.");
+          //spew("Messages Sent.");
         }
       }
 
@@ -646,6 +646,7 @@ namespace Sensors
             if (gps_read (&m_gpsdata, m_message_buffer, sizeof(m_message_buffer)) != -1) {
               std::string line(m_message_buffer);
               processSentence(line);
+              spew("%s", line.c_str());
             } else {
               spew("Could not read GPSD m_gpsdata");
             }

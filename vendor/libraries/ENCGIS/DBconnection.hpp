@@ -32,6 +32,8 @@ namespace ENCGIS
     ~DBconnection();
 
 
+    void transformSRID(double in_x, double in_y, unsigned in_srid, double &out_x, double &out_y, unsigned out_srid);
+
     void runQuery(std::string sqlstmt);
     bool runNoOutputQuery(std::string sql_stmt);
     static int callback(void *NotUsed, int argc, char **argv, char **azColName);

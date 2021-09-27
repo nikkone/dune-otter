@@ -185,12 +185,6 @@ namespace ENCGIS {
   }
 
     void DBconnection::loadSpatialite() {
-    //std::string ext=""
-    /*char *zErrMsg = 0;
-    if(sqlite3_load_extension(db, "mod_spatialite", 0, &zErrMsg) != SQLITE_OK ) {
-      printf("notok");
-      sqlite3_free(zErrMsg);
-    }*/
 
     sqlite3_enable_load_extension(db, 1);
     std::string c_stmt = "SELECT load_extension('mod_spatialite');";
@@ -225,17 +219,6 @@ namespace ENCGIS {
     } else {
       sql_stmt = "select count(*) from " + table + " as l where intersects(GeomFromText(\"LineString(" + std::to_string(startX) + " " + std::to_string(startY) + ", " + std::to_string(endX) + " " + std::to_string(endY) + ")\", " + std::to_string(epsg) + " ), l.geom)";
     }
-    /*
-    std::pair<bool, int> DBDepth;
-    iterator_stmt->execute();
-    *iterator_stmt >> DBDepth;
-    if(std::get<0>(DBDepth)) {
-      delete iterator_stmt;
-      return std::get<1>(DBDepth);
-    } else {
-      delete iterator_stmt;
-      return -1;
-    }*/
     sqlite3_stmt* m_handle;
     
     if (sqlite3_prepare_v2(db, sql_stmt.c_str(), sql_stmt.length(), &m_handle, 0) != SQLITE_OK)
@@ -297,4 +280,23 @@ namespace ENCGIS {
       return false;
 
   }
+  void DBconnection::transformSRID(double in_x, double in_y, unsigned in_srid, double &out_x, double &out_y, unsigned out_srid) {
+    std::string sqlstmt = "select X(p), Y(p) from (select transform(makepoint(?1, ?2, ?3), ?4) as p)";
+      sqlite3_stmt* m_handle;
+      sqlite3_prepare_v3(db, sqlstmt.c_str(), -1, SQLITE_PREPARE_PERSISTENT, &m_handle, 0);
+      sqlite3_bind_double(m_handle,1,in_x);
+      sqlite3_bind_double(m_handle,2,in_y);
+      sqlite3_bind_int(m_handle,3,in_srid);
+      sqlite3_bind_int(m_handle,4,out_srid);
+        // Execute
+      if(sqlite3_step(m_handle) == SQLITE_ROW) {
+        out_x = sqlite3_column_int(m_handle, 0);
+        out_y = sqlite3_column_int(m_handle, 1);
+        sqlite3_reset(m_handle);
+      } else {
+        sqlite3_reset(m_handle);
+      }
+      sqlite3_finalize(m_handle);
+  }
+
 }
