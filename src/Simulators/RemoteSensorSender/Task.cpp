@@ -44,7 +44,7 @@
 #include <DUNE/DUNE.hpp>
 //#include <DUNE/Time/Clock.hpp>
 
-namespace Sensors
+namespace Simulators
 {
   //! Device driver for ThelmaHydrophone
   namespace RemoteSensorSender
