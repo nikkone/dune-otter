@@ -1,5 +1,8 @@
+
 #include "setup.hpp"
-#include <ompl/geometric/planners/informedtrees/BITstar.h>
+#if OLDOMPL
+  #include <ompl/geometric/planners/informedtrees/BITstar.h>
+#endif
 #include <ompl/geometric/planners/fmt/FMT.h>
 #if OMPL_BENCHMARK
   #include <ompl/geometric/planners/kpiece/LBKPIECE1.h>
@@ -76,10 +79,13 @@ namespace OMPLintegrationDUNE
 
   //! Function searching for path, ends search once first valid path is available
   og::PathGeometric findPath(og::SimpleSetup &ss, double maxPlaningTime) {
+    #if OLDOMPL
     //ss.setPlanner(ob::PlannerPtr(new og::ABITstar(ss.getSpaceInformation())));
-    ob::PlannerPtr test= kbitstar( ss.getSpaceInformation(), "kBITstar");
+      ob::PlannerPtr test= kbitstar( ss.getSpaceInformation(), "kBITstar");
+      ss.setPlanner(test);
+    #endif
     //ob::PlannerPtr test= ompl::base::PlannerPtr();
-    ss.setPlanner(test);
+    
         // attempt to solve the problem within a given planning time
     ob::PlannerStatus solved = ss.solve(maxPlaningTime);
     if (solved)
@@ -236,7 +242,7 @@ namespace OMPLintegrationDUNE
 
         });
       }
-
+#if OLDOMPL
       ompl::base::PlannerPtr kbitstar(const ompl::base::SpaceInformationPtr &si, std::string name)
       {
           ompl::geometric::BITstar *planner = new og::BITstar(si);
@@ -247,7 +253,7 @@ namespace OMPLintegrationDUNE
 
           return ompl::base::PlannerPtr(planner);
       }
-
+#endif
 #if OMPL_BENCHMARK
       //! Function for performing benchmarks on a setup.
       void bmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount)
