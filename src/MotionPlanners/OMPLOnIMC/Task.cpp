@@ -55,8 +55,6 @@ namespace MotionPlanners
       std::string dbNavigableLayerName;
       //! Innavigable Layer Name
       std::string dbInnavigableLayerName;
-      //! How long a planner is run before terminated.
-      double maxPlaningTime;
       //! If a valid path is available, allow optimizing until the given time. If non-optimizing planner used, this is ignored.
       double minPlaningTime;
       //! Defines the bounds of the area the path planner operates on.
@@ -89,7 +87,8 @@ namespace MotionPlanners
       fp32_t speed;
       //! Speed Units.
       uint8_t speed_units;
-      
+      //! How long a planner is run before terminated.
+      double maxPlaningTime;
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
@@ -116,11 +115,6 @@ namespace MotionPlanners
         param("Innavigable Layer Name", m_args.dbInnavigableLayerName)
         .defaultValue("innavigable")
         .description("Innavigable Layer Name");
-
-        param("Max Planning Time", m_args.maxPlaningTime)
-        .units(DUNE::Units::Second)
-        .defaultValue("60.0")
-        .description("How long a planner is run before terminated");
 
         param("Min Planning Time", m_args.minPlaningTime)
         .units(DUNE::Units::Second)
@@ -240,30 +234,62 @@ namespace MotionPlanners
       consume(const IMC::PlanProbSpec* msg)
       {
         spew("Message received");
-        spew("%i", msg->getDestination());
-        spew("%i", msg->problem_type);
+        spew("Destination: %i", msg->getDestination());
+        spew("Problem Type%i", msg->problem_type);
+
         // Only accept messages to this system
         if (msg->getDestination() != getSystemId())
           return;
 
         /*if (msg->getDestinationEntity() != getEntityId())
           return;*/
-          
+
         // Only accept feasible path problems
         if (msg->problem_type != IMC::PlanProbSpec::TypeEnum::TBR_fpath)
           return;
+
+        spew("Checking size");
+        if(msg->area.size() != 2)
+          return;
+        spew("All checks correct");
+
+        // Parse Custom Parameters
+        /*
+          Supported custom parameters:
+            a = [0,x], activate resulting plan
+            p = [], Planning algorithm/configuration to use
+            t = [0.0,inf), Max planning time
+        */
+        DUNE::Utils::TupleList custom = DUNE::Utils::TupleList(msg->custom);
+        std::map<std::string, std::string> custommap = custom.getMapReversed();
+
+        auto parameterit = custommap.find("t");
+        if (parameterit != custommap.end()) {
+          maxPlaningTime = std::stof(parameterit->second);
+          spew("Found t=%f", maxPlaningTime);
+        }
+        parameterit = custommap.find(std::string("p"));
+        if (parameterit != custommap.end()) {
+          spew("Found p=%s", parameterit->second.c_str());
+        }
+        parameterit = custommap.find(std::string("a"));
+        bool activateResultingPlan= false;
+        if (parameterit != custommap.end()) {
+
+          spew("Found a=%i", std::stoi(parameterit->second));
+          activateResultingPlan = (std::stoi(parameterit->second)) ? true : false;
+        }
+        // Store plan specific parameters
+        vehicle = msg->vehicle;
+        speed = msg->speed;
+        speed_units = msg->speed_units;
 
         // Create planning bound
         IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = msg->area.begin();
           for (unsigned i = 0; itr != msg->area.end(); ++itr, ++i)
           {
-            inf("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
-            //WGS84::displacement(m_lat, m_lon, 0, (*it)->lat, (*it)->lon, 0, &n, &e);
+            spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
           }
-        spew("Checking size");
-        if(msg->area.size() != 2)
-          return;
-        spew("All checks correct");
         itr = msg->area.begin();
         double planningBounds[4];
         m_con->transformSRID((*itr)->lon, (*itr)->lat, 4326, planningBounds[1], planningBounds[0], 32632);
@@ -275,25 +301,29 @@ namespace MotionPlanners
         bounds.setHigh(0,planningBounds[2]);
         bounds.setLow(1,planningBounds[1]);
         bounds.setHigh(1,planningBounds[3]);
+
         // Convert from WGS-84 to EPSG32632
         double start_northing, start_easting, end_northing, end_easting;
         m_con->transformSRID(msg->start_lon, msg->start_lat, 4326, start_easting, start_northing, 32632);
         m_con->transformSRID(msg->end_lon, msg->end_lat, 4326, end_easting, end_northing, 32632);
-        // Store parameters for problem.
-        vehicle = msg->vehicle;
-        speed = msg->speed;
-        speed_units = msg->speed_units;
 
         og::SimpleSetup setup = OMPLintegrationDUNE::createSetup(start_easting, start_northing, end_easting, end_northing, bounds, pointCheck, lineCheck);
         spew("Planning start/goal: %f, %f, %f, %f", start_easting, start_northing, end_easting, end_northing);
         spew("Args bounds:  %f, %f, %f, %f", m_args.planningBounds[1], m_args.planningBounds[3], m_args.planningBounds[0], m_args.planningBounds[2]);
         spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
 
-        og::PathGeometric states = OMPLintegrationDUNE::findPath(setup, 60.0);
-        //// Dispatch and activate returned path
-        IMC::PlanDB pdb = MotionPlanners::OMPL::createPlanDBEntryUTM(states, "autoPlan", speed, 32);
-        dispatch(pdb);
-        activatePlan("autoPlan");
+        og::PathGeometric states = OMPLintegrationDUNE::findPath(setup, maxPlaningTime);
+
+        if (states.getStateCount()) {
+          //// Dispatch and activate returned path
+          IMC::PlanDB pdb = MotionPlanners::OMPL::createPlanDBEntryUTM(states, "autoPlan", speed, 32);
+          dispatch(pdb);
+          if(activateResultingPlan) {
+            activatePlan("autoPlan");
+          }
+        } else {
+          err("Could not find valid path within %f seconds.", maxPlaningTime);
+        }
       }
       
       void activatePlan(std::string plan_id) {
