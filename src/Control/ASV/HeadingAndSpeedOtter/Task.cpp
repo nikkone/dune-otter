@@ -24,8 +24,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Ricardo Gomes                                                    *
-// Author: José Braga                                                       *
+// Author: Nikolai Lauvås (Based on works by Ricardo Gomes and José Braga)  *
 //***************************************************************************
 
 // ISO C++ 98 headers.
