@@ -89,6 +89,10 @@ namespace SourceEstimators
       uint32_t receiver_serial;
       //! Reference coordinate position (degrees)
       std::vector<double> reference;
+      //! Logfile folder and prefix
+      std::string log_folder_and_prefix;
+      //! Logfile folder and prefix
+      std::string log_folder_and_prefix2;
     };
     struct Task: public DUNE::Tasks::Task
     {
@@ -103,6 +107,8 @@ namespace SourceEstimators
       //! Speed of sound provider entity label.
       int m_c_sound_eid;
 
+      std::string logfilename;
+      std::string logfilename2;
       OFP::ExtendedKalmanFilter<double, 3, 3> m_ekf;
       OFP::ExtendedKalmanFilter<double, 3, 1> m_ekf2;
       OFP::AlgebraicSolver<double, 3, 9, 5> m_aslv;
@@ -169,9 +175,16 @@ namespace SourceEstimators
         .defaultValue("false");
 
          param("Speed Of Sound - Entity", m_args.entity_c_sound)
-        .units(Units::MeterPerSecond)
         .description("The entity delivering the Speed of Sound in water")
-        .defaultValue("CTD");        
+        .defaultValue("CTD");      
+        
+         param("Log Folder and Prefix - 1", m_args.log_folder_and_prefix)
+        .description("")
+        .defaultValue("log/predict-");   
+        
+         param("Log Folder and Prefix - 2", m_args.log_folder_and_prefix2)
+        .description("")
+        .defaultValue("log/predict2-");     
 
 
 // Kalman Filter Parameters
@@ -207,6 +220,10 @@ namespace SourceEstimators
       void
       onUpdateParameters(void)
       {
+        logfilename = m_args.log_folder_and_prefix + getEntityLabel() + ".log";
+
+        logfilename2 = m_args.log_folder_and_prefix2 + getEntityLabel() + ".log";
+
         m_refCoord[0] = Math::Angles::radians(m_args.reference[0]);
         m_refCoord[1] = Math::Angles::radians(m_args.reference[1]);
         m_refCoord[2] = 0.0;
@@ -251,6 +268,19 @@ namespace SourceEstimators
       onResourceAcquisition(void)
       {
         tagBuffer = new boost::circular_buffer<IMC::TBRFishTag>(c_buffer_size);
+        #if SingleReceiverEKFLog
+          std::ofstream logOutStream;
+          logOutStream.open(logfilename, std::fstream::app);
+          if (logOutStream.good()) {
+              logOutStream << "N,E,D,Lat,Lon" << std::endl;
+              logOutStream.close();
+          }
+          logOutStream.open(logfilename2, std::fstream::app);
+          if (logOutStream.good()) {
+              logOutStream << "N,E,D,Lat,Lon" << std::endl;
+              logOutStream.close();
+          }
+        #endif
       }
 
       void
@@ -500,11 +530,8 @@ namespace SourceEstimators
                   tagPosition.id = "OFPEKF" + std::to_string(m_args.receiver_serial);
                   dispatch(tagPosition);
                   #if SingleReceiverEKFLog
-                  std::string filename = "log/predict-";
-                  filename += getEntityLabel();
-                  filename += ".log";
                   std::ofstream logOutStream;
-                  logOutStream.open(filename, std::fstream::app);
+                  logOutStream.open(logfilename, std::fstream::app);
                   if (logOutStream.good()) {
                     logOutStream.precision(15);
                       logOutStream << m_ekf.xHat(0) << "," << m_ekf.xHat(1) << "," << m_ekf.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
@@ -530,11 +557,8 @@ namespace SourceEstimators
                   tagPosition.id = "OFPEKF2" + std::to_string(m_args.receiver_serial);
                   dispatch(tagPosition);
                   #if SingleReceiverEKFLog
-                  std::string filename = "log/predict2-";
-                  filename += getEntityLabel();
-                  filename += ".log";
                   std::ofstream logOutStream;
-                  logOutStream.open(filename, std::fstream::app);
+                  logOutStream.open(logfilename2, std::fstream::app);
                   if (logOutStream.good()) {
                     logOutStream.precision(15);
                       logOutStream << m_ekf2.xHat(0) << "," << m_ekf2.xHat(1) << "," << m_ekf2.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
