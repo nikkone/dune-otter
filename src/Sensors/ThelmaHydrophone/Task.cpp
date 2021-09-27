@@ -26,8 +26,7 @@
 //***************************************************************************
 // Author: Nikolai Lauvås (based on GPS by Ricardo Martins)                 *
 //***************************************************************************
-
-#include <ctime>       /* time_t, struct tm, time, mktime */
+ 
 
 //TODO: Add feature: position at 5s before tag registration in imc message.
 //TODO: May not work without PPS anymore.
@@ -36,9 +35,10 @@
 #include <cstring>
 #include <algorithm>
 #include <cstddef>
-#include <ctime>
+#include <ctime> /* time_t, struct tm, time, mktime */
 #include <string>
 #include <sstream>
+#include <inttypes.h>
 #include <chrono>
 
 // DUNE headers.
@@ -393,9 +393,18 @@ namespace Sensors
       }
 
       void sendFullTimestamp() {
-        std::time_t timestamp = std::time(nullptr);
-        std::string UTCUnixTimestamp = std::to_string(timestamp);
-        slowTbrSend("UT=" + UTCUnixTimestamp);
+        std::time_t timestamp = std::time(nullptr) + 1;
+        std::string UTCUnixTimestamp = "UT=" + std::to_string(timestamp);
+        m_syncack_timer.reset(); // Resused to set an upper limit to waiting
+        while((std::time(nullptr) !=timestamp) && !m_syncack_timer.overflow());
+        if(!m_syncack_timer.overflow())
+          slowTbrSend(UTCUnixTimestamp);
+        else {
+          war("Something went wrong when sending timestamp, retrying.");
+          sendFullTimestamp();
+        }
+
+        //printf("%" PRIu64 "\n", ram);
         m_syncack_timer.reset();
         waitingForAck3 = true;
 
@@ -446,7 +455,9 @@ namespace Sensors
             m_handle->write(a, 1);
             Delay::waitMsec(1);
         }
-        spew(DTR("Sent: \"%s\" at \"%ld\""), cmd.c_str(), std::time(0)); 
+        uint64_t microseconds_since_epoch = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        spew("Sent: \"%s\" at \"%" PRIu64 "\n", cmd.c_str(),microseconds_since_epoch);
+        //spew(DTR("Sent: \"%s\" at \"%ld\""), cmd.c_str(), std::time(0)); 
       }
 
       //! Read int from input string.
@@ -509,7 +520,7 @@ namespace Sensors
 
       bool runningNrCheck(uint16_t running_nr) {
         if(recent_received_string_nr+1 != running_nr) {
-          err("Unexpected message running number, expected: %u, reveived %u", recent_received_string_nr+1, running_nr);
+          err("Unexpected message running number, expected: %u, received %u", recent_received_string_nr+1, running_nr);
           recent_received_string_nr = running_nr;
           return false;
         }
