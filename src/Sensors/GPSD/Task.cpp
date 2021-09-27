@@ -1,6 +1,6 @@
 //***************************************************************************
-// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
-// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
+// Copyright 2013-2021 Norwegian University of Science and Technology (NTNU)*
+// Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -24,7 +24,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Ricardo Martins                                                  *
+// Author: Nikolai Lauvås                                                   *
 //***************************************************************************
 #define MODE_STR_NUM 4
 
