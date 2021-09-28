@@ -1,6 +1,6 @@
 //***************************************************************************
-// Copyright 2007-2020 Universidade do Porto - Faculdade de Engenharia      *
-// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
+// Copyright 2013-2021 Norwegian University of Science and Technology (NTNU)*
+// Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -8,9 +8,8 @@
 // Licencees holding valid commercial DUNE licences may use this file in    *
 // accordance with the commercial licence agreement provided with the       *
 // Software or, alternatively, in accordance with the terms contained in a  *
-// written agreement between you and Faculdade de Engenharia da             *
-// Universidade do Porto. For licensing terms, conditions, and further      *
-// information contact lsts@fe.up.pt.                                       *
+// written agreement between you and the Department of Engineering          *
+// Cybernetics at the Norwegian University of Science and Technology        *
 //                                                                          *
 // Modified European Union Public Licence - EUPL v.1.1 Usage                *
 // Alternatively, this file may be used under the terms of the Modified     *
@@ -257,27 +256,39 @@ namespace MotionPlanners
         /*
           Supported custom parameters:
             a = [0,x], activate resulting plan
-            p = [], Planning algorithm/configuration to use
+            p = [], Planning algorithm/configuration to use, follows enum OMPLintegrationDUNE::configurations_t
             t = [0.0,inf), Max planning time
         */
         DUNE::Utils::TupleList custom = DUNE::Utils::TupleList(msg->custom);
         std::map<std::string, std::string> custommap = custom.getMapReversed();
-
+        unsigned planner = 0;
         auto parameterit = custommap.find("t");
         if (parameterit != custommap.end()) {
-          maxPlaningTime = std::stof(parameterit->second);
-          spew("Found t=%f", maxPlaningTime);
+          try{
+            maxPlaningTime = std::stof(parameterit->second);
+            spew("Found t=%f", maxPlaningTime);
+          } catch(...) {
+            err("Parameter \'t\' not float");
+          }
         }
         parameterit = custommap.find(std::string("p"));
         if (parameterit != custommap.end()) {
           spew("Found p=%s", parameterit->second.c_str());
+          try{
+            planner = std::stoul(parameterit->second);
+          } catch(...) {
+            err("Parameter \'p\' not unsigned");
+          }
         }
         parameterit = custommap.find(std::string("a"));
         bool activateResultingPlan= false;
         if (parameterit != custommap.end()) {
-
-          spew("Found a=%i", std::stoi(parameterit->second));
-          activateResultingPlan = (std::stoi(parameterit->second)) ? true : false;
+          try{
+            spew("Found a=%i", std::stoi(parameterit->second));
+            activateResultingPlan = (std::stoi(parameterit->second)) ? true : false;
+          } catch(...) {
+            err("Parameter \a\' not bool(int)");
+          }
         }
         // Store plan specific parameters
         vehicle = msg->vehicle;
@@ -307,12 +318,12 @@ namespace MotionPlanners
         m_con->transformSRID(msg->start_lon, msg->start_lat, 4326, start_easting, start_northing, 32632);
         m_con->transformSRID(msg->end_lon, msg->end_lat, 4326, end_easting, end_northing, 32632);
 
-        og::SimpleSetup setup = OMPLintegrationDUNE::createSetup(start_easting, start_northing, end_easting, end_northing, bounds, pointCheck, lineCheck);
         spew("Planning start/goal: %f, %f, %f, %f", start_easting, start_northing, end_easting, end_northing);
         spew("Args bounds:  %f, %f, %f, %f", m_args.planningBounds[1], m_args.planningBounds[3], m_args.planningBounds[0], m_args.planningBounds[2]);
         spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
 
-        og::PathGeometric states = OMPLintegrationDUNE::findPath(setup, maxPlaningTime);
+        og::SimpleSetup setup = OMPLintegrationDUNE::createSetup(start_easting, start_northing, end_easting, end_northing, bounds, pointCheck, lineCheck);
+        og::PathGeometric states = OMPLintegrationDUNE::findPath(setup, maxPlaningTime, OMPLintegrationDUNE::configurations_t(planner));
 
         if (states.getStateCount()) {
           //// Dispatch and activate returned path
