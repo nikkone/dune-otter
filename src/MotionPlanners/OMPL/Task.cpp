@@ -1,6 +1,6 @@
 //***************************************************************************
-// Copyright 2007-2020 Universidade do Porto - Faculdade de Engenharia      *
-// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
+// Copyright 2013-2021 Norwegian University of Science and Technology (NTNU)*
+// Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -8,9 +8,8 @@
 // Licencees holding valid commercial DUNE licences may use this file in    *
 // accordance with the commercial licence agreement provided with the       *
 // Software or, alternatively, in accordance with the terms contained in a  *
-// written agreement between you and Faculdade de Engenharia da             *
-// Universidade do Porto. For licensing terms, conditions, and further      *
-// information contact lsts@fe.up.pt.                                       *
+// written agreement between you and the Department of Engineering          *
+// Cybernetics at the Norwegian University of Science and Technology        *
 //                                                                          *
 // Modified European Union Public Licence - EUPL v.1.1 Usage                *
 // Alternatively, this file may be used under the terms of the Modified     *
@@ -80,7 +79,7 @@ namespace MotionPlanners
       ENCGIS::DBconnection* m_con;
       ENCGIS::isPointInLayerStatement       *pointCheck;
       ENCGIS::lineIntersectLayerStatement *lineCheck;
-      ENCGIS::getClosestIntersectWithOffset *lineCheck2;
+      //ENCGIS::getClosestIntersectWithOffset *lineCheck2;
       bool m_intermediate;
 
       //! Constructor.
@@ -195,12 +194,12 @@ namespace MotionPlanners
           err(DTR("Problem creating query for innavigable layer: %s"), e.what());
           // Set task state to failure
         }
-        try{
+        /*try{
           lineCheck2 = new ENCGIS::getClosestIntersectWithOffset(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632, 0.99);
         } catch(std::runtime_error& e) {
           err(DTR("Problem creating query for innavigable layer: %s"), e.what());
           // Set task state to failure
-        }
+        }*/
 
                   
           
@@ -252,8 +251,8 @@ namespace MotionPlanners
         bounds.setLow(1,m_args.planningBounds[0]);
         bounds.setHigh(1,m_args.planningBounds[2]);
 
-        //og::SimpleSetup setup = OMPLintegrationDUNE::createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck, lineCheck); // Ned nidelven
-        og::SimpleSetup setup = OMPLintegrationDUNE::createSetup2(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck,lineCheck, lineCheck2, m_args.searchDepth); // Ned nidelven
+        og::SimpleSetup setup = OMPLintegrationDUNE::createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck, lineCheck, m_args.searchDepth); // Ned nidelven
+        //og::SimpleSetup setup = OMPLintegrationDUNE::createSetup2(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck,lineCheck, lineCheck2, m_args.searchDepth); // Ned nidelven
 
         // Run/benchmark current setup
         #if OMPL_BENCHMARK
