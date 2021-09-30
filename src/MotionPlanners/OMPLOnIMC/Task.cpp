@@ -212,7 +212,7 @@ namespace MotionPlanners
       onResourceInitialization(void)
       {
         // Set OMPL to use the console output of this task
-        ompl::msg::OutputHandler *oh = new MotionPlanners::OMPL::OutputHandlerDUNEConsole(this);
+        ompl::msg::OutputHandler *oh = new OMPLforDUNE::OutputHandlerDUNEConsole(this);
         ompl::msg::useOutputHandler(oh);
         ompl::msg::setLogLevel(ompl::msg::LogLevel::LOG_DEV2);
       }
@@ -256,7 +256,7 @@ namespace MotionPlanners
         /*
           Supported custom parameters:
             a = [0,x], activate resulting plan
-            p = [], Planning algorithm/configuration to use, follows enum OMPLintegrationDUNE::configurations_t
+            p = [], Planning algorithm/configuration to use, follows enum OMPLintegrationENCGIS::configurations_t
             t = [0.0,inf), Max planning time
         */
         DUNE::Utils::TupleList custom = DUNE::Utils::TupleList(msg->custom);
@@ -322,12 +322,12 @@ namespace MotionPlanners
         spew("Args bounds:  %f, %f, %f, %f", m_args.planningBounds[1], m_args.planningBounds[3], m_args.planningBounds[0], m_args.planningBounds[2]);
         spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
 
-        og::SimpleSetup setup = OMPLintegrationDUNE::createSetup(start_easting, start_northing, end_easting, end_northing, bounds, pointCheck, lineCheck);
-        og::PathGeometric states = OMPLintegrationDUNE::findPath(setup, maxPlaningTime, OMPLintegrationDUNE::configurations_t(planner));
+        og::SimpleSetup setup = OMPLintegrationENCGIS::createSetup(start_easting, start_northing, end_easting, end_northing, bounds, pointCheck, lineCheck);
+        og::PathGeometric states = OMPLintegrationENCGIS::findPath(setup, maxPlaningTime, OMPLintegrationENCGIS::configurations_t(planner));
 
         if (states.getStateCount()) {
           //// Dispatch and activate returned path
-          IMC::PlanDB pdb = MotionPlanners::OMPL::createPlanDBEntryUTM(states, "autoPlan", speed, 32);
+          IMC::PlanDB pdb = OMPLforDUNE::createPlanDBEntryUTM(states, "autoPlan", speed, 32);
           dispatch(pdb);
           if(activateResultingPlan) {
             activatePlan("autoPlan");

@@ -2,27 +2,6 @@
 // Copyright 2020-2021 Norwegian University of Science and Technology       *
 // Department of Engineering Technology                                     *
 //***************************************************************************
-// This file is part of DUNE: Unified Navigation Environment.               *
-//                                                                          *
-// Commercial Licence Usage                                                 *
-// Licencees holding valid commercial DUNE licences may use this file in    *
-// accordance with the commercial licence agreement provided with the       *
-// Software or, alternatively, in accordance with the terms contained in a  *
-// written agreement between you and Faculdade de Engenharia da             *
-// Universidade do Porto. For licensing terms, conditions, and further      *
-// information contact lsts@fe.up.pt.                                       *
-//                                                                          *
-// Modified European Union Public Licence - EUPL v.1.1 Usage                *
-// Alternatively, this file may be used under the terms of the Modified     *
-// EUPL, Version 1.1 only (the "Licence"), appearing in the file LICENCE.md *
-// included in the packaging of this file. You may not use this work        *
-// except in compliance with the Licence. Unless required by applicable     *
-// law or agreed to in writing, software distributed under the Licence is   *
-// distributed on an "AS IS" basis, WITHOUT WARRANTIES OR CONDITIONS OF     *
-// ANY KIND, either express or implied. See the Licence for the specific    *
-// language governing permissions and limitations at                        *
-// https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
-// http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
 // Author: Nikolai Lauvås                                                   *
 //***************************************************************************
@@ -31,10 +10,9 @@
 
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 #include <DUNE/Coordinates/UTM.hpp>
-namespace MotionPlanners
-{
+
   //! @author Nikolai Lauvås
-  namespace OMPL
+  namespace OMPLforDUNE
   {
     void printPath(og::PathGeometric states) {
         for(unsigned i=0;i<states.getStateCount();i++) {
@@ -60,6 +38,57 @@ namespace MotionPlanners
             }
         }
     }
+
+      ompl::base::PlannerTerminationCondition exactSolnPlannerTerminationCondition(const bool *stop, DUNE::Tasks::Task *inTask, double maxPlaningTime)
+  {
+    double duration = maxPlaningTime; // Maxtime
+    const ompl::time::point endTime(ompl::time::now() + ompl::time::seconds(duration));
+    return ompl::base::PlannerTerminationCondition([stop, inTask, endTime]
+      {
+        if(*stop) {
+          return true;
+        }
+
+        if(ompl::time::now() > endTime){
+          inTask->inf("maxtime");
+          return true;
+        }
+
+        return inTask->isStopping();
+      }
+    );
+  }
+
+
+  
+  ompl::base::ReportIntermediateSolutionFn intermediate(DUNE::Tasks::Task *inTask, double minPlaningTime) {
+    double duration = minPlaningTime; // Mintime
+    const ompl::time::point endTime(ompl::time::now() + ompl::time::seconds(duration));
+    return ompl::base::ReportIntermediateSolutionFn([inTask, endTime](const ob::Planner *planner, const std::vector< const ob::State * > &states, const ob::Cost cost) 
+    { 
+      if(ompl::time::now() > endTime){
+        inTask->inf("mintime");
+      }
+      // Create ompl::geometric::PathGeometric from "states" vector
+      auto path = ompl::geometric::PathGeometric(planner->getSpaceInformation());
+      for (auto ptr = states.begin(); ptr < states.end(); ptr++) {
+        //auto state = static_cast<const ompl::base::RealVectorStateSpace::StateType *>(*ptr);
+        //std::cout << state->values[1] <<","<< state->values[0] << std::endl;
+        path.append(*ptr);
+      }
+
+          //ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_con);
+          //MotionPlanners::OMPL::pathToTree(path, "tree", tree);
+          //Memory::clear(tree);
+
+      //intermediate(planner,states, cost); 
+      inTask->inf("intermediate solution with %f Cost", cost.value());
+    //std::cout << "intermediate solution with "<< cost.value() << "Cost"<< std::endl;
+    //m_intermediate = true;
+    // Check if mintime reached, else return false
+
+    });
+  }
 //////////////////////////////////////////// Plan Generation
       void
       sequentialPlan(std::string plan_id, const DUNE::IMC::MessageList<DUNE::IMC::Maneuver>* maneuvers, DUNE::IMC::PlanSpecification& result)
@@ -200,5 +229,4 @@ namespace MotionPlanners
       }
     }
   }
-}
 

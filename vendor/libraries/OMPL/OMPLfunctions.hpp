@@ -5,6 +5,10 @@
 #include <ompl/geometric/PathGeometric.h>
 #include <ompl/base/State.h>
 #include "ompl/util/Console.h"
+#include <ompl/base/SpaceInformation.h>
+#include <ompl/base/spaces/RealVectorStateSpace.h>
+#include <ompl/geometric/SimpleSetup.h>
+#include <ompl/config.h>
 
 // DUNE headers.
 //#include <USER/ChartsDatabase/Connection.hpp>
@@ -16,11 +20,11 @@
 
 
 namespace og = ompl::geometric;
+namespace ob = ompl::base;
 
-namespace MotionPlanners
-{
+
   //! @author Nikolai Lauvås
-  namespace OMPL
+  namespace OMPLforDUNE
   {
         //! Convenience function for printin a path to cout
         //! TODO: Take ostream as parameter to support others, like filestream
@@ -57,6 +61,18 @@ namespace MotionPlanners
         //! @param[in] dbCon The database containing the queried tables.        
         bool isStateValid(const ompl::base::State *state, ENCGIS::DBconnection* dbCon);
 
+        //! Termination condition to be used with ompl. This one stops the planner when the task gets the stop signal, if the stop input is true or if maxTime is reached.
+        //! @param[in] stop If true, this function will notify OMPL to stop the planning in progress
+        //! @param[in] inTask Task to use as target for messages, and to monitor if task isStopping(), then stop planning
+        //! @param[in] maxPlaningTime If nothing else stops the planner, this gives an upper bound to the planning
+        //! @return Lambda function used by OMPL as termination condition
+        ompl::base::PlannerTerminationCondition exactSolnPlannerTerminationCondition(const bool *stop, DUNE::Tasks::Task *inTask, double maxPlaningTime);
+
+        //! A function that returns the ompl::base::ReportIntermediateSolutionFn type.
+        //! @param[in] inTask Task to use as target for messages
+        //! @param[in] minPlaningTime Currently only used as a demonstration of an action only after a certain planning time has elapsed
+        //! @return Lambda function that can be set as callback in OMPL for intermediate solutions
+        ompl::base::ReportIntermediateSolutionFn intermediate(DUNE::Tasks::Task *inTask, double minPlaningTime);
 
         //! This class redirects OMPL outputs to use output methods of the DUNE system.  
         class OutputHandlerDUNEConsole : public ompl::msg::OutputHandler {
@@ -75,7 +91,6 @@ namespace MotionPlanners
                 //! Stores pointer to task used for output
                 DUNE::Tasks::Task *task;
         };
-    }
 }
 
 #endif // DUNE_CHARTSDATABASE_OMPL_FUNCTIONS_

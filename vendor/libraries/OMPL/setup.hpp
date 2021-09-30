@@ -1,11 +1,11 @@
-#ifndef OMPL_FOR_DUNE_LIBRARY
-#define OMPL_FOR_DUNE_LIBRARY
+#ifndef OMPL_FOR_ENCGIS_LIBRARY
+#define OMPL_FOR_ENCGIS_LIBRARY
 
+// Build settings for disabling unneded/unsupported features
 #define NEWOMPL 0
 #define OMPL_BENCHMARK 0
-// DUNE headers.
-#include <DUNE/DUNE.hpp>
 
+// ENCGIS header
 #include <ENCGIS/DBconnection.hpp>
 
 // OMPL headers
@@ -13,21 +13,17 @@
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 #include <ompl/geometric/SimpleSetup.h>
 #include <ompl/config.h>
-
-
-
+#include <ompl/util/Time.h>
 #if OMPL_BENCHMARK
 #include <ompl/tools/benchmark/Benchmark.h> // Only used for benchmarking, remove before deployment
 #endif
 
- #include <ompl/util/Time.h>
-// CPP headers 
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
 
 
 //! @author Nikolai Lauvås
-namespace OMPLintegrationDUNE
+namespace OMPLintegrationENCGIS
 {
   //! Enumeration for created OMPL/planner configurations
   enum configurations_t {C_DEFAULT, C_KBIT, C_KABIT, C_FMT};
@@ -56,18 +52,6 @@ namespace OMPLintegrationDUNE
   //! @return An OMPL SimpleSetup object with start, goal, bounds and collision checks configured.
   ompl::geometric::SimpleSetup createSetup(double startY, double startX, double goalY, double goalX, ob::RealVectorBounds &bounds, ENCGIS::isPointInLayerStatement* pointCheck, ENCGIS::lineIntersectLayerStatement* lineCheck, unsigned searchDepth = 1);  
   
-  //! Termination condition to be used with ompl. This one stops the planner when the task gets the stop signal, if the stop input is true or if maxTime is reached.
-  //! @param[in] stop If true, this function will notify OMPL to stop the planning in progress
-  //! @param[in] inTask Task to use as target for messages, and to monitor if task isStopping(), then stop planning
-  //! @param[in] maxPlaningTime If nothing else stops the planner, this gives an upper bound to the planning
-  //! @return Lambda function used by OMPL as termination condition
-  ompl::base::PlannerTerminationCondition exactSolnPlannerTerminationCondition(const bool *stop, DUNE::Tasks::Task *inTask, double maxPlaningTime);
-
-  //! A function that returns the ompl::base::ReportIntermediateSolutionFn type.
-  //! @param[in] inTask Task to use as target for messages
-  //! @param[in] minPlaningTime Currently only used as a demonstration of an action only after a certain planning time has elapsed
-  //! @return Lambda function that can be set as callback in OMPL for intermediate solutions
-  ompl::base::ReportIntermediateSolutionFn intermediate(DUNE::Tasks::Task *inTask, double minPlaningTime);
 #if NEWOMPL
   //! Preconfigured kbitstar planner
   //! @param[in] si Space information pointer
@@ -94,4 +78,4 @@ namespace OMPLintegrationDUNE
 
 }
 
-#endif // OMPL_FOR_DUNE_LIBRARY
+#endif // OMPL_FOR_ENCGIS_LIBRARY

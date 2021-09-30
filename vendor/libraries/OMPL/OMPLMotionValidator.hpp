@@ -1,5 +1,5 @@
-#ifndef DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR_
-#define DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR_
+#ifndef ENCGIS_OMPL_MOTION_VALIDATOR_
+#define ENCGIS_OMPL_MOTION_VALIDATOR_
 
 #include <ompl/base/MotionValidator.h>
 #include <ompl/base/SpaceInformation.h>
@@ -9,10 +9,8 @@
  namespace ob = ompl::base;
 
 
-namespace MotionPlanners
-{
   //! @author Nikolai Lauvås
-  namespace OMPL
+  namespace OMPLintegrationENCGIS
   {
         /** \brief A motion validator just calls the intersect check. This was my first attempt, and is slower than the others */
         class ChartsDBMotionValidator : public ob::MotionValidator
@@ -72,6 +70,5 @@ namespace MotionPlanners
             bool transectSafety(const ob::State *s1, const ob::State *s2) const;
         };
     }
-}
 
-#endif // DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR_
+#endif // ENCGIS_OMPL_MOTION_VALIDATOR_

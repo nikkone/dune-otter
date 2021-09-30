@@ -173,7 +173,7 @@ namespace MotionPlanners
       onResourceInitialization(void)
       {
         // Set OMPL to use the console output of this task
-        ompl::msg::OutputHandler *oh = new MotionPlanners::OMPL::OutputHandlerDUNEConsole(this);
+        ompl::msg::OutputHandler *oh = new OMPLforDUNE::OutputHandlerDUNEConsole(this);
         ompl::msg::useOutputHandler(oh);
         ompl::msg::setLogLevel(ompl::msg::LogLevel::LOG_DEV2);
       }
@@ -215,25 +215,25 @@ namespace MotionPlanners
         bounds.setHigh(1,m_args.planningBounds[2]);
 
         //og::SimpleSetup setup = createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck, lineCheck); // Ned nidelven
-        og::SimpleSetup setup = OMPLintegrationDUNE::createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck, lineCheck); // Ned nidelven
+        og::SimpleSetup setup = OMPLintegrationENCGIS::createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck, lineCheck); // Ned nidelven
 
         // Run/benchmark current setup
         #if OMPL_BENCHMARK
-          OMPLintegrationDUNE::bmarkPath(setup, m_args.benchmark_name, m_args.benchmark_maxTime, m_args.benchmark_maxMem, m_args.benchmark_runCount);
+          OMPLintegrationENCGIS::bmarkPath(setup, m_args.benchmark_name, m_args.benchmark_maxTime, m_args.benchmark_maxMem, m_args.benchmark_runCount);
         #else
-          og::PathGeometric states = OMPLintegrationDUNE::findPath(setup, m_args.maxPlaningTime);
+          og::PathGeometric states = OMPLintegrationENCGIS::findPath(setup, m_args.maxPlaningTime);
           //// Dispatch and activate returned path
-          IMC::PlanDB pdb = MotionPlanners::OMPL::createPlanDBEntry(states, "autoPlan", 1.0);
+          IMC::PlanDB pdb = OMPLforDUNE::createPlanDBEntry(states, "autoPlan", 1.0);
           dispatch(pdb);
           activatePlan("autoPlan");
-          MotionPlanners::OMPL::printPath(states);
+          OMPLforDUNE::printPath(states);
           // Write path to DB for visualization purposes
           ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, m_args.epsg);
           ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_writable);
           m_writable->runNoOutputQuery("select InitSpatialMetadata(1);");
           tree->resetTree("tree");
           tree->createTree("tree");
-          MotionPlanners::OMPL::pathToTree(states, "tree", tree);
+          OMPLforDUNE::pathToTree(states, "tree", tree);
           inf("Wrote to tree");
           Memory::clear(tree);
           Memory::clear(m_writable);

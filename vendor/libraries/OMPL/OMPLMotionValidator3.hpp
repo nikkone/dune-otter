@@ -1,5 +1,5 @@
-#ifndef DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR3_
-#define DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR3_
+#ifndef ENCGIS_OMPL_MOTION_VALIDATOR3_
+#define ENCGIS_OMPL_MOTION_VALIDATOR3_
 
 #include <ompl/base/MotionValidator.h>
 #include <ompl/base/SpaceInformation.h>
@@ -8,11 +8,8 @@
 
  namespace ob = ompl::base;
 
-
-namespace MotionPlanners
-{
   //! @author Nikolai Lauvås
-  namespace OMPL
+  namespace OMPLintegrationENCGIS
   {
         /** \brief A motion validator based on the Intersection function in Spatialite that finds the intersection between geometries. 
          * A constant is then added to this number to avoid rounding error making the point be in the invalid area.
@@ -78,6 +75,5 @@ namespace MotionPlanners
             double transectSafety(const ob::State *s1, const ob::State *s2, double &bestOptionX, double &bestOptionY) const;
         };
     }
-}
 
-#endif // DUNE_CHARTSDATABASE_OMPL_MOTION_VALIDATOR3_
+#endif // ENCGIS_OMPL_MOTION_VALIDATOR3_

@@ -5,14 +5,14 @@
 namespace ob = ompl::base;
 
 
-void MotionPlanners::OMPL::ChartsDBMotionValidator2::defaultSettings()
+void OMPLintegrationENCGIS::ChartsDBMotionValidator2::defaultSettings()
 {
     stateSpace_ = si_->getStateSpace().get();
     if (stateSpace_ == nullptr)
         throw ompl::Exception("No state space for motion validator");
 }
 
-bool MotionPlanners::OMPL::ChartsDBMotionValidator2::checkMotion(const ob::State *s1, const ob::State *s2,
+bool OMPLintegrationENCGIS::ChartsDBMotionValidator2::checkMotion(const ob::State *s1, const ob::State *s2,
                                                       std::pair<ob::State *, double> &lastValid) const
 {
     
@@ -57,7 +57,7 @@ bool MotionPlanners::OMPL::ChartsDBMotionValidator2::checkMotion(const ob::State
     return result;
 }
 
-bool MotionPlanners::OMPL::ChartsDBMotionValidator2::checkMotion(const ob::State *s1, const ob::State *s2) const
+bool OMPLintegrationENCGIS::ChartsDBMotionValidator2::checkMotion(const ob::State *s1, const ob::State *s2) const
 {
     // TODO: check if s2 check speeds up?.
     /* assume motion starts in a valid configuration so s1 is valid */
@@ -73,7 +73,7 @@ bool MotionPlanners::OMPL::ChartsDBMotionValidator2::checkMotion(const ob::State
     }
 }
 
-bool MotionPlanners::OMPL::ChartsDBMotionValidator2::transectSafety(const ob::State *s1, const ob::State *s2) const {
+bool OMPLintegrationENCGIS::ChartsDBMotionValidator2::transectSafety(const ob::State *s1, const ob::State *s2) const {
 
     const auto *state1 = static_cast<const ob::RealVectorStateSpace::StateType *>(s1);
     const auto *state2 = static_cast<const ob::RealVectorStateSpace::StateType *>(s2);

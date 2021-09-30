@@ -187,7 +187,7 @@ namespace MotionPlanners
       onResourceInitialization(void)
       {
         // Set OMPL to use the console output of this task
-        ompl::msg::OutputHandler *oh = new MotionPlanners::OMPL::OutputHandlerDUNEConsole(this);
+        ompl::msg::OutputHandler *oh = new OMPLforDUNE::OutputHandlerDUNEConsole(this);
         ompl::msg::useOutputHandler(oh);
         ompl::msg::setLogLevel(ompl::msg::LogLevel::LOG_DEV2);
       }
@@ -220,8 +220,8 @@ namespace MotionPlanners
 
     // Define a simple setup class
         ompl::geometric::SimpleSetup ss(space);
-        ompl::base::MotionValidatorPtr mp2 = std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator2>(ss.getSpaceInformation(), lineCheck, 4);
-        ompl::base::MotionValidatorPtr mp3 = std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator3>(ss.getSpaceInformation(), lineCheck,lineCheck2, 4);
+        ompl::base::MotionValidatorPtr mp2 = std::make_shared<OMPLintegrationENCGIS::ChartsDBMotionValidator2>(ss.getSpaceInformation(), lineCheck, 4);
+        ompl::base::MotionValidatorPtr mp3 = std::make_shared<OMPLintegrationENCGIS::ChartsDBMotionValidator3>(ss.getSpaceInformation(), lineCheck,lineCheck2, 4);
 
 
         ob::State *a = ss.getSpaceInformation()->allocState();

@@ -7,7 +7,6 @@
 #include <ompl/geometric/planners/fmt/FMT.h>
 #include <ompl/geometric/planners/kpiece/LBKPIECE1.h>
 #if OMPL_BENCHMARK
-  
   #include <ompl/geometric/planners/informedtrees/BITstar.h>
   #include <ompl/geometric/planners/informedtrees/AITstar.h>
   #include <ompl/geometric/planners/rrt/RRTstar.h>
@@ -34,7 +33,7 @@
 #include <OMPL/OMPLMotionValidator.hpp>
 #include <OMPL/OMPLMotionValidator2.hpp>
 #include <OMPL/OMPLMotionValidator3.hpp>
-namespace OMPLintegrationDUNE
+namespace OMPLintegrationENCGIS
 {
   //! Function searching for path, ends search once first valid path is available
   og::PathGeometric findPath(og::SimpleSetup &ss, double maxPlaningTime, configurations_t config) {
@@ -89,7 +88,7 @@ namespace OMPLintegrationDUNE
     ompl::geometric::SimpleSetup ss(space);
 
     // Define Motion validator for this space
-    ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator2>(ss.getSpaceInformation(), lineCheck, searchDepth));
+    ss.getSpaceInformation()->setMotionValidator(std::make_shared<OMPLintegrationENCGIS::ChartsDBMotionValidator2>(ss.getSpaceInformation(), lineCheck, searchDepth));
 
     // Set state validity checking for this space
     ss.setStateValidityChecker([pointCheck](const ompl::base::State *state) { return isStateValid(state, pointCheck); });
@@ -120,57 +119,6 @@ namespace OMPLintegrationDUNE
       std::cout << "nullptr" << std::endl;
     return false;
     
-  }
-
-  ompl::base::PlannerTerminationCondition exactSolnPlannerTerminationCondition(const bool *stop, DUNE::Tasks::Task *inTask, double maxPlaningTime)
-  {
-    double duration = maxPlaningTime; // Maxtime
-    const ompl::time::point endTime(ompl::time::now() + ompl::time::seconds(duration));
-    return ompl::base::PlannerTerminationCondition([stop, inTask, endTime]
-      {
-        if(*stop) {
-          return true;
-        }
-
-        if(ompl::time::now() > endTime){
-          inTask->inf("maxtime");
-          return true;
-        }
-
-        return inTask->isStopping();
-      }
-    );
-  }
-
-
-  
-  ompl::base::ReportIntermediateSolutionFn intermediate(DUNE::Tasks::Task *inTask, double minPlaningTime) {
-    double duration = minPlaningTime; // Mintime
-    const ompl::time::point endTime(ompl::time::now() + ompl::time::seconds(duration));
-    return ompl::base::ReportIntermediateSolutionFn([inTask, endTime](const ob::Planner *planner, const std::vector< const ob::State * > &states, const ob::Cost cost) 
-    { 
-      if(ompl::time::now() > endTime){
-        inTask->inf("mintime");
-      }
-      // Create ompl::geometric::PathGeometric from "states" vector
-      auto path = ompl::geometric::PathGeometric(planner->getSpaceInformation());
-      for (auto ptr = states.begin(); ptr < states.end(); ptr++) {
-        //auto state = static_cast<const ompl::base::RealVectorStateSpace::StateType *>(*ptr);
-        //std::cout << state->values[1] <<","<< state->values[0] << std::endl;
-        path.append(*ptr);
-      }
-
-          //ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_con);
-          //MotionPlanners::OMPL::pathToTree(path, "tree", tree);
-          //Memory::clear(tree);
-
-      //intermediate(planner,states, cost); 
-      inTask->inf("intermediate solution with %f Cost", cost.value());
-    //std::cout << "intermediate solution with "<< cost.value() << "Cost"<< std::endl;
-    //m_intermediate = true;
-    // Check if mintime reached, else return false
-
-    });
   }
 
 #if NEWOMPL
@@ -299,14 +247,14 @@ b.addPlannerAllocator(std::bind(&kbitstar, std::placeholders::_1, "kBITstar"));
 
   // Define Motion validator for this space
   //ss.getSpaceInformation()->setMotionValidator(std::make_shared<ompl::base::DiscreteMotionValidator>(ss.getSpaceInformation()));
-  //ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator3>(ss.getSpaceInformation(), lineCheck, lineCheck2, 4));
-  ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator2>(ss.getSpaceInformation(), lineCheck, searchDepth));
-  //ss.getSpaceInformation()->setMotionValidator(std::make_shared<MotionPlanners::OMPL::ChartsDBMotionValidator>(ss.getSpaceInformation(), m_con, 6));
+  //ss.getSpaceInformation()->setMotionValidator(std::make_shared<OMPLintegrationENCGIS::ChartsDBMotionValidator3>(ss.getSpaceInformation(), lineCheck, lineCheck2, 4));
+  ss.getSpaceInformation()->setMotionValidator(std::make_shared<OMPLintegrationENCGIS::ChartsDBMotionValidator2>(ss.getSpaceInformation(), lineCheck, searchDepth));
+  //ss.getSpaceInformation()->setMotionValidator(std::make_shared<OMPLintegrationENCGIS::ChartsDBMotionValidator>(ss.getSpaceInformation(), m_con, 6));
 
 
   // Set state validity checking for this space
   ss.setStateValidityChecker([pointCheck](const ompl::base::State *state) { return isStateValid(state, pointCheck); });
-  //ss.setStateValidityChecker([&](const ompl::base::State *state) { return MotionPlanners::OMPL::isStateValid(state, m_con); });
+  //ss.setStateValidityChecker([&](const ompl::base::State *state) { return OMPLintegrationENCGIS::isStateValid(state, m_con); });
 
   // Create the start state
   ompl::base::ScopedState<> start(space);
