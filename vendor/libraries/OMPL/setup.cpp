@@ -137,13 +137,13 @@ namespace OMPLintegrationDUNE
           return true;
         }
 
-          return inTask->isStopping();
+        return inTask->isStopping();
       }
     );
   }
 
 
-  //! A function that returns the ompl::base::ReportIntermediateSolutionFn type.
+  
   ompl::base::ReportIntermediateSolutionFn intermediate(DUNE::Tasks::Task *inTask, double minPlaningTime) {
     double duration = minPlaningTime; // Mintime
     const ompl::time::point endTime(ompl::time::now() + ompl::time::seconds(duration));
