@@ -75,6 +75,9 @@ namespace SourceEstimators
 
       //! How far back into the buffer to attempt period matching.
       int max_correction_attempts;
+
+      //! How many times a new measurements can be matched with older and older detections.
+      unsigned int max_updates_per_new_measurement;
 // Kalman Filter
       //! Extended Kalman filter - Qm
       std::vector<double> ekf_Qm;      
@@ -162,6 +165,10 @@ namespace SourceEstimators
         param("Max Correction Attempts", m_args.max_correction_attempts)
         .description("How far back into the buffer to attempt period matching. -1 gives max allowed in used buffer")
         .defaultValue("-1");
+
+        param("Max Updates Per New Measurement", m_args.max_updates_per_new_measurement)
+        .description("How many times a new measurements can be matched with older and older detections.")
+        .defaultValue("1");
 
         param("Tag ID", m_args.tag_id)
         .description("The ID of the tracked fish tag")
@@ -486,49 +493,75 @@ namespace SourceEstimators
       //! 
       void updateFilter(void) {
         //inf("Update %ld", c_buffer_size - tagBuffer->size());
+
+        // Create unix timestamp in milliseconds for the most recent measurement
         double measurement_millis = tagBuffer->rbegin()->unix_timestamp + (double)tagBuffer->rbegin()->millis/1000;
         // TODO: Stop at m_args.max_correction_attempts
+        unsigned int updates = 0;
+        // Check the buffer of older tag detections from the second newest to the oldest.
+        // Only combine if a multiple of the period is found within a given threashold/jitter.
         for(boost::circular_buffer<DUNE::IMC::TBRFishTag>::reverse_iterator i=tagBuffer->rbegin()+1; i != tagBuffer->rend();i++) {
           //inf("%d - %d", tagBuffer->rbegin()->unix_timestamp, i->unix_timestamp);
+
+          // Time difference of arrival without corrigating for period
           double td = measurement_millis - i->unix_timestamp - (double)i->millis/1000;
+
+          // Calculate closest multiple of period between the new measurement and the buffered detection
           double closestMultipleOfPeriod = m_args.tag_period*std::round(td/m_args.tag_period);
+
+          // Period corrigated time difference of arrival
           double tdoa = td - closestMultipleOfPeriod;
           inf("delta %f %f", td, closestMultipleOfPeriod);
 
+          // Check if buffered detection satisfies conditions for use in estimator
           if(abs(tdoa) < m_args.max_jitter || td > 60.0) {
-              double P[2] = {m_args.ranging_snr_fit[0], m_args.ranging_snr_fit[1]}; // Found on page 54 of master, will wary from experiment to experiment
-              double rangeSNR = (tagBuffer->rbegin()->snr - P[1])/P[0];
+            // Linear fit of SNR to range
+            double P[2] = {m_args.ranging_snr_fit[0], m_args.ranging_snr_fit[1]};
+            double rangeSNR = (tagBuffer->rbegin()->snr - P[1])/P[0];
 
-              double rdoa = m_c_speed*tdoa; // Range difference
-              double depth = i->trans_data*0.392;
+            // Range difference of arrival calculation
+            double rdoa = m_c_speed*tdoa;
 
-              double NED1[3];
-              double NED2[3];
+            // Depth reading from the current tag
+            double depth = i->trans_data*0.392;
 
-              toNEDframe(*tagBuffer->rbegin(), m_refCoord, NED1);
-              toNEDframe(*i, m_refCoord, NED2);
+            // Convert the WGS84 to a local NED frame
+            double NED1[3];
+            double NED2[3];
+            toNEDframe(*tagBuffer->rbegin(), m_refCoord, NED1);
+            toNEDframe(*i, m_refCoord, NED2);
 
-              Eigen::Matrix<double, 9, 1> allMeasurements;
-              allMeasurements << NED2[0] ,NED2[1] ,m_args.receiver_depth, NED1[0] ,NED1[1] ,m_args.receiver_depth, rdoa, rangeSNR, depth;
-              if (m_aslv.addMeasurement(allMeasurements)) {
-              
-                double result[3] = {m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)};
-                if(!m_ekf.active) {
-                  m_ekf.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
-                  m_ekf.active = true;
-                }
-                if(!m_ekf2.active) {
-                  m_ekf2.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
-                  m_ekf2.active = true;
-                }
-                logResult(result, aslvlogfilename, "OFPASLV");
+            // Compile all mesurements for convenience
+            Eigen::Matrix<double, 9, 1> allMeasurements;
+            allMeasurements << NED2[0] ,NED2[1] ,m_args.receiver_depth, NED1[0] ,NED1[1] ,m_args.receiver_depth, rdoa, rangeSNR, depth;
 
+            // Update the algebraic solver
+            if (m_aslv.addMeasurement(allMeasurements)) {
+            
+              // Initialize kalman filters with position found with the algebraic solver
+              if(!m_ekf.active) {
+                m_ekf.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
+                m_ekf.active = true;
               }
+              if(!m_ekf2.active) {
+                m_ekf2.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
+                m_ekf2.active = true;
+              }
+              
+              // Log results from algebraic solver
+              double result[3] = {m_aslv.x(0), m_aslv.x(1), m_aslv.x(2)};
+              logResult(result, aslvlogfilename, "OFPASLV");
+            }
 
-              m_ekf.update(allMeasurements.block(6,0,3,1), allMeasurements.block(0,0,6,1));
-              m_ekf2.update(allMeasurements.block(6,0,1,1), allMeasurements.block(0,0,6,1));
-              //m_ekf2.update(allMeasurements.block(6,0,1,1), Eigen::Matrix<double, 1, 3>::Zero());
-              return; // So the warning does not get written
+            // Update kalman filters with current measurement and inputs
+            m_ekf.update(allMeasurements.block(6,0,3,1), allMeasurements.block(0,0,6,1));
+            m_ekf2.update(allMeasurements.block(6,0,1,1), allMeasurements.block(0,0,6,1));
+            updates++;
+            // Stop the loop after using the new measurement a given number of times.
+            if(updates >= m_args.max_updates_per_new_measurement) {
+              return; 
+            }
+            
           }
         }
         war("No good TDOA value found");
