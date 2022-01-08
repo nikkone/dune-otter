@@ -120,7 +120,7 @@ namespace SourceEstimators
       OFP::AlgebraicSolver<double, 3, 9, 5> m_aslv;
 
       //! How far back into the buffer to attempt period matching.
-      int m_max_correction_attempts;
+      unsigned int m_max_correction_attempts;
       //! Reference coordinate used to calculate NED frame
       double m_refCoord[3];
       //! Constructor.
@@ -496,11 +496,13 @@ namespace SourceEstimators
 
         // Create unix timestamp in milliseconds for the most recent measurement
         double measurement_millis = tagBuffer->rbegin()->unix_timestamp + (double)tagBuffer->rbegin()->millis/1000;
-        // TODO: Stop at m_args.max_correction_attempts
+        
         unsigned int updates = 0;
+        unsigned int attempt = 0;
         // Check the buffer of older tag detections from the second newest to the oldest.
         // Only combine if a multiple of the period is found within a given threashold/jitter.
         for(boost::circular_buffer<DUNE::IMC::TBRFishTag>::reverse_iterator i=tagBuffer->rbegin()+1; i != tagBuffer->rend();i++) {
+          attempt++;
           //inf("%d - %d", tagBuffer->rbegin()->unix_timestamp, i->unix_timestamp);
 
           // Time difference of arrival without corrigating for period
@@ -562,6 +564,11 @@ namespace SourceEstimators
               return; 
             }
             
+          }
+          // Stop after a number of predetermined attempts
+          if(attempt >= m_max_correction_attempts) {
+            war("Stopped because maximum correction attempts reached. Attempts: %u, Updates %d", attempt, updates);
+            return;
           }
         }
         war("No good TDOA value found");
