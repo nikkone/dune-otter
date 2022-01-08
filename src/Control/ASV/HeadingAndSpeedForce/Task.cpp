@@ -88,9 +88,6 @@ namespace Control
         //! Log the size of each PID parcel
         bool log_parcels;
 
-        //! Factor to reduce forward thrust when differential thrusting
-        float skewed_motor_force_factor;
-
         //! Force to actuation - RPM
         std::vector<float> force_at_actuation_levels;
 
@@ -105,6 +102,8 @@ namespace Control
         float mps_force_max_int;
         //! PID gains for mps to force controller.
         std::vector<float> mps_force_gains;
+
+        bool courseControl;
       };
 
       struct Task: public Tasks::Task
@@ -179,10 +178,6 @@ namespace Control
           .defaultValue("")
           .size(3)
           .description("PID gains for RPM controller");
-
-          param("Skewed Motor Force Factor", m_args.skewed_motor_force_factor)
-          .defaultValue("1.0")
-          .description("Factor to reduce forward thrust when differential thrusting.");
 
           param("RPMs Feedforward Gain", m_args.rpm_ffgain)
           .defaultValue("0.5")
@@ -274,6 +269,10 @@ namespace Control
           .defaultValue("239.364")
           .units(Units::Newton)
           .description("Maximum value admissible for desired Force");
+
+          param("Use Course", m_args.courseControl)
+          .defaultValue("false")
+          .description("True if Course control is to be used");
 
           m_desired_speed = 0.0;
           m_speed_units = IMC::SUNITS_PERCENTAGE;
@@ -437,6 +436,7 @@ namespace Control
 
           if (!isActive())
           {
+            if(m_args.courseControl)
             m_desired_yaw = msg->psi;
             m_desired_speed = msg->u;
             return;
@@ -479,19 +479,9 @@ namespace Control
               default:
                 break;
             }
-/*
-            // Limit differential when thrusting forward.
-            thrust_diff = Math::trimValue(thrust_diff,
-                                          - m_args.act_diff_max,
-                                          m_args.act_diff_max);
-*/                                          
+                                        
           }
-/*          
-            // Limit differential thrust to min value
-            thrust_diff = Math::trimValue(thrust_diff,
-                                          - m_args.min_force,
-                                          m_args.min_force);
-*/
+
             float force[2] = {thrust_com + thrust_diff, thrust_com - thrust_diff};
             inf("Thrust com: %f, diff: %f", thrust_com, thrust_diff);
 
@@ -530,18 +520,8 @@ namespace Control
 
             inf("act: %f, %f", m_act[0].value, m_act[1].value);
 
-            // TODO: Hva viss negativ går i mettning?
+            // TODO: Hva viss negativ går i metning?
             // TODO: 
-
-          /*// Compensation for assymmetric thrust force curves
-          if(thrust_diff > 0) {
-            m_act[0].value = thrust_com + (thrust_diff * m_args.skewed_motor_force_factor);
-            m_act[1].value = thrust_com - thrust_diff;
-          } else {
-            m_act[0].value = thrust_com + thrust_diff;
-            m_act[1].value = thrust_com - (thrust_diff * m_args.skewed_motor_force_factor);
-          }*/
-
 
           shareSaturation();
 

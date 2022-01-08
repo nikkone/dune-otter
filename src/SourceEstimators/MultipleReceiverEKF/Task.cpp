@@ -140,7 +140,7 @@
 
             debug(DTR("Reference Cooridnate: %f %f"), m_args.reference[0], m_args.reference[1]);
             debug(DTR("Fish Position: %f %f %f"), m_args.position[0], m_args.position[1], m_args.position[2]);
-
+/*
             for (unsigned i = 0; i<c_receivers;i++) {
               m_o[i].open("/home/nikolai/ExperimentDataSet/Set4/S" + std::to_string(i) + "3output.txt", std::ios::out | std::ios::trunc);
               if(m_o[i].is_open())
@@ -148,7 +148,7 @@
                 debug(DTR("Stage %d open!"), i);
               } 
             }
-
+*/
           }
 
           //! Reserve entity identifiers.

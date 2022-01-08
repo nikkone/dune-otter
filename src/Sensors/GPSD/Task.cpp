@@ -165,16 +165,57 @@ namespace Sensors
       std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
+    int status = gpsd_data->status;
+    if (status == 1)
+      {
+        m_fix.type = IMC::GpsFix::GFT_STANDALONE;
+        m_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
+      }
+    else if (status == 2)
+      {
+        m_fix.type = IMC::GpsFix::GFT_DIFFERENTIAL;
+        m_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
+      }
+    else if (status == 5)
+      {
+        m_fix.type = IMC::GpsFix::GFT_DEAD_RECKONING;
+        m_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
+      }
+    else if (status == 7)
+      {
+        //m_fix.type = IMC::GpsFix::GFT_DIFFERENTIAL;
+        m_fix.validity |= IMC::GpsFix::GFV_VALID_DATE;
+        m_fix.validity |= IMC::GpsFix::GFV_VALID_TIME;
+      }
+    else if (status == 8)
+      {
+        m_fix.type = IMC::GpsFix::GFT_SIMULATION;
+        m_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
+      }
+    //m_fix.type = gpsd_data->status;
+    tm *gmtm = gmtime(&gpsd_data->fix.time.tv_sec);
+    m_fix.utc_year = 1900 + gmtm->tm_year;
+    m_fix.utc_month = gmtm->tm_mon;
+    m_fix.utc_day = gmtm->tm_mday;
+    m_fix.utc_time = gpsd_data->fix.time.tv_sec;
     m_fix.lat = Angles::radians(gpsd_data->fix.latitude);
     m_fix.lon = Angles::radians(gpsd_data->fix.longitude);
+    m_fix.height = gpsd_data->fix.altHAE;
     m_fix.satellites = gpsd_data->satellites_used;
+    m_fix.cog = gpsd_data->fix.track;
+    m_fix.sog = gpsd_data->fix.speed;
     m_fix.hdop = gpsd_data->dop.hdop;
     m_fix.vdop = gpsd_data->dop.vdop;
-    m_fix.height = gpsd_data->fix.altHAE;
-    m_fix.type = gpsd_data->status;
-    m_fix.sog = gpsd_data->fix.speed;
+    m_fix.hacc = gpsd_data->fix.eph;
+    m_fix.vacc = gpsd_data->fix.epv;
     dispatch(m_fix);
-    
+
+    m_euler.psi = Angles::normalizeRadian(Angles::radians(gpsd_data->attitude.yaw)); // Or gpsd_data->attitude.heading, confusing
+    m_euler.theta = Angles::normalizeRadian(Angles::radians(gpsd_data->attitude.pitch));
+    m_euler.phi = Angles::normalizeRadian(Angles::radians(gpsd_data->attitude.roll));
+    m_euler.psi_magnetic = Angles::radians(gpsd_data->fix.magnetic_track);
+    dispatch(m_euler);
+
     const auto latitude{gpsd_data->fix.latitude};
     const auto longitude{gpsd_data->fix.longitude};
     const auto hdop{gpsd_data->dop.hdop};

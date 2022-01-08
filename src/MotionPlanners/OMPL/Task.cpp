@@ -258,7 +258,7 @@ namespace MotionPlanners
         #if OMPL_BENCHMARK
           OMPLintegrationENCGIS::multiBmarkPath(setup, m_args.benchmark_name, m_args.benchmark_maxTime, m_args.benchmark_maxMem, m_args.benchmark_runCount);
         #else
-          og::PathGeometric states = OMPLintegrationENCGIS::findPath(setup, m_args.maxPlaningTime);
+          og::PathGeometric states = OMPLintegrationENCGIS::findPath(setup, m_args.maxPlaningTime, OMPLintegrationENCGIS::C_KBIT);
           //// Dispatch and activate returned path
           IMC::PlanDB pdb = OMPLforDUNE::createPlanDBEntryUTM(states, "autoPlan", 1.0, 32);
           dispatch(pdb);

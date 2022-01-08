@@ -37,6 +37,8 @@
 //#include <gps.h>
 
 #include <libgpsmm.h>
+#include <errno.h>
+
 #include <ctime>
 #include <iomanip>
 #include <iostream>
@@ -138,12 +140,13 @@ namespace Sensors
         .description("Sentence order");
       }
 
-
-
       void
       onResourceAcquisition(void)
       {
-        gps_open(m_args.gpsd_host.c_str(), m_args.gpsd_port.c_str(), &m_gpsdata);
+          if (gps_open(m_args.gpsd_host.c_str(), m_args.gpsd_port.c_str(), &m_gpsdata) == -1) {
+              err("GPSD error code: %d, reason: %s\n", errno, gps_errstr(errno));
+              throw RestartNeeded(DTR("Error opening GPSD connection, restarting"), 5);
+          }
       }
 
       void
@@ -640,17 +643,21 @@ namespace Sensors
       {
         while (!stopping())
         {
+
           consumeMessages(); // Needed because task status querys are consumed (inherrited from tasks)
           if (gps_waiting (&m_gpsdata, 500)) {
+            spew("After gps_waiting");
             *m_message_buffer = '\0';
             if (gps_read (&m_gpsdata, m_message_buffer, sizeof(m_message_buffer)) != -1) {
+              spew("After gps_read");
               std::string line(m_message_buffer);
               processSentence(line);
-              spew("%s", line.c_str());
+              spew("Line processed: %s", line.c_str());
             } else {
               spew("Could not read GPSD m_gpsdata");
             }
           }
+
         }
       }
     };

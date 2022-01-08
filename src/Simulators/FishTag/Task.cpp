@@ -69,9 +69,13 @@ namespace Simulators
       uint16_t recv_mem_addr;
       //! If GPS fix should be set as received location
       bool use_gps;
+      //! Should RemoteSensorInfo be sent as well?
+      bool sendRemoteSensorInfo;
     };
     struct Task: public DUNE::Tasks::Periodic
     {
+      IMC::RemoteSensorInfo tagPosition;
+      IMC::TBRFishTag tag_msg;
       //! PRNG handle
       Random::Generator* m_prng;
       //! Task arguments.
@@ -136,7 +140,8 @@ namespace Simulators
         param("Use GPS Position", m_args.use_gps)
         .defaultValue("false");
 
-
+        param("Send RemoteSensorInfo", m_args.sendRemoteSensorInfo)
+        .defaultValue("false");
 
         bind<IMC::GpsFix>(this);
       }
@@ -212,7 +217,6 @@ namespace Simulators
 
         
         inf("Timestamp: %i - %i dist: %f - traveltime: %f", unix_timestamp,millis,dist, t);
-        IMC::TBRFishTag tag_msg;
         tag_msg.serial_no = m_args.serial_no;
         tag_msg.unix_timestamp = unix_timestamp;
         tag_msg.millis = millis;
@@ -231,6 +235,14 @@ namespace Simulators
         }
 
         dispatch(tag_msg);
+        if(m_args.sendRemoteSensorInfo) {
+          tagPosition.lat = tag_msg.lat;
+          tagPosition.lon = tag_msg.lon;
+          tagPosition.alt = m_args.trans_data;
+          tagPosition.id = std::to_string(m_args.serial_no) + " - " + std::to_string(m_args.trans_id);
+          tagPosition.data = SNR;
+          dispatch(tagPosition);
+        }
       }
     };
   }

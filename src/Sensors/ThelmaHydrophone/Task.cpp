@@ -197,8 +197,11 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if(paramChanged(m_args.sync_period))
+        if(paramChanged(m_args.sync_period)) {
+          //sendFullTimestamp();
           m_sync_timer.setTop(m_args.sync_period);
+        }
+          
 
         if(paramChanged(m_args.sync_period_ack_timeout)) {
           m_syncack_timer.setTop(m_args.sync_period_ack_timeout);
@@ -313,8 +316,10 @@ namespace Sensors
 
         
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-        if(!m_args.usingPPS) {
-          //! Set timer for periodic check of surroundings.
+        if(m_args.usingPPS) {
+          debug("Using PPS");
+          //sendFullTimestamp();
+        } else {
           debug("Waiting to start timer to dividable by 10.");
           while(std::time(0) % 10 != 0);
           m_sync_timer.setTop(m_args.sync_period);
@@ -760,6 +765,7 @@ namespace Sensors
       void
       onMain(void)
       {
+        sendFullTimestamp();
         while(!stopping()) {
 
           if(m_sync_timer.overflow())

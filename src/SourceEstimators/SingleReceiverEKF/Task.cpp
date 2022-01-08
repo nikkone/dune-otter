@@ -93,6 +93,8 @@ namespace SourceEstimators
       std::string log_folder_and_prefix;
       //! Logfile folder and prefix
       std::string log_folder_and_prefix2;
+      //! Logfile folder and prefix
+      std::string log_folder_and_prefix3;
     };
     struct Task: public DUNE::Tasks::Task
     {
@@ -109,11 +111,11 @@ namespace SourceEstimators
 
       std::string logfilename;
       std::string logfilename2;
-      OFP::ExtendedKalmanFilter<double, 3, 3> m_ekf;
-      OFP::ExtendedKalmanFilter<double, 3, 1> m_ekf2;
+      std::string aslvlogfilename;
+      OFP::ExtendedKalmanFilter<double, 3, 3, 6> m_ekf;
+      OFP::ExtendedKalmanFilter<double, 3, 1, 6> m_ekf2;
       OFP::AlgebraicSolver<double, 3, 9, 5> m_aslv;
-      Eigen::Matrix<double, 3, 1> pos_current;
-      Eigen::Matrix<double, 3, 1> pos_previous;
+
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
       //! Reference coordinate used to calculate NED frame
@@ -186,6 +188,9 @@ namespace SourceEstimators
         .description("")
         .defaultValue("log/predict2-");     
 
+         param("Log Folder and Prefix - 3", m_args.log_folder_and_prefix3)
+        .description("")
+        .defaultValue("log/aslv-");  
 
 // Kalman Filter Parameters
         param("x0", m_args.ekf_x0)
@@ -223,6 +228,8 @@ namespace SourceEstimators
         logfilename = m_args.log_folder_and_prefix + getEntityLabel() + ".log";
 
         logfilename2 = m_args.log_folder_and_prefix2 + getEntityLabel() + ".log";
+
+        aslvlogfilename = m_args.log_folder_and_prefix3 + getEntityLabel() + ".log";
 
         m_refCoord[0] = Math::Angles::radians(m_args.reference[0]);
         m_refCoord[1] = Math::Angles::radians(m_args.reference[1]);
@@ -333,10 +340,12 @@ namespace SourceEstimators
         //! Set timer for periodic part of filter
         m_filter_timer.setTop(m_args.filter_timestep);
         m_ekf.dt = m_args.filter_timestep;
-        m_ekf.h = [this](Eigen::Matrix<double, 3, 1> x) {
+
+        m_ekf.h = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 6, 1> u) {
+
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
-          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
-          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
+          Eigen::Matrix<double, 3, 1> distance1 = x-u.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-u.block(3,0,3,1); // X_e-X_rx1
           double r1 = distance1.norm();//  ||X_e-X_rx0||
           double r2 = distance2.norm();// ||X_e-X_rx1||
           
@@ -348,11 +357,10 @@ namespace SourceEstimators
           return ykest;
         };
 
-        m_ekf.calculateJacobian = [this](Eigen::Matrix<double, 3, 1> x) {
-
+        m_ekf.calculateJacobian = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 6, 1> u) {
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
-          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
-          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
+          Eigen::Matrix<double, 3, 1> distance1 = x-u.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-u.block(3,0,3,1); // X_e-X_rx1
           double r1 = distance1.norm();//  ||X_e-X_rx0||
           double r2 = distance2.norm();// ||X_e-X_rx1||
 
@@ -360,7 +368,7 @@ namespace SourceEstimators
           Eigen::Matrix<double, 3, 3> C;       // Observation matrix
           C.row(0) = (distance2/r2) - (distance1/r1); // Eq (2.18)
           C.row(1) = (distance2/r2); // Exends the Jacobian with eq (2.20)
-          Eigen::Matrix<double, 1, 3> Hdepth= {0.0,0.0,1.0};
+          Eigen::Matrix<double, 1, 3> Hdepth= {0.0,0.0,x(3,0)};
           C.row(2) = Hdepth;  
 
           return C;
@@ -376,11 +384,12 @@ namespace SourceEstimators
         //! Set timer for periodic part of filter
         m_filter_timer.setTop(m_args.filter_timestep);
         m_ekf2.dt = m_args.filter_timestep;
-        m_ekf2.h = [this](Eigen::Matrix<double, 3, 1> x) {
+        
+        m_ekf2.h = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 6, 1> u) {
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
-          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
-          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
-          double r1 = distance1.norm();//  ||X_e-X_rx0||
+          Eigen::Matrix<double, 3, 1> distance1 = x-u.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-u.block(3,0,3,1); // X_e-X_rx1
+          double r1 = distance1.norm();// ||X_e-X_rx0||
           double r2 = distance2.norm();// ||X_e-X_rx1||
           
           // Calculate estimated measurements
@@ -389,15 +398,14 @@ namespace SourceEstimators
           return ykest;
         };
 
-        m_ekf2.calculateJacobian = [this](Eigen::Matrix<double, 3, 1> x) {
-
+        m_ekf2.calculateJacobian = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 6, 1> u) {
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
-          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
-          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
+          Eigen::Matrix<double, 3, 1> distance1 = x-u.block(0,0,3,1); // X_e-X_rx0
+          Eigen::Matrix<double, 3, 1> distance2 = x-u.block(3,0,3,1); // X_e-X_rx1
           double r1 = distance1.norm();//  ||X_e-X_rx0||
           double r2 = distance2.norm();// ||X_e-X_rx1||
 
-          // Calculate Jacobian with RDOA, SNR and Depth
+          // Calculate Jacobian with RDOA only
           Eigen::Matrix<double, 1, 3> C;       // Observation matrix
           C.row(0) = (distance2/r2) - (distance1/r1); // Eq (2.18)
           return C;
@@ -411,35 +419,69 @@ namespace SourceEstimators
         Memory::clear(tagBuffer);
       }
 
-          //! Turns the latitude and longtitude of the input to a NED representation with refCoord as origin.
-          //! @param [in] input Tag detection to take lat/lon [rad] from 
-          //! @param [in] refCoord Reference coordinate in {lat[rad], lon [rad], elevation [m]} 
-          //! @param [out] output NED frame representation of input in {North, East, Down} [meters] relative to the reference coordinate
-          void toNEDframe(const IMC::TBRFishTag &input, const double refCoord[3], double (&output)[3])
-          {
-            double input_d[3] = {input.lat, input.lon, 0.0};
-            toNEDframe(input_d,refCoord, output);
-          }
+      //! Turns the latitude and longtitude of the input to a NED representation with refCoord as origin.
+      //! @param [in] input Tag detection to take lat/lon [rad] from 
+      //! @param [in] refCoord Reference coordinate in {lat[rad], lon [rad], elevation [m]} 
+      //! @param [out] output NED frame representation of input in {North, East, Down} [meters] relative to the reference coordinate
+      void toNEDframe(const IMC::TBRFishTag &input, const double refCoord[3], double (&output)[3])
+      {
+        double input_d[3] = {input.lat, input.lon, 0.0};
+        toNEDframe(input_d,refCoord, output);
+      }
 
-          //! Turns the latitude and longtitude of the input to a NED representation with refCoord as origin.
-          //! @param [in] input Location in WGS84 {lat[rad], lon [rad], elevation [m]} 
-          //! @param [in] refCoord Reference coordinate in WGS84 {lat[rad], lon [rad], elevation [m]} 
-          //! @param [out] output NED frame representation of input in {North, East, Down} [meters] relative to the reference coordinate
-          void toNEDframe(const double input[3], const double refCoord[3], double (&output)[3])
-          {
-            WGS84::displacement(refCoord[0], refCoord[1], refCoord[2], input[0], input[1], input[2], &(output[0]), &(output[1]), &(output[2]));
-          }
+      //! Turns the latitude and longtitude of the input to a NED representation with refCoord as origin.
+      //! @param [in] input Location in WGS84 {lat[rad], lon [rad], elevation [m]} 
+      //! @param [in] refCoord Reference coordinate in WGS84 {lat[rad], lon [rad], elevation [m]} 
+      //! @param [out] output NED frame representation of input in {North, East, Down} [meters] relative to the reference coordinate
+      void toNEDframe(const double input[3], const double refCoord[3], double (&output)[3])
+      {
+        WGS84::displacement(refCoord[0], refCoord[1], refCoord[2], input[0], input[1], input[2], &(output[0]), &(output[1]), &(output[2]));
+      }
 
-          //! Takes a NED frame position and transforms it to a WGS84 lat/lon/elevation position
-          //! @param [in] input NED frame position to transform {North, East, Down} [meters] relative to the reference coordinate
-          //! @param [in] refCoord Reference coordinate in WGS84 {lat[rad], lon [rad], elevation [m]} 
-          //! @param [out] output Input position converted to WGS84 coordinates {lat[rad], lon [rad], elevation [m]} 
-          void fromNEDframe(const double input[3], const double refCoord[3], double (&output)[3]) {
-            output[0] = refCoord[0];
-            output[1] = refCoord[1];
-            output[2] = refCoord[2];
-            WGS84::displace(input[0], input[1], input[2], &(output[0]), &(output[1]), &(output[2]));
-          }
+      //! Takes a NED frame position and transforms it to a WGS84 lat/lon/elevation position
+      //! @param [in] input NED frame position to transform {North, East, Down} [meters] relative to the reference coordinate
+      //! @param [in] refCoord Reference coordinate in WGS84 {lat[rad], lon [rad], elevation [m]} 
+      //! @param [out] output Input position converted to WGS84 coordinates {lat[rad], lon [rad], elevation [m]} 
+      void fromNEDframe(const double input[3], const double refCoord[3], double (&output)[3]) {
+        output[0] = refCoord[0];
+        output[1] = refCoord[1];
+        output[2] = refCoord[2];
+        WGS84::displace(input[0], input[1], input[2], &(output[0]), &(output[1]), &(output[2]));
+      }
+
+      //! Function for logging to an external file and dispatching the result as IMC
+      //! @param [in] result The result to be logged. This is a NED value
+      //! @param [in] in_logfilename Filename of file written to
+      //! @param [in] logname Name used for the ID in the dispatched IMC::RemoteSensorInfo
+      void logResult(const double result[3], std::string in_logfilename, std::string logname) {
+        double lati,longi;
+        //double result[3] = {m_ekf.xHat(0),m_ekf.xHat(1),m_ekf.xHat(2)};
+        double latLon[3];
+        fromNEDframe(result, m_refCoord, latLon);
+        lati=latLon[0], longi=latLon[1];
+
+        // Send output to Neptus/DUNE log
+        IMC::RemoteSensorInfo tagPosition;
+        tagPosition.lat = lati;
+        tagPosition.lon = longi;
+        tagPosition.alt = -result[2];
+        tagPosition.data = std::to_string(result[0]) + std::to_string(result[1]) + "," + std::to_string(result[2]);
+        //tagPosition.data << result[0] << "," << result[1] << "," << result[2];
+        tagPosition.id = logname + std::to_string(m_args.receiver_serial);
+        dispatch(tagPosition);
+
+        // External Logfile
+        #if SingleReceiverEKFLog
+        std::ofstream logOutStream;
+        logOutStream.open(in_logfilename, std::fstream::app);
+        if (logOutStream.good()) {
+          logOutStream.precision(15);
+            logOutStream << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+            logOutStream.close();
+        }   
+        #endif
+        spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ekf.xHat(0), m_ekf.xHat(1), m_ekf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+      }
 
       //! 
       void updateFilter(void) {
@@ -479,27 +521,14 @@ namespace SourceEstimators
                   m_ekf2.xHat << m_aslv.x(0), m_aslv.x(1), m_aslv.x(2);
                   m_ekf2.active = true;
                 }
-                #if SingleReceiverEKFLog
-                double latLon[3];
-                fromNEDframe(result, m_refCoord, latLon);
-                std::ofstream logOutStream;
-                std::string filename = "log/aslv-";
-                            filename += getEntityLabel();
-                            filename += ".log";
-                logOutStream.open(filename, std::fstream::app);
-                if (logOutStream.good()) {
-                  logOutStream.precision(15);
-                  logOutStream << m_aslv.x(0) << "," << m_aslv.x(1) << "," << m_aslv.x(2) << "," << DUNE::Math::Angles::degrees(latLon[0]) << "," << DUNE::Math::Angles::degrees(latLon[1]) << std::endl;
-                  logOutStream.close();
-                }
-                #endif
+                logResult(result, aslvlogfilename, "OFPASLV");
+
               }
 
-              pos_current <<  NED1[0], NED1[1], m_args.receiver_depth;
-              pos_previous << NED2[0], NED2[1], m_args.receiver_depth;
-              m_ekf.update(allMeasurements.block(6,0,3,1));
-              m_ekf2.update(allMeasurements.block(6,0,1,1));
-              return;
+              m_ekf.update(allMeasurements.block(6,0,3,1), allMeasurements.block(0,0,6,1));
+              m_ekf2.update(allMeasurements.block(6,0,1,1), allMeasurements.block(0,0,6,1));
+              //m_ekf2.update(allMeasurements.block(6,0,1,1), Eigen::Matrix<double, 1, 3>::Zero());
+              return; // So the warning does not get written
           }
         }
         war("No good TDOA value found");
@@ -516,57 +545,13 @@ namespace SourceEstimators
             m_filter_timer.reset();
             if(m_ekf.active) {
               m_ekf.predict(); // Filter time update
-                  double lati,longi;
-                  double result[3] = {m_ekf.xHat(0),m_ekf.xHat(1),m_ekf.xHat(2)};
-                double latLon[3];
-                fromNEDframe(result, m_refCoord, latLon);
-                lati=latLon[0], longi=latLon[1];
-                  // Send output to Neptus/DUNE log
-                  IMC::RemoteSensorInfo tagPosition;
-                  tagPosition.lat = lati;
-                  tagPosition.lon = longi;
-                  tagPosition.alt = -m_ekf.xHat(2);
-                  tagPosition.data = std::to_string(m_ekf.xHat(0)) + std::to_string(m_ekf.xHat(1)) + "," + std::to_string(m_ekf.xHat(2));
-                  tagPosition.id = "OFPEKF" + std::to_string(m_args.receiver_serial);
-                  dispatch(tagPosition);
-                  #if SingleReceiverEKFLog
-                  std::ofstream logOutStream;
-                  logOutStream.open(logfilename, std::fstream::app);
-                  if (logOutStream.good()) {
-                    logOutStream.precision(15);
-                      logOutStream << m_ekf.xHat(0) << "," << m_ekf.xHat(1) << "," << m_ekf.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
-                      logOutStream.close();
-                  }   
-                  #endif
-                  spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ekf.xHat(0), m_ekf.xHat(1), m_ekf.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
-              
+              double result[3] = {m_ekf.xHat(0),m_ekf.xHat(1),m_ekf.xHat(2)};
+              logResult(result, logfilename, "OFPEKF");
             }
             if(m_ekf2.active) {
               m_ekf2.predict(); // Filter time update
-                  double lati,longi;
-                  double result[3] = {m_ekf2.xHat(0),m_ekf2.xHat(1),m_ekf2.xHat(2)};
-                double latLon[3];
-                fromNEDframe(result, m_refCoord, latLon);
-                lati=latLon[0], longi=latLon[1];
-                  // Send output to Neptus/DUNE log
-                  IMC::RemoteSensorInfo tagPosition;
-                  tagPosition.lat = lati;
-                  tagPosition.lon = longi;
-                  tagPosition.alt = -m_ekf2.xHat(2);
-                  tagPosition.data = std::to_string(m_ekf2.xHat(0)) + std::to_string(m_ekf2.xHat(1)) + "," + std::to_string(m_ekf2.xHat(2));
-                  tagPosition.id = "OFPEKF2" + std::to_string(m_args.receiver_serial);
-                  dispatch(tagPosition);
-                  #if SingleReceiverEKFLog
-                  std::ofstream logOutStream;
-                  logOutStream.open(logfilename2, std::fstream::app);
-                  if (logOutStream.good()) {
-                    logOutStream.precision(15);
-                      logOutStream << m_ekf2.xHat(0) << "," << m_ekf2.xHat(1) << "," << m_ekf2.xHat(2) << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
-                      logOutStream.close();
-                  }   
-                  #endif
-                  spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", m_ekf2.xHat(0), m_ekf2.xHat(1), m_ekf2.xHat(2),DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
-              
+              double result[3] = {m_ekf2.xHat(0),m_ekf2.xHat(1),m_ekf2.xHat(2)};
+              logResult(result, logfilename2, "OFPEKF2");
             }
           }
           waitForMessages(m_args.message_wait_time);

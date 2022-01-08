@@ -122,6 +122,19 @@ namespace OMPLintegrationENCGIS
   }
 
 #if NEWOMPL
+      ompl::base::PlannerPtr kbitstar1(const ompl::base::SpaceInformationPtr &si, std::string name, bool pruning, double rewireFactor, double samplesPerBatch, double PruneThreshold, bool JITS, bool Knearest)
+      {
+          ompl::geometric::BITstar *planner = new og::BITstar(si);
+          planner->setName(name);
+          planner->setPruning(pruning); // True
+          planner->setRewireFactor(rewireFactor); // graphPtr_ 1.1 Have tried 1.1, 1.5 and 2.1. Increasing seems bad for extralong, but 1.5 gives faster first solution for byneset and nidelven. 15. and 2.1 faster convergence for Froan.
+          planner->setSamplesPerBatch(samplesPerBatch); // 100 Increasing this uses more memory but higher solve rate (tested from 100,500,1000)
+          planner->setPruneThresholdFraction(PruneThreshold); // 0.05 Large values seem to give worse performance, slightly more seems to have potential benefit time to first solution.
+          planner->setJustInTimeSampling(JITS); // graphPtr_ false (Must be used with r-disc)
+          planner->setUseKNearest(Knearest); //Tentatively looks to worsen performance
+
+          return ompl::base::PlannerPtr(planner);
+      }
       ompl::base::PlannerPtr kbitstar(const ompl::base::SpaceInformationPtr &si, std::string name)
       {
           ompl::geometric::BITstar *planner = new og::BITstar(si);
@@ -132,6 +145,7 @@ namespace OMPLintegrationENCGIS
 
           return ompl::base::PlannerPtr(planner);
       }
+
 #endif
 #if OMPL_BENCHMARK
       //! Function for performing benchmarks on a setup.
@@ -167,7 +181,35 @@ namespace OMPLintegrationENCGIS
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::LBKPIECE1(ss.getSpaceInformation())));
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::FMT(ss.getSpaceInformation())));
 //b.addPlannerAllocator(std::bind(&kabitstar, std::placeholders::_1, "kABITstar"));
-b.addPlannerAllocator(std::bind(&kbitstar, std::placeholders::_1, "kBITstar"));
+//std::string name, bool pruning, double rewireFactor, double samplesPerBatch, double PruneThreshold, bool JITS, bool Knearest)
+/*
+          planner->setPruning(pruning); // True
+          planner->setRewireFactor(rewireFactor); // graphPtr_ 1.1
+          planner->setSamplesPerBatch(samplesPerBatch); // 100
+          planner->setPruneThresholdFraction(PruneThreshold); // 0.05
+          planner->setJustInTimeSampling(JITS); // graphPtr_ false (Must be used with r-disc)
+          planner->setUseKNearest(Knearest); //Tentatively looks to worsen performance
+*/
+
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar1" , true, 1.1, 100, 0.05, false, true));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar2" , true, 1.1, 500, 0.05, false, true));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar3" , true, 1.1, 1000, 0.05, false, true));
+
+b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar4" , true, 1.1, 100, 0.05, false, true));
+b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar5" , false, 1.1, 100, 0.05, false, true));
+b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar6" , true, 1.1, 100, 0.05, false, false));
+b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar7" , true, 1.1, 100, 0.05, true, false));
+b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar8" , false, 1.1, 100, 0.05, false, false));
+b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar9" , false, 1.1, 100, 0.05, true, false));
+//
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar10", true, 1.1, 100, 0.05, false, true));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar11", true, 1.1, 100, 0.55, false, true));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar12", true, 1.1, 100, 0.75, false, true));
+//
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar13" , true, 1.1, 100, 0.05, false, true));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar14" , true, 1.5, 100, 0.05, false, true));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar15" , true, 2.1, 100, 0.05, false, true));
+
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTstar(ss.getSpaceInformation())));
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTsharp(ss.getSpaceInformation())));
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::AITstar(ss.getSpaceInformation())));
