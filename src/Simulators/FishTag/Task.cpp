@@ -55,6 +55,10 @@ namespace Simulators
       int prng_seed;
       //! Mean temperature value.
       float mean_value;
+      //! Time offset
+      int time_offset_s;
+      //! Time offset
+      int time_offset_ms;
       //! Standard deviation of temperature measurements.
       double std_dev;
       //! Receiver ID
@@ -116,10 +120,15 @@ namespace Simulators
         .units(Units::Second)
         .defaultValue("0.0");
 
-        param("Time Offset", m_args.mean_value)
+        param("Time Offset S", m_args.time_offset_s)
         .description("Offset to subtract from timestamp. Can simulate constant processing/receiving time.")
         .units(Units::Second)
-        .defaultValue("0.0");
+        .defaultValue("0");
+
+        param("Time Offset MS", m_args.time_offset_ms)
+        .description("Offset to subtract from timestamp. Can simulate constant processing/receiving time.")
+        .units(Units::Millisecond)
+        .defaultValue("0");
 
         param("Receiver Serial", m_args.serial_no)
         .defaultValue("47");
@@ -206,10 +215,9 @@ namespace Simulators
 
         // newtime=unixtimestamp + estimated propagation time
         std::chrono::milliseconds newtime = std::chrono::seconds(std::time(nullptr)) + std::chrono::milliseconds(static_cast<int>(std::round(t*1000)));
+        int unix_timestamp = std::chrono::duration_cast<std::chrono::seconds>(newtime).count() + m_args.time_offset_s;
 
-        int unix_timestamp = std::chrono::duration_cast<std::chrono::seconds>(newtime).count();
-
-        int millis = newtime.count()-std::chrono::duration_cast<std::chrono::seconds>(newtime).count()*1000;
+        int millis = newtime.count()-std::chrono::duration_cast<std::chrono::seconds>(newtime).count()*1000 + m_args.time_offset_ms;
         //std::cout << std::time(nullptr)<< std::endl;
 
         int SNR =50-dist*5/100;
