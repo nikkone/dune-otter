@@ -112,6 +112,7 @@ namespace SourceEstimators
       //! Speed of sound provider entity label.
       int m_c_sound_eid;
 
+      unsigned totalTagDetections;
       std::string logfilename;
       std::string logfilename2;
       std::string aslvlogfilename;
@@ -286,12 +287,12 @@ namespace SourceEstimators
           std::ofstream logOutStream;
           logOutStream.open(logfilename, std::fstream::app);
           if (logOutStream.good()) {
-              logOutStream << "N,E,D,Lat,Lon" << std::endl;
+              logOutStream << "#,N,E,D,Lat,Lon" << std::endl;
               logOutStream.close();
           }
           logOutStream.open(logfilename2, std::fstream::app);
           if (logOutStream.good()) {
-              logOutStream << "N,E,D,Lat,Lon" << std::endl;
+              logOutStream << "#,N,E,D,Lat,Lon" << std::endl;
               logOutStream.close();
           }
         #endif
@@ -314,6 +315,7 @@ namespace SourceEstimators
       }   
         if (m_args.receiver_serial == msg->serial_no) {
           if(msg->trans_id == m_args.tag_id) {
+            totalTagDetections++;
             tagBuffer->push_back(*msg);
             updateFilter();
           }
@@ -375,7 +377,7 @@ namespace SourceEstimators
           Eigen::Matrix<double, 3, 3> C;       // Observation matrix
           C.row(0) = (distance2/r2) - (distance1/r1); // Eq (2.18)
           C.row(1) = (distance2/r2); // Exends the Jacobian with eq (2.20)
-          Eigen::Matrix<double, 1, 3> Hdepth= {0.0,0.0,x(3,0)};
+          Eigen::Matrix<double, 1, 3> Hdepth= {0.0,0.0,x(3,0)}; // TODO:: burde være x(2)
           C.row(2) = Hdepth;  
 
           return C;
@@ -483,7 +485,7 @@ namespace SourceEstimators
         logOutStream.open(in_logfilename, std::fstream::app);
         if (logOutStream.good()) {
           logOutStream.precision(15);
-            logOutStream << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+            logOutStream << totalTagDetections << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
             logOutStream.close();
         }   
         #endif
@@ -496,7 +498,7 @@ namespace SourceEstimators
 
         // Create unix timestamp in milliseconds for the most recent measurement
         double measurement_millis = tagBuffer->rbegin()->unix_timestamp + (double)tagBuffer->rbegin()->millis/1000;
-        
+
         unsigned int updates = 0;
         unsigned int attempt = 0;
         // Check the buffer of older tag detections from the second newest to the oldest.
@@ -505,7 +507,7 @@ namespace SourceEstimators
           attempt++;
           //inf("%d - %d", tagBuffer->rbegin()->unix_timestamp, i->unix_timestamp);
 
-          // Time difference of arrival without corrigating for period
+          // Time difference of arrival without correcting for period
           double td = measurement_millis - i->unix_timestamp - (double)i->millis/1000;
 
           // Calculate closest multiple of period between the new measurement and the buffered detection
@@ -513,6 +515,7 @@ namespace SourceEstimators
 
           // Period corrigated time difference of arrival
           double tdoa = td - closestMultipleOfPeriod;
+
           inf("delta %f %f", td, closestMultipleOfPeriod);
 
           // Check if buffered detection satisfies conditions for use in estimator
