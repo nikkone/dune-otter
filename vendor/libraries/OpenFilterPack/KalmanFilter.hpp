@@ -66,7 +66,7 @@ namespace OFP
       //! @return True if active and end reached, false if filter not active.
       template <int F = inputs>
       typename std::enable_if<F == 0, bool>::type
-      update(Eigen::Matrix<T, measurements, 1> yk_in) {
+      update(const Eigen::Matrix<T, measurements, 1> &yk_in) {
         if(active) {
           // Compute Kalman gain
           K = PHat * C.transpose() * (C*PHat*C.transpose() + R).inverse();
@@ -90,7 +90,7 @@ namespace OFP
       //! @return True if active and end reached, false if filter not active.
       template <int F = inputs>
       typename std::enable_if<F != 0, bool>::type
-      update(Eigen::Matrix<T, measurements, 1> yk_in, Eigen::Matrix<T, inputs, 1> u) {
+      update(const Eigen::Matrix<T, measurements, 1> &yk_in, const Eigen::Matrix<T, inputs, 1> &u) {
         if(active) {
           // Compute Kalman gain
           K = PHat * C.transpose() * (C*PHat*C.transpose() + R).inverse();

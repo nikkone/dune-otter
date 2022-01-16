@@ -11,9 +11,9 @@ namespace OFP
   {
     public:
       //! Holder for Jacobian function
-      std::function<Eigen::Matrix<T, measurements, states>(Eigen::Matrix<T, states, 1> x, Eigen::Matrix<T, inputs, 1> u)> calculateJacobian;
+      std::function<Eigen::Matrix<T, measurements, states>(const Eigen::Matrix<T, states, 1> &x, const Eigen::Matrix<T, inputs, 1> &u)> calculateJacobian;
       //! Holder for measurment function
-      std::function<Eigen::Matrix<T, measurements, 1>(Eigen::Matrix<T, states, 1> x, Eigen::Matrix<T, inputs, 1> u)> h;
+      std::function<Eigen::Matrix<T, measurements, 1>(const Eigen::Matrix<T, states, 1> x, const Eigen::Matrix<T, inputs, 1> &u)> h;
 
       //! Measurment update for the filter. This is dependent on the Jacobian and measurment function being set.
       //! @param[in] yk_in Measurment vector.
@@ -34,7 +34,7 @@ namespace OFP
 
     template <int D = inputs>
     typename std::enable_if<D == 0, bool>::type
-    update(Eigen::Matrix<T, measurements, 1> yk_in) {
+    update(const Eigen::Matrix<T, measurements, 1> &yk_in) {
       if(KalmanFilter<T, states, measurements, inputs>::active) {
         KalmanFilter<T, states, measurements, inputs>::C = calculateJacobian(KalmanFilter<T, states, measurements, inputs>::xHat, Eigen::Matrix<T, inputs, 1>::Zero());
         KalmanFilter<T, states, measurements, inputs>::ykest = h(KalmanFilter<T, states, measurements, inputs>::xHat, Eigen::Matrix<T, inputs, 1>::Zero());
@@ -46,7 +46,7 @@ namespace OFP
     
     template <int D = inputs>
     typename std::enable_if<D != 0, bool>::type
-    update(Eigen::Matrix<T, measurements, 1> yk_in, Eigen::Matrix<T, inputs, 1> u) {
+    update(const Eigen::Matrix<T, measurements, 1> &yk_in, const Eigen::Matrix<T, inputs, 1> &u) {
       if(KalmanFilter<T, states, measurements, inputs>::active) {
         KalmanFilter<T, states, measurements, inputs>::C = calculateJacobian(KalmanFilter<T, states, measurements, inputs>::xHat, u);
         KalmanFilter<T, states, measurements, inputs>::ykest = h(KalmanFilter<T, states, measurements, inputs>::xHat, u);

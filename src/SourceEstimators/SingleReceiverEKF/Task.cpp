@@ -350,7 +350,7 @@ namespace SourceEstimators
         m_filter_timer.setTop(m_args.filter_timestep);
         m_ekf.dt = m_args.filter_timestep;
 
-        m_ekf.h = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 6, 1> u) {
+        m_ekf.h = [](const Eigen::Matrix<double, 3, 1> &x, const Eigen::Matrix<double, 6, 1> &u) {
 
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
           Eigen::Matrix<double, 3, 1> distance1 = x-u.block(0,0,3,1); // X_e-X_rx0
@@ -366,7 +366,7 @@ namespace SourceEstimators
           return ykest;
         };
 
-        m_ekf.calculateJacobian = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 6, 1> u) {
+        m_ekf.calculateJacobian = [](const Eigen::Matrix<double, 3, 1> &x, const Eigen::Matrix<double, 6, 1> &u) {
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
           Eigen::Matrix<double, 3, 1> distance1 = x-u.block(0,0,3,1); // X_e-X_rx0
           Eigen::Matrix<double, 3, 1> distance2 = x-u.block(3,0,3,1); // X_e-X_rx1
@@ -394,7 +394,7 @@ namespace SourceEstimators
         m_filter_timer.setTop(m_args.filter_timestep);
         m_ekf2.dt = m_args.filter_timestep;
         
-        m_ekf2.h = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 6, 1> u) {
+        m_ekf2.h = [](const Eigen::Matrix<double, 3, 1> &x, const Eigen::Matrix<double, 6, 1> &u) {
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
           Eigen::Matrix<double, 3, 1> distance1 = x-u.block(0,0,3,1); // X_e-X_rx0
           Eigen::Matrix<double, 3, 1> distance2 = x-u.block(3,0,3,1); // X_e-X_rx1
@@ -407,7 +407,7 @@ namespace SourceEstimators
           return ykest;
         };
 
-        m_ekf2.calculateJacobian = [](Eigen::Matrix<double, 3, 1> x, Eigen::Matrix<double, 6, 1> u) {
+        m_ekf2.calculateJacobian = [](const Eigen::Matrix<double, 3, 1> &x, const Eigen::Matrix<double, 6, 1> &u) {
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
           Eigen::Matrix<double, 3, 1> distance1 = x-u.block(0,0,3,1); // X_e-X_rx0
           Eigen::Matrix<double, 3, 1> distance2 = x-u.block(3,0,3,1); // X_e-X_rx1
@@ -462,7 +462,7 @@ namespace SourceEstimators
       //! @param [in] result The result to be logged. This is a NED value
       //! @param [in] in_logfilename Filename of file written to
       //! @param [in] logname Name used for the ID in the dispatched IMC::RemoteSensorInfo
-      void logResult(const double result[3], std::string in_logfilename, std::string logname) {
+      void logResult(const double result[3], const std::string &in_logfilename, const std::string &logname) {
         double lati,longi;
         //double result[3] = {m_ekf.xHat(0),m_ekf.xHat(1),m_ekf.xHat(2)};
         double latLon[3];
