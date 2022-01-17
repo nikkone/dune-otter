@@ -26,7 +26,7 @@ namespace OFP
       Eigen::Matrix<T, Eigen::Dynamic, states> C;
       //! Unknown input matrix.
       Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> D;
-      //! State Covariance estimate matric.
+      //! Kalman gain.
       Eigen::Matrix<T, states, Eigen::Dynamic> K;
       //! State Covariance estimate matric.
       Eigen::Matrix<T, states, states> PHat;
@@ -83,7 +83,11 @@ namespace OFP
           xHat = xHat + K*innov;//calculateInnovation(yk_in, u);
 
           // Compute error covariance for updated estimate
-          PHat = (Eigen::Matrix<T, states, states>::Identity() - K*C)*PHat;
+          //PHat = (Eigen::Matrix<T, states, states>::Identity() - K*C)*PHat;  // Simplified, but only valid for optimal K
+          PHat = (Eigen::Matrix<T, states, states>::Identity() - K*C)*PHat*
+                 (Eigen::Matrix<T, states, states>::Identity() - K*C).transpose()
+                 + K*R*K.transpose();
+
           return true;
         }
         return false;
