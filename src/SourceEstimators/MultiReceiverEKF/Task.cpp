@@ -66,13 +66,16 @@ namespace SourceEstimators
 // Kalman Filter
       //! Extended Kalman filter - Qm
       std::vector<double> ekf_Qm;      
-      //! Extended Kalman filter - Rm
-      std::vector<double> ekf_Rm; 
       //! Extended Kalman filter - P0
       std::vector<double> ekf_P0;
       //! Extended Kalman filter - x0
       std::vector<double> ekf_x0;
-
+      //! Time of Arrival Covariance
+      double rr_cov;
+      //! Depth measurement Covariance
+      double rz_cov;
+      //! Maximum allowed time [ms] shift between receivers' messages
+      double max_time_shift_ms;
       //! Logfile folder and prefix
       std::string log_folder_and_prefix;
     };
@@ -83,7 +86,7 @@ namespace SourceEstimators
       //! Buffer holding received tag detections.
       //boost::circular_buffer<IMC::TBRFishTag> *tagBuffer;
       typedef std::map<uint32_t, bool> tagBool_t;
-      tagBool_t unusedData;
+      tagBool_t unprocessedData;
       typedef std::map<uint32_t, boost::circular_buffer<IMC::TBRFishTag>*> tagBuffer_t;
       tagBuffer_t tagBuffer;
       //! Timer responsible for running filter timestep
@@ -92,9 +95,6 @@ namespace SourceEstimators
       float m_c_speed;
       //! Speed of sound provider entity label.
       //int m_c_sound_eid;
-
-      double m_max_tdoa_ms;
-
       //unsigned totalTagDetections;
       //std::string logfilename;
       //std::string aslvlogfilename;
@@ -145,13 +145,21 @@ namespace SourceEstimators
         .description("Initial P matrix value for the extended Kalman filter, first row")
         .defaultValue("1, 0, 0, 0, 1, 0, 0, 0, 0.1}");
 
-        param("Rm", m_args.ekf_Rm)
-        .description("Initial X value for the extended Kalman filter")
-        .defaultValue("1.5*3.8706, 0, 0, 2.1638e6");
+        param("ToA Cov", m_args.rr_cov)
+        .description("Time of Arrival Covariance")
+        .defaultValue("0");
+
+        param("Depth Cov", m_args.rz_cov)
+        .description("Depth measurement Covariance")
+        .defaultValue("0");
+
+        param("Max time shift [ms]", m_args.max_time_shift_ms)
+        .description("Maximum allowed time [ms] shift between receivers' messages")
+        .defaultValue("500");
 
         param("Qm", m_args.ekf_Qm)
         .size(c_states*c_states)
-        .description("Initial X value for the extended Kalman filter")
+        .description("Process noise covariance matrix for the extended Kalman filter")
         .defaultValue("1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.01");
 // Others
 
@@ -169,14 +177,15 @@ namespace SourceEstimators
       onUpdateParameters(void)
       {
         logfilename = m_args.log_folder_and_prefix + getEntityLabel() + ".log";
+        std::ofstream logOutStream;
+        logOutStream.open(logfilename, std::ofstream::out | std::ofstream::trunc); // Reset file
+        logOutStream.close();
 
         m_refCoord[0] = Math::Angles::radians(m_args.reference[0]);
         m_refCoord[1] = Math::Angles::radians(m_args.reference[1]);
         m_refCoord[2] = 0.0;
 
         m_c_speed=m_args.init_c_sound;
-
-        m_max_tdoa_ms = 500;
 
         if(paramChanged(m_args.filter_timestep))
           m_filter_timer.setTop(m_args.filter_timestep);
@@ -217,7 +226,7 @@ namespace SourceEstimators
             spew("Created buffer for receiver %u", msg->serial_no);
           }
           tagBuffer[msg->serial_no]->push_back(*msg);
-          unusedData[msg->serial_no] = true;
+          unprocessedData[msg->serial_no] = true;
           updateFilter();
         }
         // Ignore other tags
@@ -231,12 +240,8 @@ namespace SourceEstimators
         m_ekf.Q = Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data());
         m_ekf.PHat = Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data());
         m_ekf.xHat = Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data());
-        //m_ekf.R = Eigen::Map<Eigen::Matrix<double, 3, 3> >(m_args.ekf_Rm.data());
         m_filter_timer.setTop(m_args.filter_timestep);
         m_ekf.dt = m_args.filter_timestep;
-
-        inf("Q");
-        std::cout << m_ekf.Q << std::endl;
 
         m_ekf.active = true;
       }
@@ -270,7 +275,7 @@ namespace SourceEstimators
       //! @return Boolean representing accepted/not accepted
       bool timeShiftCorrect(const long int TDOA)
       {
-        if((std::abs(TDOA) <= m_max_tdoa_ms))
+        if((std::abs(TDOA) <= m_args.max_time_shift_ms))
           return true;
         else
           return false;
@@ -284,6 +289,7 @@ namespace SourceEstimators
       {
         //inf("%f, %f",Math::Angles::degrees(input.lat), Math::Angles::degrees(input.lon));
         WGS84::displacement(refCoord[0], refCoord[1], refCoord[2], input.lat, input.lon, 0.0, &(std::get<0>(output)), &(std::get<1>(output)), &(std::get<2>(output)));
+        //std::get<2>(output) = 0.0;
       }
 
       //! Takes a NED frame position and transforms it to a WGS84 lat/lon/elevation position
@@ -301,7 +307,7 @@ namespace SourceEstimators
       //! @param [in] result The result to be logged. This is a NED value
       //! @param [in] in_logfilename Filename of file written to
       //! @param [in] logname Name used for the ID in the dispatched IMC::RemoteSensorInfo
-      void logResult(const double result[3], std::string in_logfilename, std::string logname) {
+      void logResult(const double result[3], const std::string &in_logfilename, const std::string &logname) {
         double lati,longi;
         //double result[3] = {m_ekf.xHat(0),m_ekf.xHat(1),m_ekf.xHat(2)};
         double latLon[3];
@@ -335,12 +341,10 @@ namespace SourceEstimators
         if(tagBuffer.size() <2)
           return;
         int com = boost::math::binomial_coefficient<double>(tagBuffer.size(), 2);
-        inf("com: %i", com);
+        spew("com: %i", com);
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> RDOA(com  ,1);
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> NED(3,tagBuffer.size());
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> depth(tagBuffer.size(),1);
-        //Eigen::Matrix<double, Eigen::Dynamic, 1> ykest(1,1);
-        //Eigen::Matrix<double, Eigen::Dynamic, c_states> C(1,c_states);
+        Eigen::Matrix<double, Eigen::Dynamic, 1> depth(tagBuffer.size(),1);
         m_ekf.ykest.resize(1,1);
         m_ekf.C.resize(1,c_states);
         tagBool_t used;
@@ -351,7 +355,7 @@ namespace SourceEstimators
         unsigned combinations = 0;
         unsigned outer = 0;
         unsigned inner;
-        unsigned valid = 0;
+        unsigned baselines = 0;
         for (tagBuffer_t::iterator outerreceiver = tagBuffer.begin(); outerreceiver != tagBuffer.end(); outerreceiver++) {
           toNEDframe(*outerreceiver->second->rbegin(), m_refCoord, tempNED);
           NED.col(outer) << std::get<0>(tempNED), std::get<1>(tempNED),std::get<2>(tempNED);
@@ -359,7 +363,7 @@ namespace SourceEstimators
           for (tagBuffer_t::iterator receiver = std::next(outerreceiver); receiver != tagBuffer.end(); receiver++) {
             inner++;
             //inf("%u - %u", outerreceiver->first, receiver->first);
-            if( unusedData[outerreceiver->first] || unusedData[receiver->first] ) {
+            if( unprocessedData[outerreceiver->first] || unprocessedData[receiver->first] ) {
               if( used.find(outerreceiver->first) == used.end() || used.find(receiver->first) == used.end()) {
                 long int tempTDOA_ms = ((long int)outerreceiver->second->rbegin()->unix_timestamp - receiver->second->rbegin()->unix_timestamp)*1000 + ((int)outerreceiver->second->rbegin()->millis - receiver->second->rbegin()->millis);
                 if(timeShiftCorrect(tempTDOA_ms)) {
@@ -367,7 +371,7 @@ namespace SourceEstimators
                   NED.col(inner) << std::get<0>(tempNED), std::get<1>(tempNED),std::get<2>(tempNED);
                   //inf("Usable TDOA: %li", tempTDOA_ms);
                   RDOA.row(combinations) << m_c_speed*tempTDOA_ms/1000;
-                  depth.row(valid) << outerreceiver->second->rbegin()->trans_data;
+                  depth.row(baselines) << (outerreceiver->second->rbegin()->trans_data + receiver->second->rbegin()->trans_data)/2;
 
                   if(m_ekf.active) {
                     Eigen::Matrix<double, c_states, 1> distance1 = m_ekf.xHat-NED.col(outer); // X_e-X_rx0
@@ -376,20 +380,17 @@ namespace SourceEstimators
                     double r2 = distance2.norm();// ||X_e-X_rx1||
 
                     // Update ykest
-                    //inf("Diff: %u, %u, %f", outer, inner, r2 - r1);
-
                     m_ekf.ykest.row(m_ekf.ykest.rows() -1) << r1 - r2;
-                    //std::cout << "Row" << ykest.row(ykest.rows() -1) << std::endl;
                     m_ekf.ykest.conservativeResize(m_ekf.ykest.rows()+1,1);
 
                     // Update C and R
                     m_ekf.C.row(m_ekf.C.rows() -1) =  (distance1/r1) - (distance2/r2);
                     m_ekf.C.conservativeResize(m_ekf.C.rows()+1,c_states);
-                    //inf("C");
-                    //std::cout << m_ekf.C << std::endl;
+
+                    // Set data as used so that no baseline is with only old/used data
                     used[outerreceiver->first] = false;
                     used[receiver->first] = false;
-                    valid++;
+                    baselines++;
                   }
                 }
               }
@@ -400,35 +401,37 @@ namespace SourceEstimators
         }
 
 
-        if(valid <2) {
-          return; // Do not update filter
+        if(baselines <2) {
+          return; // Do not process data/update filter if fewer than two baselines available
         }
-        depth = 0.392*depth; // Only valid for S256
-        double avgDepth = (depth/valid).sum();
+        // Set unprocessedData to false for used data receivers
+        for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
+          unprocessedData[it->first] = false;
+        }
 
+        // Add depth measurement
+        double avgDepth = 0.392*depth.block(0,0,baselines,1).mean(); // Only valid for S256 tags with depth
+        //inf("Depth: %lf, baselines: %u, alternative depth: %lf", avgDepth, baselines, 0.392*depth.block(0,0,baselines,1).sum()/baselines);
         m_ekf.ykest.row(m_ekf.ykest.rows()-1) << m_ekf.xHat(3,1);
-        m_ekf.C.row(m_ekf.C.rows()-1) << 0,0, avgDepth;
+        m_ekf.C.row(m_ekf.C.rows()-1) << 0, 0, 1;
 
         
-        
-
         Eigen::Matrix<double, Eigen::Dynamic, 1> measurements(RDOA.cols()*RDOA.rows()+1,1);
         measurements << Eigen::Map<Eigen::VectorXd>(RDOA.data(), RDOA.cols()*RDOA.rows());
         measurements.row(RDOA.cols()*RDOA.rows()) << avgDepth;
 
         //m_ekf.R.resize(measurements.rows(), measurements.rows());
-        m_ekf.R = 2*Eigen::MatrixXd::Identity(RDOA.rows(), RDOA.rows());
-        m_ekf.R(RDOA.rows() - 1, RDOA.rows() - 1) = 0.2;
-        inf("R");
-        std::cout << m_ekf.R << std::endl;
+        m_ekf.R = m_args.rr_cov*Eigen::MatrixXd::Identity(m_ekf.C.rows(), m_ekf.C.rows());
+        m_ekf.R(m_ekf.C.rows() - 1, m_ekf.C.rows() - 1) = m_args.rz_cov;
         m_ekf.update(measurements);
 
+        inf("R");
+        std::cout << m_ekf.R << std::endl;
         inf("C");
         std::cout << m_ekf.C << std::endl;
         //inf("Measurements");
         //std::cout << measurements << std::endl;
-        /*inf("NED");
-        std::cout << Eigen::Map<Eigen::VectorXd>(NED.data(), NED.cols()*NED.rows()) << std::endl;
+        /*
         inf("NED");
         std::cout << NED << std::endl;*/
       }
