@@ -425,10 +425,10 @@ namespace SourceEstimators
         m_ekf.R(m_ekf.C.rows() - 1, m_ekf.C.rows() - 1) = m_args.rz_cov;
         m_ekf.update(measurements);
 
-        inf("R");
-        std::cout << m_ekf.R << std::endl;
-        inf("C");
-        std::cout << m_ekf.C << std::endl;
+        //inf("R");
+        //std::cout << m_ekf.R << std::endl;
+        //inf("C");
+        //std::cout << m_ekf.C << std::endl;
         //inf("Measurements");
         //std::cout << measurements << std::endl;
         /*
