@@ -69,6 +69,15 @@ namespace SourceEstimators
           output[2] = refCoord[2];
           WGS84::displace(input[0], input[1], input[2], &(output[0]), &(output[1]), &(output[2]));
         }
+
+      virtual void print(std::ostream& os) const {
+        os << "Base";
+      };
+      friend std::ostream& operator<<(std::ostream& os, const Estimator& es) {
+        es.print(os);
+        return os;
+      }
+
       protected:
         //! Check if the TDOA indicates a time shift larger than accepted
         //! @param [in] TDOA Time Difference of Arrival 
@@ -100,6 +109,11 @@ namespace SourceEstimators
         //! Depth measurement Covariance
         double rz_cov;
     };
+    /*std::ostream& operator<<(std::ostream& os, const Estimator& es) {
+      es.print(os);
+      return os;
+    }*/
+
   }
 }
 #endif // FishTag_Estimator

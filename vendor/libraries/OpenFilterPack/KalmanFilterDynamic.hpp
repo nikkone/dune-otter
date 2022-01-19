@@ -37,7 +37,7 @@ namespace OFP
       //! Time varying innovation vector.
       Eigen::Matrix<T, Eigen::Dynamic, 1> innov;
       //! Measurement vector.
-      //Eigen::Matrix<T, Eigen::Dynamic, 1> yk;
+      Eigen::Matrix<T, Eigen::Dynamic, 1> yk;
       //! Estimate of the Eigen::Dynamic.
       Eigen::Matrix<T, Eigen::Dynamic, 1> ykest;
       //! State estimate vector.
@@ -78,6 +78,7 @@ namespace OFP
           K = PHat * C.transpose() * (C*PHat*C.transpose() + R).inverse();
 
           //Update estimate with measurement
+          yk=yk_in;
           innov = yk_in - ykest;
           //innov = yk_in - C*xHat - D*u;
           xHat = xHat + K*innov;//calculateInnovation(yk_in, u);

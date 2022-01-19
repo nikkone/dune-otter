@@ -7,6 +7,7 @@
 #include <Eigen/Core>
 #include <OpenFilterPack/KalmanFilterDynamic.hpp>
 #include "Estimator.hpp"
+#include <iostream>
 namespace SourceEstimators
 {
   //! Task that runst source position estimation algorithms for IMC::TBRFishTag
@@ -27,9 +28,12 @@ namespace SourceEstimators
                                          const Eigen::Matrix<double, c_states, c_states> &P0_inn,
                                          const Eigen::Matrix<double, c_states, 1> &x0_inn);
         std::tuple<double, double, double> getEstimate();
+        //friend std::ostream& operator<<(std::ostream& os, const MultipleReceiverEKF& mr);
+        void print(std::ostream& os) const;
       private:
         
     };
+    //std::ostream& operator<<(std::ostream& os, const MultipleReceiverEKF& mr);
   }
 }
 #endif // FishTag_MultipleReceiverEKF

@@ -122,7 +122,7 @@ namespace SourceEstimators
         param("P0", m_args.ekf_P0)
         .size(c_states*c_states)
         .description("Initial P matrix value for the extended Kalman filter, first row")
-        .defaultValue("1, 0, 0, 0, 1, 0, 0, 0, 0.1}");
+        .defaultValue("1, 0, 0, 0, 1, 0, 0, 0, 1.0}");
 
         param("ToA Cov", m_args.rr_cov)
         .description("Time of Arrival Covariance")
@@ -139,7 +139,7 @@ namespace SourceEstimators
         param("Qm", m_args.ekf_Qm)
         .size(c_states*c_states)
         .description("Process noise covariance matrix for the extended Kalman filter")
-        .defaultValue("1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.01");
+        .defaultValue("1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.1");
 // Others
 
         param("Reference Coordinate", m_args.reference)
@@ -160,6 +160,7 @@ namespace SourceEstimators
       void
       onResourceAcquisition(void)
       {
+        
         estimators.push_back(&m_ekf);
         for(std::vector<Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
           (*it)->setSoundSpeed(m_args.init_c_sound);
@@ -174,6 +175,12 @@ namespace SourceEstimators
           Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
           );
         }
+        std::ofstream logOutStream;
+        logOutStream.open("log/predict-test.txt", std::ofstream::out | std::ofstream::trunc);
+        if (logOutStream.good()) {
+            logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
+            logOutStream.close();
+        }
       }
 
       void
@@ -187,9 +194,11 @@ namespace SourceEstimators
           }
           tagBuffer[msg->serial_no]->push_back(*msg);
           unprocessedData[msg->serial_no] = true;
+          //printNewBool();
           for(std::vector<Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
             (*it)->update(tagBuffer, unprocessedData);
           }
+          //printNewBool();
         }
         // Ignore other tags
       }
@@ -203,7 +212,16 @@ namespace SourceEstimators
         }
         tagBuffer.clear();
       }
-
+      void printNewBool(void) {
+        for (MultipleReceiverEKF::tagBool_t::iterator it = unprocessedData.begin(); it != unprocessedData.end(); it++)
+        {
+          if(it->second) {
+            inf("Receiver %u True", it->first);
+          } else {
+            inf("Receiver %u False", it->first);
+          }
+        }
+      }
       void
       onResourceInitialization(void)
       {
@@ -238,7 +256,8 @@ namespace SourceEstimators
         logOutStream.open(in_logfilename, std::fstream::app);
         if (logOutStream.good()) {
           logOutStream.precision(15);
-            logOutStream << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+            logOutStream << Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+            logOutStream << *est;
             logOutStream.close();
         }   
         #endif
@@ -253,7 +272,7 @@ namespace SourceEstimators
             m_filter_timer.reset();
             for(std::vector<Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
               (*it)->predict();
-              logResult((*it), "log/predict-test.txt", "OFPEKF");
+              logResult((*it), "log/predict-test.txt", "ME");
             }
           }
           waitForMessages(m_args.message_wait_time);
