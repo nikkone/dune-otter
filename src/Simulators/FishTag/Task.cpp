@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2013-2021 Norwegian University of Science and Technology (NTNU)*
+// Copyright 2013-2022 Norwegian University of Science and Technology (NTNU)*
 // Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -34,10 +34,11 @@
 #include <chrono>
 namespace Simulators
 {
-  //! TODO: Add drift
-  //! TODO: Add reading from file to have moving tag
+  //! TODO: Add reading positions from file to have moving tag
+  //! TODO: Add movement models such as random walk, Levy flight etc.
   //!
-  //! Insert explanation on task behaviour here.
+  //! Simulates a fish tag by creating dispatching TBRFishTag messages with correct signal travel time between a given vehicle and the sensor.
+  //! The vehicle is taken as the position of the tag, which can be received by the receiver at given distances.
   //! @author Nikolai Lauvås
   namespace FishTag
   {
@@ -46,21 +47,41 @@ namespace Simulators
     struct Arguments
     {
       //! Activation depth.
-      double depth;
-      //! Initial position (degrees)
-      std::vector<double> position;
+      double receiver_depth;
+      //! Tag depth.
+      double tag_depth;
+      //! Initial receiver position (degrees)
+      std::vector<double> receiver_position;
+      //! Initial tag position (degrees)
+      std::vector<double> tag_position;
       //! PRNG type.
-      std::string prng_type;
+      std::string time_prng_type;
       //! PRNG seed.
-      int prng_seed;
+      int time_prng_seed;
       //! Mean temperature value.
-      float mean_value;
-      //! Time offset
-      int time_offset_s;
-      //! Time offset
-      int time_offset_ms;
+      float time_mean_value;
       //! Standard deviation of temperature measurements.
-      double std_dev;
+      double time_std_dev;
+      //! PRNG type
+      std::string depth_prng_type;
+      //! PRNG seed.
+      int depth_prng_seed;
+      //! Mean temperature value.
+      float depth_mean_value;
+      //! Standard deviation of temperature measurements.
+      double depth_std_dev;
+      //! PRNG type
+      std::string position_prng_type;
+      //! PRNG seed.
+      int position_prng_seed;
+      //! Mean temperature value.
+      float position_mean_value;
+      //! Standard deviation of temperature measurements.
+      double position_std_dev;
+      //! Fixed Time offset
+      int time_offset_s;
+      //! Fixed Time offset
+      int time_offset_ms;
       //! Receiver ID
       uint32_t serial_no;
       //! TransmitterID
@@ -75,13 +96,30 @@ namespace Simulators
       bool use_gps;
       //! Should RemoteSensorInfo be sent as well?
       bool sendRemoteSensorInfo;
+      //! SNR values under this will not be transmitted/detected
+      int SNR_detection_limit;
+      //! Using a linear model ax+b=SNR, this is the 'a' coefficient 
+      double SNR_linear_a;
+      //! Using a linear model ax+b=SNR, this is the 'b' coefficient 
+      double SNR_linear_b;
+      //! Source Address to use GPS information from.
+      std::string GPS_src;
+      //! Source Entity to use GPS information from.
+      std::string GPS_src_ent;
     };
     struct Task: public DUNE::Tasks::Periodic
     {
       IMC::RemoteSensorInfo tagPosition;
       IMC::TBRFishTag tag_msg;
       //! PRNG handle
-      Random::Generator* m_prng;
+      Random::Generator* m_time_prng;
+      Random::Generator* m_position_prng;
+      Random::Generator* m_depth_prng;
+
+      uint16_t m_GPS_src;
+      //! Source Entity to use GPS information from.
+      uint8_t m_GPS_src_ent;
+
       //! Task arguments.
       Arguments m_args;
       //! Current Lat and Lon of vehicle.
@@ -90,46 +128,11 @@ namespace Simulators
       //! @param[in] name task name.
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx):
-        DUNE::Tasks::Periodic(name, ctx)
+        DUNE::Tasks::Periodic(name, ctx),
+        m_time_prng(NULL),
+        m_position_prng(NULL),
+        m_depth_prng(NULL)
       {
-        param("Initial Position", m_args.position)
-        .units(Units::Degree)
-        .size(2)
-        .description("Initial tag position lat lon");
-
-        param("Initial Depth", m_args.depth)
-        .units(Units::Meter)
-        .minimumValue("0.0")
-        .maximumValue("1000.0")
-        .defaultValue("0.20")
-        .description("Initial tag depth");
-
-        param("Time Disturbance Standard deviation", m_args.std_dev)
-        .description("Standard deviation of produced temperature")
-        .units(Units::Second)
-        .defaultValue("0.01");
-
-        param("Time Disturbance PRNG Type", m_args.prng_type)
-        .defaultValue(Random::Factory::c_default);
-
-        param("Time Disturbance PRNG Seed", m_args.prng_seed)
-        .defaultValue("-1");
-
-        param("Time Disturbance Mean value", m_args.mean_value)
-        .description("Mean value of disturbance")
-        .units(Units::Second)
-        .defaultValue("0.0");
-
-        param("Time Offset S", m_args.time_offset_s)
-        .description("Offset to subtract from timestamp. Can simulate constant processing/receiving time.")
-        .units(Units::Second)
-        .defaultValue("0");
-
-        param("Time Offset MS", m_args.time_offset_ms)
-        .description("Offset to subtract from timestamp. Can simulate constant processing/receiving time.")
-        .units(Units::Millisecond)
-        .defaultValue("0");
-
         param("Receiver Serial", m_args.serial_no)
         .defaultValue("47");
 
@@ -145,12 +148,114 @@ namespace Simulators
         param("Receiver Memory Location", m_args.recv_mem_addr)
         .defaultValue("1001");
 
-
-        param("Use GPS Position", m_args.use_gps)
-        .defaultValue("false");
-
         param("Send RemoteSensorInfo", m_args.sendRemoteSensorInfo)
         .defaultValue("false");
+
+// Time Disturbance
+        param("Time Disturbance PRNG Type", m_args.time_prng_type)
+        .defaultValue(Random::Factory::c_default);
+
+        param("Time Disturbance PRNG Seed", m_args.time_prng_seed)
+        .defaultValue("-1");
+
+        param("Time Disturbance Mean value", m_args.time_mean_value)
+        .description("Mean value of disturbance")
+        .units(Units::Millisecond)
+        .defaultValue("0.0");
+
+        param("Time Disturbance Standard deviation", m_args.time_std_dev)
+        .description("Standard deviation of produced temperature")
+        .units(Units::Millisecond)
+        .defaultValue("0.00");
+        
+        param("Time Offset S", m_args.time_offset_s)
+        .description("Offset to subtract from timestamp. Can simulate constant processing/receiving time.")
+        .units(Units::Second)
+        .defaultValue("0");
+
+        param("Time Offset MS", m_args.time_offset_ms)
+        .description("Offset to subtract from timestamp. Can simulate constant processing/receiving time.")
+        .units(Units::Millisecond)
+        .defaultValue("0");
+// Position
+        param("Initial Receiver Position", m_args.receiver_position)
+        .units(Units::Degree)
+        .size(2)
+        .defaultValue("0.0, 0.0")
+        .description("Initial tag position lat lon");
+
+        param("Use GPS Position Receiver", m_args.use_gps)
+        .defaultValue("true");
+
+        param("GPS Source Address", m_args.GPS_src)
+        .defaultValue("-1");
+
+        param("GPS Source Entity", m_args.GPS_src_ent)
+        .defaultValue("-1");
+
+        param("Initial Tag Position", m_args.tag_position)
+        .units(Units::Degree)
+        .size(2)
+        .description("Initial tag position lat lon");
+
+        param("Position PRNG Type", m_args.position_prng_type)
+        .defaultValue(Random::Factory::c_default);
+
+        param("Position PRNG Seed", m_args.position_prng_seed)
+        .defaultValue("-1");
+
+        param("Position Mean value", m_args.position_mean_value)
+        .description("Mean value of disturbance")
+        .units(Units::Second)
+        .defaultValue("0.0");
+
+        param("Position Standard deviation", m_args.position_std_dev)
+        .description("Standard deviation of produced temperature")
+        .units(Units::Second)
+        .defaultValue("0.0");
+
+// Depth
+        param("Initial Receiver Depth", m_args.receiver_depth)
+        .units(Units::Meter)
+        .minimumValue("0.0")
+        .maximumValue("1000.0")
+        .defaultValue("0.20")
+        .description("Initial receiver depth");
+
+        param("Initial Tag Depth", m_args.tag_depth)
+        .units(Units::Meter)
+        .minimumValue("0.0")
+        .maximumValue("1000.0")
+        .defaultValue("0.20")
+        .description("Initial tag depth");
+
+        param("Tag Depth PRNG Type", m_args.depth_prng_type)
+        .defaultValue(Random::Factory::c_default);
+
+        param("Tag Depth PRNG Seed", m_args.depth_prng_seed)
+        .defaultValue("-1");
+
+        param("Tag Depth Mean value", m_args.depth_mean_value)
+        .description("Mean value of disturbance")
+        .units(Units::Second)
+        .defaultValue("0.0");
+
+        param("Tag Depth Standard deviation", m_args.depth_std_dev)
+        .description("Standard deviation of produced temperature")
+        .units(Units::Second)
+        .defaultValue("0.0");
+// SNR
+        param("Minimum SNR", m_args.SNR_detection_limit)
+        .description("Mean value of disturbance")
+        .defaultValue("0.0");
+
+        param("SNR linear a", m_args.SNR_linear_a)
+        .description("Using a linear model ax+b=SNR, this is the 'a' coefficient")
+        .defaultValue("-0.05");
+
+        param("SNR linear b", m_args.SNR_linear_b)
+        .description("Using a linear model ax+b=SNR, this is the 'b' coefficient ")
+        .defaultValue("50");
 
         bind<IMC::GpsFix>(this);
       }
@@ -159,6 +264,17 @@ namespace Simulators
       void
       onUpdateParameters(void)
       {
+        if(m_args.GPS_src == "-1") {
+          m_GPS_src = getSystemId();
+        } else {
+          m_GPS_src = resolveSystemName(m_args.GPS_src);
+        }
+        if(m_args.GPS_src_ent == "-1") {
+          m_GPS_src_ent = getEntityId();
+        } else {
+          m_GPS_src_ent = resolveEntity(m_args.GPS_src_ent);
+        }
+
       }
 
       //! Reserve entity identifiers.
@@ -177,28 +293,41 @@ namespace Simulators
       void
       onResourceAcquisition(void)
       {
-        m_prng = Random::Factory::create(m_args.prng_type,
-                                         m_args.prng_seed);
+        m_time_prng = Random::Factory::create(m_args.time_prng_type,
+                                         m_args.time_prng_seed);
+        m_position_prng = Random::Factory::create(m_args.position_prng_type,
+                                         m_args.position_prng_seed);
+        m_depth_prng = Random::Factory::create(m_args.depth_prng_type,
+                                         m_args.depth_prng_seed);
       }
 
       //! Initialize resources.
       void
       onResourceInitialization(void)
       {
+        //IMC::TBRFishTag::TransmitProtocolEnum trans_protocol = IMC::TBRFishTag::TBR_S256;
+        tag_msg.trans_protocol = IMC::TBRFishTag::TBR_S256;
       }
 
       //! Release resources.
       void
       onResourceRelease(void)
       {
-        Memory::clear(m_prng);
+        Memory::clear(m_time_prng);
+        Memory::clear(m_position_prng);
+        Memory::clear(m_depth_prng);
       }
 
       void
       consume(const IMC::GpsFix* msg)
       {
-        if (msg->getSource() != getSystemId())
+        if (msg->getSource() != m_GPS_src)
           return;
+        if(m_args.GPS_src_ent != "-1") {
+          if (msg->getSourceEntity() != m_GPS_src_ent)
+            return;
+        }  
+        
         m_current_lat=msg->lat;
         m_current_lon=msg->lon;
       }
@@ -206,50 +335,59 @@ namespace Simulators
       void
       task(void)
       {
-        IMC::TBRFishTag::TransmitProtocolEnum trans_protocol = IMC::TBRFishTag::TBR_S256;
         // Calculate
+        fp64_t receiver_lat, receiver_lon;
 
-        double dist = DUNE::Coordinates::WGS84::distance(Math::Angles::radians(m_args.position[0]), Math::Angles::radians(m_args.position[1]), m_args.depth, m_current_lat, m_current_lon, 0.0);
-        
-        double t=dist/1485; //1485=Speed of sound in water
-
-        // newtime=unixtimestamp + estimated propagation time
-        std::chrono::milliseconds newtime = std::chrono::seconds(std::time(nullptr)) + std::chrono::milliseconds(static_cast<int>(std::round(t*1000)));
-        int unix_timestamp = std::chrono::duration_cast<std::chrono::seconds>(newtime).count() + m_args.time_offset_s;
-
-        int millis = newtime.count()-std::chrono::duration_cast<std::chrono::seconds>(newtime).count()*1000 + m_args.time_offset_ms;
-        //std::cout << std::time(nullptr)<< std::endl;
-
-        int SNR =50-dist*5/100;
-
-
-        
-        inf("Timestamp: %i - %i dist: %f - traveltime: %f", unix_timestamp,millis,dist, t);
-        tag_msg.serial_no = m_args.serial_no;
-        tag_msg.unix_timestamp = unix_timestamp;
-        tag_msg.millis = millis;
-        tag_msg.trans_protocol = trans_protocol;
-        tag_msg.trans_id = m_args.trans_id;
-        tag_msg.trans_data = m_args.trans_data;
-        tag_msg.snr = SNR;
-        tag_msg.trans_freq = m_args.trans_freq;
-        tag_msg.recv_mem_addr = m_args.recv_mem_addr;
         if(m_args.use_gps) {
-          tag_msg.lat = m_current_lat;
-          tag_msg.lon = m_current_lon;
+          receiver_lat = m_current_lat;
+          receiver_lon = m_current_lon;
         } else {
-          tag_msg.lat = Math::Angles::radians(m_args.position[0]);
-          tag_msg.lon = Math::Angles::radians(m_args.position[1]);
+          receiver_lat = Math::Angles::radians(m_args.receiver_position[0]);
+          receiver_lon = Math::Angles::radians(m_args.receiver_position[1]);
         }
+        tag_msg.lat = Math::Angles::radians(m_args.tag_position[0]) + m_position_prng->gaussian(m_args.position_mean_value, m_args.position_std_dev);
+        tag_msg.lon = Math::Angles::radians(m_args.tag_position[1]) + m_position_prng->gaussian(m_args.position_mean_value, m_args.position_std_dev);
 
-        dispatch(tag_msg);
-        if(m_args.sendRemoteSensorInfo) {
-          tagPosition.lat = tag_msg.lat;
-          tagPosition.lon = tag_msg.lon;
-          tagPosition.alt = m_args.trans_data;
-          tagPosition.id = std::to_string(m_args.serial_no) + " - " + std::to_string(m_args.trans_id);
-          tagPosition.data = SNR;
-          dispatch(tagPosition);
+        double tag_depth = m_args.tag_depth + m_position_prng->gaussian(m_args.depth_mean_value, m_args.depth_std_dev);
+
+        double dist = DUNE::Coordinates::WGS84::distance(receiver_lat, receiver_lon, m_args.receiver_depth, tag_msg.lat, tag_msg.lon, tag_depth);
+        double SNR = dist*m_args.SNR_linear_a + m_args.SNR_linear_b;
+        spew("SNR: %lf, dist %f", SNR, dist);
+        if(SNR > m_args.SNR_detection_limit) {
+          double t=dist/1485; //1485=Speed of sound in water
+
+          std::chrono::milliseconds newtime = std::chrono::seconds(std::time(nullptr))
+                                            + std::chrono::milliseconds(static_cast<int>(std::round(t*1000)))
+                                            + std::chrono::milliseconds(static_cast<int>(m_time_prng->gaussian(m_args.time_mean_value, m_args.time_std_dev)));
+
+          int unix_timestamp = std::chrono::duration_cast<std::chrono::seconds>(newtime).count() + m_args.time_offset_s;
+          int millis = newtime.count()-std::chrono::duration_cast<std::chrono::seconds>(newtime).count()*1000 + m_args.time_offset_ms;
+
+          
+
+
+          
+          inf("Timestamp: %i - %i dist: %f - traveltime: %f", unix_timestamp,millis,dist, t);
+          tag_msg.serial_no = m_args.serial_no;
+          tag_msg.unix_timestamp = unix_timestamp;
+          tag_msg.millis = millis;
+          tag_msg.trans_id = m_args.trans_id;
+          tag_msg.trans_data = tag_depth/0.392;
+          tag_msg.snr = SNR;
+          tag_msg.trans_freq = m_args.trans_freq;
+          tag_msg.recv_mem_addr = m_args.recv_mem_addr;
+
+          dispatch(tag_msg);
+          if(m_args.sendRemoteSensorInfo) {
+            tagPosition.lat = tag_msg.lat;
+            tagPosition.lon = tag_msg.lon;
+            tagPosition.alt = tag_msg.trans_data;
+            tagPosition.id = std::to_string(m_args.serial_no) + " - " + std::to_string(m_args.trans_id);
+            tagPosition.data = SNR;
+            dispatch(tagPosition);
+          }
+          
+        //inf("%lf",m_time_prng->gaussian(m_args.time_mean_value, m_args.time_std_dev));
         }
       }
     };
