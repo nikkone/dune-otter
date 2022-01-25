@@ -23,7 +23,7 @@ std::tuple<double, double, double> MultipleReceiverEKF::getEstimate() {
     }
 
     void MultipleReceiverEKF::update(const tagBuffer_t &tagBuffer, tagBool_t &unprocessedData) {
-      std::cout << "update"<< std::endl << std::endl;
+      //std::cout << "update"<< std::endl << std::endl;
       if(tagBuffer.size() <2)
         return;
       int com = boost::math::binomial_coefficient<double>(tagBuffer.size(), 2);

@@ -257,7 +257,7 @@ namespace SourceEstimators
         if (logOutStream.good()) {
           logOutStream.precision(15);
             logOutStream << Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
-            logOutStream << *est;
+            //logOutStream << *est;
             logOutStream.close();
         }   
         #endif
