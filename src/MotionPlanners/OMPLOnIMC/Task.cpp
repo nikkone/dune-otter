@@ -137,19 +137,19 @@ namespace MotionPlanners
         
 #if OMPL_BENCHMARK
         param("Benchmark Name", m_args.benchmark_name)
-        .defaultValue("")
+        .defaultValue("unnamed")
         .description("Path of the db");
 
         param("Benchmark Runtime", m_args.benchmark_maxTime)
-        .defaultValue("")
+        .defaultValue("1")
         .description("Path of the db");
 
         param("Benchmark Max Memory", m_args.benchmark_maxMem)
-        .defaultValue("")
+        .defaultValue("100")
         .description("Path of the db");
 
         param("Benchmark Runs", m_args.benchmark_runCount)
-        .defaultValue("")
+        .defaultValue("1")
         .description("Path of the db"); 
 #endif
         bind<IMC::PlanProbSpec>(this);
@@ -303,9 +303,9 @@ namespace MotionPlanners
           }
         itr = msg->area.begin();
         double planningBounds[4];
-        m_con->transformSRID((*itr)->lon, (*itr)->lat, 4326, planningBounds[1], planningBounds[0], 32632);
+        m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[1], planningBounds[0], 32632);
         ++itr;
-        m_con->transformSRID((*itr)->lon, (*itr)->lat, 4326, planningBounds[3], planningBounds[2], 32632);
+        m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[3], planningBounds[2], 32632);
         ob::RealVectorBounds bounds(2);
 
         bounds.setLow(0,planningBounds[0]);
@@ -315,8 +315,8 @@ namespace MotionPlanners
 
         // Convert from WGS-84 to EPSG32632
         double start_northing, start_easting, end_northing, end_easting;
-        m_con->transformSRID(msg->start_lon, msg->start_lat, 4326, start_easting, start_northing, 32632);
-        m_con->transformSRID(msg->end_lon, msg->end_lat, 4326, end_easting, end_northing, 32632);
+        m_con->transformSRID(Math::Angles::degrees(msg->start_lon), Math::Angles::degrees(msg->start_lat), 4326, start_easting, start_northing, 32632);
+        m_con->transformSRID(Math::Angles::degrees(msg->end_lon), Math::Angles::degrees(msg->end_lat), 4326, end_easting, end_northing, 32632);
 
         spew("Planning start/goal: %f, %f, %f, %f", start_easting, start_northing, end_easting, end_northing);
         spew("Args bounds:  %f, %f, %f, %f", m_args.planningBounds[1], m_args.planningBounds[3], m_args.planningBounds[0], m_args.planningBounds[2]);
