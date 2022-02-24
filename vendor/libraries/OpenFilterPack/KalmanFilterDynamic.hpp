@@ -81,6 +81,8 @@ namespace OFP
           yk=yk_in;
           innov = yk_in - ykest;
           //innov = yk_in - C*xHat - D*u;
+          //std::cout << "innov" << std::endl << innov << std::endl;
+          //std::cout << "K" << std::endl << K << std::endl;
           xHat = xHat + K*innov;//calculateInnovation(yk_in, u);
 
           // Compute error covariance for updated estimate
