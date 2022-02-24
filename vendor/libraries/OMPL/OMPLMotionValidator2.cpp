@@ -59,12 +59,11 @@ bool OMPLintegrationENCGIS::ChartsDBMotionValidator2::checkMotion(const ob::Stat
 
 bool OMPLintegrationENCGIS::ChartsDBMotionValidator2::checkMotion(const ob::State *s1, const ob::State *s2) const
 {
-    // TODO: check if s2 check speeds up?.
     /* assume motion starts in a valid configuration so s1 is valid */
-    /*if (!si_->isValid(s2))
-    */
-       //std::cout << "0"<< std::endl;
-    if(transectSafety(s1, s2)) {
+    if(!dbcon->run(static_cast<const ob::RealVectorStateSpace::StateType *>(s1)->values[1],
+                   static_cast<const ob::RealVectorStateSpace::StateType *>(s1)->values[0],
+                   static_cast<const ob::RealVectorStateSpace::StateType *>(s2)->values[1],
+                   static_cast<const ob::RealVectorStateSpace::StateType *>(s2)->values[0])) {
         valid_++;
         return true;
     } else {
@@ -74,8 +73,8 @@ bool OMPLintegrationENCGIS::ChartsDBMotionValidator2::checkMotion(const ob::Stat
 }
 
 bool OMPLintegrationENCGIS::ChartsDBMotionValidator2::transectSafety(const ob::State *s1, const ob::State *s2) const {
-
-    const auto *state1 = static_cast<const ob::RealVectorStateSpace::StateType *>(s1);
-    const auto *state2 = static_cast<const ob::RealVectorStateSpace::StateType *>(s2);
-    return dbcon->run(state1->values[1], state1->values[0], state2->values[1], state2->values[0]) == 0;
+    return !dbcon->run(static_cast<const ob::RealVectorStateSpace::StateType *>(s1)->values[1],
+                  static_cast<const ob::RealVectorStateSpace::StateType *>(s1)->values[0],
+                  static_cast<const ob::RealVectorStateSpace::StateType *>(s2)->values[1],
+                  static_cast<const ob::RealVectorStateSpace::StateType *>(s2)->values[0]);
 }
