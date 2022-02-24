@@ -1,16 +1,8 @@
 //***************************************************************************
-// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
-// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
+// Copyright 2013-2022 Norwegian University of Science and Technology (NTNU)*
+// Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
-// This file is part of DUNE: Unified Navigation Environment.               *
-//                                                                          *
-// Commercial Licence Usage                                                 *
-// Licencees holding valid commercial DUNE licences may use this file in    *
-// accordance with the commercial licence agreement provided with the       *
-// Software or, alternatively, in accordance with the terms contained in a  *
-// written agreement between you and Faculdade de Engenharia da             *
-// Universidade do Porto. For licensing terms, conditions, and further      *
-// information contact lsts@fe.up.pt.                                       *
+// This file is an extention to DUNE: Unified Navigation Environment.       *
 //                                                                          *
 // Modified European Union Public Licence - EUPL v.1.1 Usage                *
 // Alternatively, this file may be used under the terms of the Modified     *
@@ -24,8 +16,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Ricardo Gomes                                                    *
-// Author: José Braga                                                       *
+//Author: Nikolai Lauvås (Reusing some code by Ricardo Gomes and José Braga)*
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -51,8 +42,6 @@ namespace Control
       {
         //! Maximum Motor thrust.
         float act_max;
-        //! Maximum Motor differential thrust.
-        float act_diff_max;
         //! Ramp actuation limit when the value is rising in actuation per second
         float act_ramp;
         //! End of scale value for RPM's at 100% of thurst
@@ -67,14 +56,9 @@ namespace Control
         std::vector<float> rpm_gains;
         //! RPM controller feedforward gain
         float rpm_ffgain;
-        //! PID gains for MPS controller.
-        std::vector<float> mps_gains;
-        //! MPS controller feedforward gain
-        float mps_ffgain;
-        //! Limit for the integral term
-        float mps_max_int;
+
         //! Maximum acceleration step to smooth speed ramp in mps control
-        int16_t max_accel;
+        int16_t max_force_accel;
         //! Maximum heading error to thrust.
         float yaw_max;
         //! PID gains for heading controller.
@@ -87,10 +71,6 @@ namespace Control
         std::string eid_starboard;
         //! Log the size of each PID parcel
         bool log_parcels;
-
-        //! Force to actuation - RPM
-        std::vector<float> force_at_actuation_levels;
-
 
         //! MPS to force controller feedforward gain
         float mps_force_ffgain;
@@ -110,14 +90,10 @@ namespace Control
       {
         //! RPM PID controller
         DiscretePID m_rpm_pid;
-        //! MPS(speed) to rpm PID controller
-        DiscretePID m_mps_pid;
         //! MPS(speed) to thrustforce PID controller
         DiscretePID m_mps_force_pid;
         //! YAW(Heading) PID controller
         DiscretePID m_yaw_pid;
-        //! Control Parcels for meters per second controller returning rpm
-        IMC::ControlParcel m_parcel_mps;
         //! Control Parcels for meters per second controller returning force
         IMC::ControlParcel m_parcel_mps_force;
         //! Control Parcels for rpm controller
@@ -161,10 +137,6 @@ namespace Control
           .defaultValue("1.0")
           .description("Maximum Motor Command");
 
-          param("Maximum Thrust Differential Actuation", m_args.act_diff_max)
-          .defaultValue("0.2")
-          .description("Maximum Motor Differential Command");
-
           param("RPMs at Maximum Thrust", m_args.rpm_eos)
           .defaultValue("2500")
           .units(Units::RPM)
@@ -183,20 +155,7 @@ namespace Control
           .defaultValue("0.5")
           .description("RPM controller feedforward gain");
 
-          param("MPS PID Gains", m_args.mps_gains)
-          .defaultValue("")
-          .size(3)
-          .description("PID gains for MPS controller");
-
-          param("MPS Feedforward Gain", m_args.mps_ffgain)
-          .defaultValue("0.0")
-          .description("MPS controller feedforward gain");
-
-          param("MPS Integral Limit", m_args.mps_max_int)
-          .defaultValue("-1.0")
-          .description("Limit for the integral term");
-
-          param("Maximum RPM Acceleration", m_args.max_accel)
+          param("Maximum RPM Acceleration", m_args.max_force_accel)
           .defaultValue("70")
           .units(Units::RPM)
           .description("Maximum acceleration step to smooth speed ramp in mps control");
@@ -240,15 +199,8 @@ namespace Control
           .defaultValue("false")
           .description("Log the size of each PID parcel");
 
-          param("Force Map - Force", m_args.force_at_actuation_levels)
-          //.defaultValue("-13.6, -13.5, -13.4, -10.8, -7.4, -5.4, -3.5, -1.9, -0.7, 0, 0, 0.4, 1.3, 3.0, 5.4, 8.8, 12.4, 17.3, 22.7, 24.4, 24.0")
-          .defaultValue("-133.416, -132.435, -131.454, -105.948, -72.594, -52.974, -34.335, -18.639, -6.867, -0.1, 0, 3.924, 12.753, 29.43, 52.974, 86.328, 121.644, 169.713, 222.687, 239.364, 235.44")
-          .size(21)
-          .description("End of scale value for RPM's at 100% of thurst");
-
-
           param("MPS Force PID Gains", m_args.mps_force_gains)
-          .defaultValue("14.0, 1.0, 0.0")
+          .defaultValue("200.0, 5.0, 0.0")
           .size(3)
           .description("PID Force gains for MPS controller");
 
@@ -296,11 +248,11 @@ namespace Control
             m_args.yaw_max = Angles::radians(m_args.yaw_max);
 
           if (paramChanged(m_args.rpm_gains) ||
-              paramChanged(m_args.mps_gains) ||
               paramChanged(m_args.yaw_gains) ||
               paramChanged(m_args.rpm_ffgain) ||
-              paramChanged(m_args.mps_ffgain) ||
-              paramChanged(m_args.mps_max_int) ||
+              paramChanged(m_args.mps_force_gains) ||
+              paramChanged(m_args.mps_force_ffgain) ||
+              paramChanged(m_args.mps_force_max_int) ||
               paramChanged(m_args.log_parcels))
           {
             reset();
@@ -316,7 +268,7 @@ namespace Control
           {
             std::string label = getEntityLabel();
             m_parcel_rpm.setSourceEntity(reserveEntity(label + " - RPM Parcel"));
-            m_parcel_mps.setSourceEntity(reserveEntity(label + " - MPS Parcel"));
+            m_parcel_mps_force.setSourceEntity(reserveEntity(label + " - MPS Parcel"));
             m_parcel_yaw.setSourceEntity(reserveEntity(label + " - Yaw Parcel"));
           }
         }
@@ -365,7 +317,6 @@ namespace Control
         reset(void)
         {
           m_rpm_pid.reset();
-          m_mps_pid.reset();
           m_yaw_pid.reset();
           m_mps_force_pid.reset();
 
@@ -390,9 +341,6 @@ namespace Control
           m_rpm_pid.setOutputLimits(-m_args.act_max, m_args.act_max);
 
           // Do not set MPS PID output limits since we use a feedforward gain.
-          m_mps_pid.setGains(m_args.mps_gains);
-          m_mps_pid.setIntegralLimits(m_args.mps_max_int);
-
           m_mps_force_pid.setGains(m_args.mps_force_gains);
           m_mps_force_pid.setIntegralLimits(m_args.mps_force_max_int);
 
@@ -402,8 +350,7 @@ namespace Control
           if (m_args.log_parcels)
           {
             m_rpm_pid.enableParcels(this, &m_parcel_rpm);
-            m_mps_pid.enableParcels(this, &m_parcel_mps);
-            m_mps_force_pid.enableParcels(this, &m_parcel_mps);
+            m_mps_force_pid.enableParcels(this, &m_parcel_mps_force);
             m_yaw_pid.enableParcels(this, &m_parcel_yaw);
           }
         }
@@ -423,9 +370,6 @@ namespace Control
           // This works as redundancy, in case everything else fails
           reset();
           debug("disabling");
-          for(unsigned x=0;x<21.1;x++) {
-            inf("%f,%f", m_args.force_at_actuation_levels[x], forceToThrust(m_args.force_at_actuation_levels[x]));
-          }
         }
 
         void
@@ -436,7 +380,7 @@ namespace Control
 
           if (!isActive())
           {
-            if(m_args.courseControl)
+            //if(m_args.courseControl) Hva var tanken med dette?
             m_desired_yaw = msg->psi;
             m_desired_speed = msg->u;
             return;
@@ -465,11 +409,7 @@ namespace Control
               case IMC::SUNITS_PERCENTAGE:
                 thrust_com = (m_desired_speed / 100.0);
                 break;
-              /*case IMC::SUNITS_METERS_PS:
-                thrust_com = rpmToThrust(rpm, mpsToRpm(msg->u, tstep), tstep);
-                break;*/
               case IMC::SUNITS_METERS_PS:
-                //thrust_com = rpmToThrust(rpm, mpsToRpm(msg->u, tstep), tstep);
                 thrust_com = mpsToForce(msg->u, tstep);
                 break;
 
@@ -643,46 +583,14 @@ namespace Control
           force += m_parcel_mps_force.a;
 
           // trim acceleration in force
-          /*force = Math::trimValue(force, m_previous_force - m_args.max_accel * timestep,
-                                m_previous_force + m_args.max_accel * timestep);
+          /*force = Math::trimValue(force, m_previous_force - m_args.max_force_accel * timestep,
+                                m_previous_force + m_args.max_force_accel * timestep);
           */
 
           // trim force value
           force = Math::trimValue(force, m_args.min_force, m_args.max_force);
           m_previous_force = force;
           return force;
-        }
-
-        //! Convert meters per second to a desired rpm value.
-        //! @param[in] vel absolute ground velocity.
-        //! @param[in] timestep amount of time since last control step.
-        //! @return desired rpm value.
-        float
-        mpsToRpm(float vel, double timestep)
-        {
-          // if desired speed is too low just turn off motor
-          if (m_desired_speed < c_mps_tol)
-          {
-            m_previous_rpm = 0.0;
-            return 0.0;
-          }
-
-          // cannot let the timestep be zero
-          if (timestep <= 0.0)
-            return 0.0;
-
-          float rpm = m_mps_pid.step(timestep, m_desired_speed - vel);
-          m_parcel_mps.a = m_desired_speed * m_args.mps_ffgain;
-          rpm += m_parcel_mps.a;
-
-          // trim acceleration in rpms
-          rpm = Math::trimValue(rpm, m_previous_rpm - m_args.max_accel * timestep,
-                                m_previous_rpm + m_args.max_accel * timestep);
-
-          // trim rpm value
-          rpm = Math::trimValue(rpm, m_args.min_rpm, m_args.max_rpm);
-          m_previous_rpm = rpm;
-          return rpm;
         }
 
         //! Dispatch to bus SetThrusterActuation message
