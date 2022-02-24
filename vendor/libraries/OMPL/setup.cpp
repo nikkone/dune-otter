@@ -179,7 +179,7 @@ namespace OMPLintegrationENCGIS
           ompl::tools::Benchmark b(ss, benchmark_name);
           // Planners to be tested
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::LBKPIECE1(ss.getSpaceInformation())));
-//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::FMT(ss.getSpaceInformation())));
+
 //b.addPlannerAllocator(std::bind(&kabitstar, std::placeholders::_1, "kABITstar"));
 //std::string name, bool pruning, double rewireFactor, double samplesPerBatch, double PruneThreshold, bool JITS, bool Knearest)
 /*
@@ -195,12 +195,12 @@ namespace OMPLintegrationENCGIS
 //b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar2" , true, 1.1, 500, 0.05, false, true));
 //b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar3" , true, 1.1, 1000, 0.05, false, true));
 
-b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar4" , true, 1.1, 100, 0.05, false, true));
-b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar5" , false, 1.1, 100, 0.05, false, true));
-b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar6" , true, 1.1, 100, 0.05, false, false));
-b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar7" , true, 1.1, 100, 0.05, true, false));
-b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar8" , false, 1.1, 100, 0.05, false, false));
-b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar9" , false, 1.1, 100, 0.05, true, false));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar4" , true, 1.1, 100, 0.05, false, true));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar5" , false, 1.1, 100, 0.05, false, true));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar6" , true, 1.1, 100, 0.05, false, false));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar7" , true, 1.1, 100, 0.05, true, false));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar8" , false, 1.1, 100, 0.05, false, false));
+//b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar9" , false, 1.1, 100, 0.05, true, false));
 //
 //b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar10", true, 1.1, 100, 0.05, false, true));
 //b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar11", true, 1.1, 100, 0.55, false, true));
@@ -210,14 +210,18 @@ b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar9" ,
 //b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar14" , true, 1.5, 100, 0.05, false, true));
 //b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar15" , true, 2.1, 100, 0.05, false, true));
 
-//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTstar(ss.getSpaceInformation())));
-//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTsharp(ss.getSpaceInformation())));
-//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::AITstar(ss.getSpaceInformation())));
-//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::InformedRRTstar(ss.getSpaceInformation())));
-//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::TRRT(ss.getSpaceInformation())));
-//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::LBTRRT(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::FMT(ss.getSpaceInformation())));
+
+b.addPlannerAllocator(std::bind(&kbitstar, std::placeholders::_1, "kBITstar1"));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::ABITstar(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTstar(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTsharp(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::AITstar(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::InformedRRTstar(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::TRRT(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::LBTRRT(ss.getSpaceInformation())));
+b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTXstatic(ss.getSpaceInformation())));
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::SST(ss.getSpaceInformation())));
-//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTXstatic(ss.getSpaceInformation())));
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::SPARS(ss.getSpaceInformation())));
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::SPARStwo(ss.getSpaceInformation())));
 
