@@ -14,6 +14,7 @@ std::tuple<double, double, double> MultipleReceiverEKF::getEstimate() {
                                          const Eigen::Matrix<double, c_states, c_states> &P0_inn,
                                          const Eigen::Matrix<double, c_states, 1> &x0_inn)
     {
+      name = "MultiReceiverEKF";
       ekf.A =     A_inn;
       ekf.Q =     Q_inn;
       ekf.PHat = P0_inn;
@@ -26,7 +27,7 @@ std::tuple<double, double, double> MultipleReceiverEKF::getEstimate() {
       //std::cout << "update"<< std::endl << std::endl;
       if(tagBuffer.size() <2)
         return;
-      int com = boost::math::binomial_coefficient<double>(tagBuffer.size(), 2);
+      //int com = boost::math::binomial_coefficient<double>(tagBuffer.size(), 2);
       //spew("com: %i", com);
       Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA(1  ,1);
       Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> NED(3,tagBuffer.size());

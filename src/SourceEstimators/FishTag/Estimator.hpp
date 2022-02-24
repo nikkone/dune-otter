@@ -15,6 +15,7 @@ namespace SourceEstimators
     class Estimator
     {
       public:
+      std::string name;
       static const unsigned c_states = 3;
       typedef std::map<uint32_t, bool> tagBool_t;
       typedef std::map<uint32_t, boost::circular_buffer<DUNE::IMC::TBRFishTag>*> tagBuffer_t;
@@ -69,7 +70,9 @@ namespace SourceEstimators
           output[2] = refCoord[2];
           WGS84::displace(input[0], input[1], input[2], &(output[0]), &(output[1]), &(output[2]));
         }
-
+      virtual bool isActive() const {
+        return false;
+      };
       virtual void print(std::ostream& os) const {
         os << "Base";
       };
@@ -109,10 +112,6 @@ namespace SourceEstimators
         //! Depth measurement Covariance
         double rz_cov;
     };
-    /*std::ostream& operator<<(std::ostream& os, const Estimator& es) {
-      es.print(os);
-      return os;
-    }*/
 
   }
 }

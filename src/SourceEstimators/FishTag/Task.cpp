@@ -32,11 +32,13 @@
 #include <DUNE/DUNE.hpp>
 #include <boost/circular_buffer.hpp>
 #include "MultipleReceiverEKF.hpp"
+#include "SingleReceiverEKF.hpp"
+
 
 #define LOGFTOILE 1
 namespace SourceEstimators
 {
-  //! Task that runst source position estimation algorithms for IMC::TBRFishTag
+  //! Task that runs source position estimation algorithms for IMC::TBRFishTag
   //! @author Nikolai Lauvås
   namespace FishTag
   {
@@ -71,6 +73,8 @@ namespace SourceEstimators
       double rz_cov;
       //! Maximum allowed time [ms] shift between receivers' messages
       double max_time_shift_ms;
+
+      std::string log_folder_and_prefix;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -83,6 +87,8 @@ namespace SourceEstimators
       MultipleReceiverEKF::tagBuffer_t tagBuffer;
 
       MultipleReceiverEKF m_ekf;
+      SingleReceiverEKF m_sekf;
+
 
       std::vector<Estimator*> estimators;
       //! Timer responsible for running filter timestep
@@ -110,9 +116,9 @@ namespace SourceEstimators
         .units(Units::Second)
         .defaultValue("0.01");
 
-/*        param("Log Folder and Prefix - 1", m_args.log_folder_and_prefix)
+        param("Log Folder and Prefix", m_args.log_folder_and_prefix)
         .description("")
-        .defaultValue("log/predict-"); */
+        .defaultValue("log/predict-"); 
 // Kalman Filter Parameters
         param("x0", m_args.ekf_x0)
         .size(c_states)
@@ -160,8 +166,8 @@ namespace SourceEstimators
       void
       onResourceAcquisition(void)
       {
-        
-        estimators.push_back(&m_ekf);
+        estimators.push_back(&m_sekf);
+        //estimators.push_back(&m_ekf);
         for(std::vector<Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
           (*it)->setSoundSpeed(m_args.init_c_sound);
           (*it)->setAllowedTimeShift(m_args.max_time_shift_ms);
@@ -174,12 +180,12 @@ namespace SourceEstimators
           Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
           Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
           );
-        }
-        std::ofstream logOutStream;
-        logOutStream.open("log/predict-test.txt", std::ofstream::out | std::ofstream::trunc);
-        if (logOutStream.good()) {
-            logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
-            logOutStream.close();
+          std::ofstream logOutStream;
+          logOutStream.open(m_args.log_folder_and_prefix + (*it)->name + ".csv", std::ofstream::out | std::ofstream::trunc);
+          if (logOutStream.good()) {
+              logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
+              logOutStream.close();
+          }
         }
       }
 
@@ -272,7 +278,9 @@ namespace SourceEstimators
             m_filter_timer.reset();
             for(std::vector<Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
               (*it)->predict();
-              logResult((*it), "log/predict-test.txt", "ME");
+              if(( *it)->isActive()) {
+                logResult((*it), m_args.log_folder_and_prefix + (*it)->name + ".csv", (*it)->name);
+              }
             }
           }
           waitForMessages(m_args.message_wait_time);

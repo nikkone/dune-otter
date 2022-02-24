@@ -1,28 +1,30 @@
-#ifndef FishTag_MultipleReceiverEKF
-#define FishTag_MultipleReceiverEKF
+#ifndef FishTag_SingleReceiverEKF
+#define FishTag_SingleReceiverEKF
 #include <DUNE/DUNE.hpp>
 #include <boost/circular_buffer.hpp>
 #include <boost/math/special_functions/binomial.hpp>
 #include <unistd.h>
 #include <Eigen/Core>
 #include <OpenFilterPack/KalmanFilterDynamic.hpp>
+#include <OpenFilterPack/AlgebraicSolution.hpp>
 #include "Estimator.hpp"
 #include <iostream>
 namespace SourceEstimators
 {
-  //! Task that runst source position estimation algorithms for IMC::TBRFishTag
+  //! Task that runs source position estimation algorithms for IMC::TBRFishTag
   //! @author Nikolai Lauvås
   namespace FishTag
   {
-    class MultipleReceiverEKF : public Estimator
+    class SingleReceiverEKF : public Estimator
     {
       public:
-        MultipleReceiverEKF() {};
-        ~MultipleReceiverEKF() {};
+        SingleReceiverEKF() {};
+        ~SingleReceiverEKF() {};
         void update(const tagBuffer_t &tagBuffer, tagBool_t &unprocessedData);
         void predict();
 
         OFP::KalmanFilterDynamic<double, c_states> ekf;
+        OFP::AlgebraicSolver<double, 3, 9, 5> aslv;
         void initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
                                          const Eigen::Matrix<double, c_states, c_states> &Q_inn,
                                          const Eigen::Matrix<double, c_states, c_states> &P0_inn,
@@ -33,8 +35,14 @@ namespace SourceEstimators
           return ekf.active;
         }
       private:
-        
+        uint32_t receiver;
+        double receiver_depth;
+        float tag_period;
+        float max_jitter;
+        unsigned int max_updates_per_new_measurement;
+        unsigned int max_correction_attempts;
+
     };
   }
 }
-#endif // FishTag_MultipleReceiverEKF
+#endif // FishTag_SingleReceiverEKF
