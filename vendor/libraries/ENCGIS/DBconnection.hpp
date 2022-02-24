@@ -69,7 +69,7 @@ namespace ENCGIS
         int run(double lat, double lon);
       private:
         sqlite3_stmt* m_handle;
-        int statusLastResult;
+        //int statusLastResult;
     };
 
       class lineIntersectLayerStatement {
@@ -79,7 +79,7 @@ namespace ENCGIS
         int run(double startLat, double startLon, double endLat, double endLon);
       private:
         sqlite3_stmt* m_handle;
-        int statusLastResult;
+        //int statusLastResult;
     };
     class getClosestIntersectWithOffset {
       public:

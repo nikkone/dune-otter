@@ -37,10 +37,8 @@ namespace ENCGIS {
         sqlite3_bind_double(m_handle,2,Y);
         // Execute
         if(sqlite3_step(m_handle) == SQLITE_ROW) {
-          statusLastResult = sqlite3_column_int(m_handle, 0);
           sqlite3_reset(m_handle);
-          //return sqlite3_stmt_status(m_handle, SQLITE_STMTSTATUS_FULLSCAN_STEP, false);
-          return statusLastResult;
+          return 1;//statusLastResult;
         } else {
           sqlite3_reset(m_handle);
           return 0;
@@ -79,14 +77,10 @@ namespace ENCGIS {
         sqlite3_bind_double(m_handle,4,endY);
         // Execute
         if(sqlite3_step(m_handle) == SQLITE_ROW) {
-          statusLastResult = sqlite3_column_int(m_handle, 0);
           sqlite3_reset(m_handle);
-          //return sqlite3_stmt_status(m_handle, SQLITE_STMTSTATUS_FULLSCAN_STEP, false);
-        //  printf("\nOne\n");
-          return statusLastResult;
+          return 1; // As long as the query returns a row, we know that there is at least one intersection.
         } else {
           sqlite3_reset(m_handle);
-        //  printf("\nZero\n");
           return 0;
         }
       }
@@ -246,7 +240,11 @@ namespace ENCGIS {
   void DBconnection::runQuery(std::string sqlstmt) {
       char *zErrMsg = 0;
       if(sqlite3_exec(db, sqlstmt.c_str(), callback, 0, &zErrMsg)!=SQLITE_OK ){
-        Error("SQL error: %s\n", zErrMsg);
+        if(zErrMsg == NULL) {
+          Error("SQL error: %s\n", "Received NULL as error message, but SQLITE_OK nt received. Does the databasefile exist?");
+        } else {
+          Error("SQL error: %s\n", zErrMsg);
+        }
         sqlite3_free(zErrMsg);
       }
   }
