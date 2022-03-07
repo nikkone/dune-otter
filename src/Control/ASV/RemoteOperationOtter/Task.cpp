@@ -40,7 +40,12 @@ namespace Control
     namespace RemoteOperationOtter
     {
       using DUNE_NAMESPACES;
-
+      typedef enum RCmode
+      {
+          RCM_NORMAL   = 0,
+          RCM_FORCE    = 1,
+          RCM_SKEWED   = 2
+      } RCmode_t;
       //! Task arguments.
       struct Arguments
       {
@@ -48,6 +53,7 @@ namespace Control
         double scale;
         //! Factor to reduce forward thrust when differential thrusting
         float skewed_motor_force_factor;
+        u_int8_t rcmode;
       };
 
       struct Task: public DUNE::Control::BasicRemoteOperation
@@ -70,12 +76,17 @@ namespace Control
           .defaultValue("0.0")
           .description("Factor to reduce forward thrust when differential thrusting.");
 
+          param("RC mode", m_args.rcmode)
+          .defaultValue("0")
+          .description("");
+
           // Add remote actions.
           addActionAxis("Port Motor");
           addActionAxis("Starboard Motor");
           addActionButton("Accelerate");
           addActionButton("Decelerate");
           addActionAxis("Heading");
+          addActionAxis("Throttle");
           addActionButton("Stop");
 
           // Initialize SetThrusterActuation messages.
@@ -117,6 +128,37 @@ namespace Control
           return Math::trimValue((value / 127.0) * m_args.scale, -1.0, 1.0);
         }
 
+        //! Model converting force to thrust actuation level (Untrimmed)
+        //! @param[in] force value of force currently in the motor
+        //! @return thrust actuation.
+        float forceToThrust(float force){
+          if(force > 0) {
+            float weights[] = {0.01137,-7.549e-05,1.86e-07};
+            return weights[0]*force+weights[1]*force*force+weights[2]*force*force*force; // ax+bx^2+cx^3
+          } else if(force < 0) {
+            float weights[] = {0.01912, 0.0002268, 1.012e-06};
+            return weights[0]*force+weights[1]*force*force+weights[2]*force*force*force; // ax+bx^2+cx^3
+          } else { // Force is 0
+            return 0.0;
+          }
+          return 0.0;
+        }
+        //! Model converting thrust actuation level to force (Untrimmed)
+        //! @param[in] thrust value of thrust currently in the motor
+        //! @return force.
+        float thrustToForce(float thrust){
+          if(thrust > 0) {
+            float weights[] = {-146.4,948.7,-556.3}; 
+            return weights[0]*thrust+weights[1]*thrust*thrust+weights[2]*thrust*thrust*thrust; // ax+bx^2+cx^3
+          } else if(thrust < 0) {
+            float weights[] = {-99.73, -609.1, -378.6};
+            return weights[0]*thrust+weights[1]*thrust*thrust+weights[2]*thrust*thrust*thrust; // ax+bx^2+cx^3
+          } else { // Force is 0
+            return 0.0;
+          }
+          return 0.0;
+        }
+
         void
         onRemoteActions(const IMC::RemoteActions* msg)
         {
@@ -127,28 +169,63 @@ namespace Control
 
           if (m_thrust[0].value == 0 && m_thrust[1].value == 0)
           {
+              double throttle = applyScale(tuples.get("Throttle", 0));
+              inf("%f", throttle);
               if (tuples.get("Decelerate", 0))
                 m_speed -= 0.05;
               else if (tuples.get("Accelerate", 0))
                 m_speed += 0.05;
+              else if (throttle) {
+                m_speed = throttle;
+              }
+                
 
               m_speed = Math::trimValue(m_speed, -1.0 , 1.0);
 
               double hdng = (tuples.get("Heading", 0)) / 127.0;
               double leftThrust = m_speed;
               double rightThrust = m_speed;
+
+
+              switch(m_args.rcmode) {
+                case RCM_FORCE:
+                  {
+                    double minForce = 130.0;
+                    leftThrust *= 1+hdng*2;
+                    rightThrust *= 1-hdng*2;
+                    double leftForce  = thrustToForce(leftThrust);                    
+                    double rightForce = thrustToForce(rightThrust);
+                    if(leftForce < -minForce) {
+                      rightForce = Math::trimValue(rightForce, -minForce, minForce);
+                      inf("sat l");
+                    }
+                    if(rightForce < -minForce) {
+                      leftForce = Math::trimValue(leftForce, -minForce, minForce);
+                      inf("sat r");
+                    }
+                    leftThrust  = forceToThrust(leftForce);
+                    rightThrust = forceToThrust(rightForce);
+                  }
+                break;
+                case RCM_SKEWED:
+                  if(hdng>0) {
+                    leftThrust  *= 1+(hdng*2*m_args.skewed_motor_force_factor);
+                    rightThrust *= 1-hdng*2;
+                  } else if(hdng<0) {
+                    rightThrust *= 1-(hdng*2*m_args.skewed_motor_force_factor);
+                    leftThrust  *= 1+hdng*2;
+                  }
+                break;
+                case RCM_NORMAL:
+                  leftThrust *= 1+hdng*2;
+                  rightThrust *= 1-hdng*2;
+                break;
+                default:
+                  spew("Invalid mode %u, changing to normal mode.", m_args.rcmode);
+                  m_args.rcmode = RCM_NORMAL;
+              };
               spew("Heading: %f", hdng);
 
-              // leftThrust *= 1+hdng*2;
-              // rightThrust *= 1-hdng*2;
-              if(hdng>0) {
-                leftThrust  *= 1+(hdng*2*m_args.skewed_motor_force_factor);
-                rightThrust *= 1-hdng*2;
-              } else if(hdng<0) {
-                rightThrust *= 1-(hdng*2*m_args.skewed_motor_force_factor);
-                leftThrust  *= 1+hdng*2;
-              }
-              
               m_thrust[0].value = Math::trimValue(leftThrust, -1.0, 1.0);
               m_thrust[1].value = Math::trimValue(rightThrust, -1.0, 1.0);
 
