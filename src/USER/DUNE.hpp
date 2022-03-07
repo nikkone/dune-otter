@@ -30,6 +30,8 @@
 
 // USER module headers.
 #include <USER/Hardware.hpp>
+#include <USER/Control.hpp>
+
 
 
 //! DUNE: Uniform Navigational Environment.
@@ -40,5 +42,6 @@ namespace DUNE
 //! into global scope. Use it like this: 'using USER_NAMESPACES;'
 #define USER_NAMESPACES                         \
   namespace DUNE;                               \
-  using namespace DUNE::Hardware                
+  using namespace DUNE::Hardware;                \
+  using namespace DUNE::Control;
 #endif
