@@ -31,8 +31,8 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <boost/circular_buffer.hpp>
-#include "MultipleReceiverEKF.hpp"
-#include "SingleReceiverEKF.hpp"
+#include <FishTagEstimators/MultipleReceiverEKF.hpp>
+#include <FishTagEstimators/SingleReceiverEKF.hpp>
 
 
 #define LOGFTOILE 1
@@ -82,15 +82,15 @@ namespace SourceEstimators
       //! Datastructure to hold task arguments/parameters
       Arguments m_args;
 
-      MultipleReceiverEKF::tagBool_t unprocessedData;
+      FishTagEstimators::Estimator::tagBool_t unprocessedData;
 
-      MultipleReceiverEKF::tagBuffer_t tagBuffer;
+      FishTagEstimators::Estimator::tagBuffer_t tagBuffer;
 
-      MultipleReceiverEKF m_ekf;
-      SingleReceiverEKF m_sekf;
+      FishTagEstimators::MultipleReceiverEKF m_ekf;
+      FishTagEstimators::SingleReceiverEKF m_sekf;
 
 
-      std::vector<Estimator*> estimators;
+      std::vector<FishTagEstimators::Estimator*> estimators;
       //! Timer responsible for running filter timestep
       Time::Counter<float> m_filter_timer;
 
@@ -168,7 +168,7 @@ namespace SourceEstimators
       {
         estimators.push_back(&m_sekf);
         //estimators.push_back(&m_ekf);
-        for(std::vector<Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
+        for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
           (*it)->setSoundSpeed(m_args.init_c_sound);
           (*it)->setAllowedTimeShift(m_args.max_time_shift_ms);
           (*it)->setTDOACovariance(m_args.rr_cov);
@@ -180,6 +180,12 @@ namespace SourceEstimators
           Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
           Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
           );
+          (*it)->setParameter("receiver", 1000052);
+          (*it)->setParameter("receiver_depth", -2.0);
+          (*it)->setParameter("tag_period", 10.0);
+          (*it)->setParameter("max_jitter", 0.01);
+          (*it)->setParameter("max_updates_per_new_measurement", 1);
+          (*it)->setParameter("max_correction_attempts", 0);
           std::ofstream logOutStream;
           logOutStream.open(m_args.log_folder_and_prefix + (*it)->name + ".csv", std::ofstream::out | std::ofstream::trunc);
           if (logOutStream.good()) {
@@ -201,7 +207,7 @@ namespace SourceEstimators
           tagBuffer[msg->serial_no]->push_back(*msg);
           unprocessedData[msg->serial_no] = true;
           //printNewBool();
-          for(std::vector<Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
+          for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
             (*it)->update(tagBuffer, unprocessedData);
           }
           //printNewBool();
@@ -211,7 +217,7 @@ namespace SourceEstimators
 
       void
       onResourceRelease(void) {
-        for (MultipleReceiverEKF::tagBuffer_t::iterator it = tagBuffer.begin(); it != tagBuffer.end(); it++)
+        for (FishTagEstimators::Estimator::tagBuffer_t::iterator it = tagBuffer.begin(); it != tagBuffer.end(); it++)
         {
           Memory::clear(it->second);
           spew("Cleared buffer for receiver %u", it->first);
@@ -219,7 +225,7 @@ namespace SourceEstimators
         tagBuffer.clear();
       }
       void printNewBool(void) {
-        for (MultipleReceiverEKF::tagBool_t::iterator it = unprocessedData.begin(); it != unprocessedData.end(); it++)
+        for (FishTagEstimators::Estimator::tagBool_t::iterator it = unprocessedData.begin(); it != unprocessedData.end(); it++)
         {
           if(it->second) {
             inf("Receiver %u True", it->first);
@@ -238,7 +244,7 @@ namespace SourceEstimators
       //! @param [in] result The result to be logged. This is a NED value
       //! @param [in] in_logfilename Filename of file written to
       //! @param [in] logname Name used for the ID in the dispatched IMC::RemoteSensorInfo
-      void logResult(Estimator* est, const std::string &in_logfilename, const std::string &logname) {
+      void logResult(FishTagEstimators::Estimator* est, const std::string &in_logfilename, const std::string &logname) {
         double lati,longi;
         std::tuple<double, double, double>  estimate = est->getEstimate();
         double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
@@ -276,7 +282,7 @@ namespace SourceEstimators
         while(!stopping()) {
           if(m_filter_timer.overflow()) {
             m_filter_timer.reset();
-            for(std::vector<Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
+            for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
               (*it)->predict();
               if(( *it)->isActive()) {
                 logResult((*it), m_args.log_folder_and_prefix + (*it)->name + ".csv", (*it)->name);
