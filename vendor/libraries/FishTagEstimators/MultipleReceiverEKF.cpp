@@ -1,4 +1,5 @@
 #include "MultipleReceiverEKF.hpp"
+#include <iostream>
   //! Task that runst source position estimation algorithms for IMC::TBRFishTag
   //! @author Nikolai Lauvås
 namespace FishTagEstimators
@@ -21,7 +22,7 @@ namespace FishTagEstimators
     Estimator::initialize(A_inn, Q_inn, P0_inn, x0_inn);
   }
 
-  void MultipleReceiverEKF::update(const tagBuffer_t &tagBuffer, tagBool_t &unprocessedData) {
+  void MultipleReceiverEKF::update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData) {
     //std::cout << "update"<< std::endl << std::endl;
     if(tagBuffer.size() <2)
       return;
@@ -41,11 +42,11 @@ namespace FishTagEstimators
     unsigned outer = 0;
     unsigned inner;
     unsigned baselines = 0;
-    for (tagBuffer_t::const_iterator outerreceiver = tagBuffer.begin(); outerreceiver != tagBuffer.end(); outerreceiver++) {
+    for (tagBufferMap_t::const_iterator outerreceiver = tagBuffer.begin(); outerreceiver != tagBuffer.end(); outerreceiver++) {
       toNEDframe(*outerreceiver->second->rbegin(), tempNED);
       NED.col(outer) << std::get<0>(tempNED), std::get<1>(tempNED),std::get<2>(tempNED);
       inner = outer;
-      for (tagBuffer_t::const_iterator receiver = std::next(outerreceiver); receiver != tagBuffer.end(); receiver++) {
+      for (tagBufferMap_t::const_iterator receiver = std::next(outerreceiver); receiver != tagBuffer.end(); receiver++) {
         inner++;
         //inf("%u - %u", outerreceiver->first, receiver->first);
         if( unprocessedData[outerreceiver->first] || unprocessedData[receiver->first] ) {

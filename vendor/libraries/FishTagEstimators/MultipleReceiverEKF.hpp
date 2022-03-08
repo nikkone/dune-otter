@@ -1,13 +1,9 @@
-#ifndef FishTag_MultipleReceiverEKF
-#define FishTag_MultipleReceiverEKF
-#include <DUNE/DUNE.hpp>
-#include <boost/circular_buffer.hpp>
-#include <boost/math/special_functions/binomial.hpp>
-#include <unistd.h>
+#ifndef FishTagEstimator_MultipleReceiverEKF
+#define FishTagEstimator_MultipleReceiverEKF
 #include <Eigen/Core>
 #include <OpenFilterPack/KalmanFilterDynamic.hpp>
 #include "Estimator.hpp"
-#include <iostream>
+
 
 //! Task that runst source position estimation algorithms for IMC::TBRFishTag
 //! @author Nikolai Lauvås
@@ -18,7 +14,7 @@ namespace FishTagEstimators
     public:
       MultipleReceiverEKF() {};
       ~MultipleReceiverEKF() {};
-      void update(const tagBuffer_t &tagBuffer, tagBool_t &unprocessedData);
+      void update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData);
       void predict();
 
       OFP::KalmanFilterDynamic<double, c_states> ekf;
@@ -35,4 +31,4 @@ namespace FishTagEstimators
       
   };
 }
-#endif // FishTag_MultipleReceiverEKF
+#endif // FishTagEstimator_MultipleReceiverEKF

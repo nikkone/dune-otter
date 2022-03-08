@@ -30,7 +30,6 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
-#include <boost/circular_buffer.hpp>
 #include <FishTagEstimators/MultipleReceiverEKF.hpp>
 #include <FishTagEstimators/SingleReceiverEKF.hpp>
 
@@ -84,7 +83,7 @@ namespace SourceEstimators
 
       FishTagEstimators::Estimator::tagBool_t unprocessedData;
 
-      FishTagEstimators::Estimator::tagBuffer_t tagBuffer;
+      FishTagEstimators::Estimator::tagBufferMap_t tagBuffer;
 
       FishTagEstimators::MultipleReceiverEKF m_ekf;
       FishTagEstimators::SingleReceiverEKF m_sekf;
@@ -201,10 +200,10 @@ namespace SourceEstimators
         if(msg->trans_id == m_args.tag_id) {
           if(tagBuffer.find(msg->serial_no) == tagBuffer.end()) {
             // New receiver found, create buffer
-            tagBuffer[msg->serial_no] = new boost::circular_buffer<IMC::TBRFishTag>(c_buffer_size);
+            tagBuffer[msg->serial_no] = new FishTagEstimators::Estimator::tagBuffer_t(c_buffer_size);
             spew("Created buffer for receiver %u", msg->serial_no);
           }
-          tagBuffer[msg->serial_no]->push_back(*msg);
+          tagBuffer[msg->serial_no]->push_back(toEstimatorTag(*msg));
           unprocessedData[msg->serial_no] = true;
           //printNewBool();
           for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
@@ -217,7 +216,7 @@ namespace SourceEstimators
 
       void
       onResourceRelease(void) {
-        for (FishTagEstimators::Estimator::tagBuffer_t::iterator it = tagBuffer.begin(); it != tagBuffer.end(); it++)
+        for (FishTagEstimators::Estimator::tagBufferMap_t::iterator it = tagBuffer.begin(); it != tagBuffer.end(); it++)
         {
           Memory::clear(it->second);
           spew("Cleared buffer for receiver %u", it->first);
@@ -234,6 +233,24 @@ namespace SourceEstimators
           }
         }
       }
+
+
+      FishTagEstimators::TBRFishTag toEstimatorTag(DUNE::IMC::TBRFishTag tagIn) {
+        FishTagEstimators::TBRFishTag tagOut;
+        tagOut.serial_no = tagIn.serial_no;
+        tagOut.unix_timestamp = tagIn.unix_timestamp;
+        tagOut.millis = tagIn.millis;
+        tagOut.trans_protocol = tagIn.trans_protocol;
+        tagOut.trans_id = tagIn.trans_id;
+        tagOut.trans_data = tagIn.trans_data;
+        tagOut.snr = tagIn.snr;
+        tagOut.trans_freq = tagIn.trans_freq;
+        tagOut.recv_mem_addr = tagIn.recv_mem_addr;
+        tagOut.lat = tagIn.lat;
+        tagOut.lon = tagIn.lon;
+        return tagOut;
+      }
+
       void
       onResourceInitialization(void)
       {

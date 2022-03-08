@@ -66,11 +66,11 @@ namespace FishTagEstimators
     }
   }
 
-  void SingleReceiverEKF::update(const tagBuffer_t &tagBuffer, tagBool_t &unprocessedData) {
+  void SingleReceiverEKF::update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData) {
     if(tagBuffer.find(receiver) !=tagBuffer.end()) {
 
       
-      const boost::circular_buffer<DUNE::IMC::TBRFishTag> *receiverBuffer = tagBuffer.find(receiver)->second;
+      const tagBuffer_t *receiverBuffer = tagBuffer.find(receiver)->second;
           unsigned int m_max_correction_attempts;
       if(max_correction_attempts == 0)
         m_max_correction_attempts = receiverBuffer->max_size()-2;
@@ -80,7 +80,7 @@ namespace FishTagEstimators
       //inf("Update %ld", c_buffer_size - receiverBuffer->size());
       // Create unix timestamp in milliseconds for the most recent measurement
       
-      //boost::circular_buffer<DUNE::IMC::TBRFishTag>::const_reverse_iterator it = tagBuffer.find(receiver)->second->rbegin();
+      //tagBuffer_t::const_reverse_iterator it = tagBuffer.find(receiver)->second->rbegin();
       double measurement_millis = receiverBuffer->rbegin()->unix_timestamp + (double)receiverBuffer->rbegin()->millis/1000;
 
       unsigned int updates = 0;
@@ -88,7 +88,7 @@ namespace FishTagEstimators
       // Check the buffer of older tag detections from the second newest to the oldest.
       // Only combine if a multiple of the period is found within a given threashold/jitter.
       //std::cout << "Steg0"<< std::endl;
-      for(boost::circular_buffer<DUNE::IMC::TBRFishTag>::const_reverse_iterator i=receiverBuffer->rbegin()+1; i != receiverBuffer->rend();i++) {
+      for(tagBuffer_t::const_reverse_iterator i=receiverBuffer->rbegin()+1; i != receiverBuffer->rend();i++) {
         attempt++;
         //inf("%d - %d", receiverBuffer->rbegin()->unix_timestamp, i->unix_timestamp);
 
