@@ -73,6 +73,8 @@ namespace Control
         std::string elabel_gps;
         //! Min speed to switch to course control
         double minCourseSpeed;
+        //! Minimum timestep accepted
+        double min_timestep_accepted;
       };
 
       struct Task: public Tasks::Task
@@ -181,6 +183,11 @@ namespace Control
           .defaultValue("false")
           .description("Log the size of each PID parcel");
 
+          param("Minimum timestep accepted", m_args.min_timestep_accepted)
+          .defaultValue("0.5")
+          .minimumValue("0.0")
+          .maximumValue("5.0")
+          .description("Log the size of each PID parcel");
           m_desired_speed = 0.0;
           m_speed_units = IMC::SUNITS_PERCENTAGE;
 
@@ -338,7 +345,15 @@ namespace Control
             m_desired_speed = msg->u;
             return;
           }
-
+          if(tstep > m_args.min_timestep_accepted) {
+            reset();
+            debug("disabling due to timestep too large");
+            setEntityState(IMC::EntityState::ESTA_ERROR, "disabling due to timestep too large");
+            IMC::Abort abort;
+            abort.setDestination(getSystemId());
+            dispatch(abort);
+            // TODO: Consider milder action, such as a roof on delta.
+          }
           // Check if we have a valid time delta.
           if (tstep < 0.0)
             return;
@@ -372,7 +387,7 @@ namespace Control
           }
 
             float force[2] = {thrust_com + thrust_diff, thrust_com - thrust_diff};
-            inf("Thrust com: %f, diff: %f", thrust_com, thrust_diff);
+            spew("Thrust com: %f, diff: %f", thrust_com, thrust_diff);
 
             // Positive saturation
             if(force[0] > m_args.max_force) {
@@ -395,7 +410,7 @@ namespace Control
               force[0] = -m_args.min_force;
               force[1] = m_args.min_force;
             }
-            inf("Force: %f, %f", force[0], force[1]);
+            spew("Force: %f, %f", force[0], force[1]);
 
             m_act[0].value = forceToThrust(force[0]);
             m_act[1].value = forceToThrust(force[1]);
@@ -404,7 +419,7 @@ namespace Control
 
             m_act[1].value = Math::trimValue(m_act[1].value, -1.0, 1.0);
 
-            inf("act: %f, %f", m_act[0].value, m_act[1].value);
+            spew("act: %f, %f", m_act[0].value, m_act[1].value);
 
             // TODO: Hva viss negativ går i metning?
             // TODO: 
