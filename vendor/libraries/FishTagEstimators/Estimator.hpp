@@ -1,10 +1,8 @@
 #ifndef FishTag_Estimator
 #define FishTag_Estimator
-#include <boost/circular_buffer.hpp>
 #include <Eigen/Core>
-#include <map>
 
-#include "TBRFishTag.hpp"
+#include "TagBuffer.hpp"
   //! Base class for source position estimator algorithms on IMC::TBRFishTag
   //! @author Nikolai Lauvås
 namespace FishTagEstimators
@@ -14,10 +12,6 @@ namespace FishTagEstimators
     public:
       std::string name;
       static const unsigned c_states = 3;
-      typedef std::map<uint32_t, bool> tagBool_t;
-      typedef boost::circular_buffer<TBRFishTag> tagBuffer_t;
-      typedef std::map<uint32_t, tagBuffer_t*> tagBufferMap_t;
-
       virtual void update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData);
       virtual void predict();
 

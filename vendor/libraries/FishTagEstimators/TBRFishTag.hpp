@@ -1,3 +1,5 @@
+#ifndef FishTag_TBRFishTag
+#define FishTag_TBRFishTag
 namespace FishTagEstimators
 {    
     class TBRFishTag
@@ -46,5 +48,12 @@ namespace FishTagEstimators
       double lat;
       //! Longitude (WGS-84).
       double lon;
+      //! North relative to fixed LL point
+      double N;
+      //! East relative to fixed LL point
+      double E;
+      //! Down relative to fixed LL point
+      double D;
     };
 }
+#endif // FishTag_TBRFishTag

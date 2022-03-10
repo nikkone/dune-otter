@@ -33,6 +33,8 @@
 #include <FishTagEstimators/MultipleReceiverEKF.hpp>
 #include <FishTagEstimators/SingleReceiverEKF.hpp>
 
+#include <FishTagEstimators/DUNETagBuffer.hpp>
+
 
 #define LOGFTOILE 1
 namespace SourceEstimators
@@ -43,7 +45,6 @@ namespace SourceEstimators
   {
     using DUNE_NAMESPACES;
 
-    static const unsigned c_buffer_size = 5;
     static const unsigned c_states = 3;
 
     struct Arguments
@@ -81,14 +82,12 @@ namespace SourceEstimators
       //! Datastructure to hold task arguments/parameters
       Arguments m_args;
 
-      FishTagEstimators::Estimator::tagBool_t unprocessedData;
-
-      FishTagEstimators::Estimator::tagBufferMap_t tagBuffer;
+      FishTagEstimators::DUNETagBuffers_t tagBuffers;
 
       FishTagEstimators::MultipleReceiverEKF m_ekf;
       FishTagEstimators::SingleReceiverEKF m_sekf;
 
-
+      
       std::vector<FishTagEstimators::Estimator*> estimators;
       //! Timer responsible for running filter timestep
       Time::Counter<float> m_filter_timer;
@@ -197,58 +196,28 @@ namespace SourceEstimators
       void
       consume(const IMC::TBRFishTag* msg)
       {
-        if(msg->trans_id == m_args.tag_id) {
-          if(tagBuffer.find(msg->serial_no) == tagBuffer.end()) {
-            // New receiver found, create buffer
-            tagBuffer[msg->serial_no] = new FishTagEstimators::Estimator::tagBuffer_t(c_buffer_size);
+
+          if(tagBuffers.find(msg->trans_id) == tagBuffers.end()) {
+            // New tag found, create buffer
+            tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 5);
             spew("Created buffer for receiver %u", msg->serial_no);
           }
-          tagBuffer[msg->serial_no]->push_back(toEstimatorTag(*msg));
-          unprocessedData[msg->serial_no] = true;
-          //printNewBool();
-          for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
-            (*it)->update(tagBuffer, unprocessedData);
+          if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
+            for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
+              (*it)->update(tagBuffers[msg->trans_id]->tagBuffer, tagBuffers[msg->trans_id]->unprocessedData);
+            }
+            spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
           }
-          //printNewBool();
-        }
-        // Ignore other tags
       }
 
       void
       onResourceRelease(void) {
-        for (FishTagEstimators::Estimator::tagBufferMap_t::iterator it = tagBuffer.begin(); it != tagBuffer.end(); it++)
+        for (FishTagEstimators::DUNETagBuffers_t::iterator it = tagBuffers.begin(); it != tagBuffers.end(); it++)
         {
           Memory::clear(it->second);
-          spew("Cleared buffer for receiver %u", it->first);
+          spew("Cleared buffer for tag %u", it->first);
         }
-        tagBuffer.clear();
-      }
-      void printNewBool(void) {
-        for (FishTagEstimators::Estimator::tagBool_t::iterator it = unprocessedData.begin(); it != unprocessedData.end(); it++)
-        {
-          if(it->second) {
-            inf("Receiver %u True", it->first);
-          } else {
-            inf("Receiver %u False", it->first);
-          }
-        }
-      }
-
-
-      FishTagEstimators::TBRFishTag toEstimatorTag(DUNE::IMC::TBRFishTag tagIn) {
-        FishTagEstimators::TBRFishTag tagOut;
-        tagOut.serial_no = tagIn.serial_no;
-        tagOut.unix_timestamp = tagIn.unix_timestamp;
-        tagOut.millis = tagIn.millis;
-        tagOut.trans_protocol = tagIn.trans_protocol;
-        tagOut.trans_id = tagIn.trans_id;
-        tagOut.trans_data = tagIn.trans_data;
-        tagOut.snr = tagIn.snr;
-        tagOut.trans_freq = tagIn.trans_freq;
-        tagOut.recv_mem_addr = tagIn.recv_mem_addr;
-        tagOut.lat = tagIn.lat;
-        tagOut.lon = tagIn.lon;
-        return tagOut;
+        tagBuffers.clear();
       }
 
       void

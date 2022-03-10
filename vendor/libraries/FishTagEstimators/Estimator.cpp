@@ -1,5 +1,7 @@
 #include "Estimator.hpp"
-#include <DUNE/DUNE.hpp>
+#include <DUNE/Coordinates/WGS84.hpp>
+#include <DUNE/Math/Angles.hpp>
+#include <iostream>
   //! Base class for source position estimator algorithms on IMC::TBRFishTag
   //! @author Nikolai Lauvås
 namespace FishTagEstimators
@@ -51,7 +53,7 @@ namespace FishTagEstimators
     output[0] = refCoord[0];
     output[1] = refCoord[1];
     output[2] = refCoord[2];
-    WGS84::displace(input[0], input[1], input[2], &(output[0]), &(output[1]), &(output[2]));
+    DUNE::Coordinates::WGS84::displace(input[0], input[1], input[2], &(output[0]), &(output[1]), &(output[2]));
   }
    bool Estimator::isActive() const {
     return false;
