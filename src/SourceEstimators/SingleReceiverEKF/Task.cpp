@@ -377,7 +377,7 @@ namespace SourceEstimators
           Eigen::Matrix<double, 3, 3> C;       // Observation matrix
           C.row(0) = (distance2/r2) - (distance1/r1); // Eq (2.18)
           C.row(1) = (distance2/r2); // Exends the Jacobian with eq (2.20)
-          Eigen::Matrix<double, 1, 3> Hdepth= {0.0,0.0,x(3,0)}; // TODO:: burde være x(2)
+          Eigen::Matrix<double, 1, 3> Hdepth= {0.0,0.0,1.0}; // TODO:: burde være x(2)
           C.row(2) = Hdepth;  
 
           return C;

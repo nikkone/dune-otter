@@ -1,0 +1,29 @@
+      void updateFilter(void) {
+        unsigned receivers = 0;
+        for (unusedData_t::iterator it = unusedData.begin(); it != unusedData.end(); it++) {
+          receivers++;
+        }
+        DUNE::IMC::TBRFishTag newTags[3];
+        if(receivers > 2) {
+          receivers = 0;
+          // Gather data
+          for (unusedData_t::iterator it = unusedData.begin(); it != unusedData.end(); it++) {
+            newTags[receivers] = *(tagBuffer[it->first]->rbegin());
+            spew("Receiver %u used for estimate update.", newTags[receivers].serial_no);
+            receivers++;
+            it->second = false; // Set unusedData for the receiver as false.
+            if(receivers >= 3) {
+              break;
+            }
+          }
+          // Update estimate
+          for(unsigned i=0;i<3-1;i++) {
+            long int delta = ((long int)newTags[i].unix_timestamp - newTags[i+1].unix_timestamp)*1000 + ((int)newTags[i].millis - newTags[i+1].millis);
+            if( std::abs(delta) > 300.0) { // TDOA
+              spew("Stopped update with delta %ld", delta);
+              return; // Stop update if time difference too large
+            }
+            spew("Accepted delta %ld", delta);
+          }
+        }
+      }
