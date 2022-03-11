@@ -14,7 +14,8 @@ namespace FishTagEstimators
     public:
       MultipleReceiverEKF() {};
       ~MultipleReceiverEKF() {};
-      void update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData);
+      void update(TagBuffer *tagBuffer);
+
       void predict();
 
       OFP::KalmanFilterDynamic<double, c_states> ekf;

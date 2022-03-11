@@ -1,13 +1,11 @@
 #include "Estimator.hpp"
-#include <DUNE/Coordinates/WGS84.hpp>
-#include <DUNE/Math/Angles.hpp>
 #include <iostream>
   //! Base class for source position estimator algorithms on IMC::TBRFishTag
   //! @author Nikolai Lauvås
 namespace FishTagEstimators
 {
-   void Estimator::update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData) {
-    std::cout << "Base. Buffersize:" << tagBuffer.size() << "Unprocessed size" << unprocessedData.size() <<  std::endl;
+   void Estimator::update(TagBuffer *tagBuffer) {
+    std::cout << "Base. Buffersize:" << tagBuffer->tagBuffer.size() << "Unprocessed size" << tagBuffer->unprocessedData.size() <<  std::endl;
   }
    void Estimator::predict() {return;}
 
@@ -29,10 +27,11 @@ namespace FishTagEstimators
     rz_cov = depthCovariance;
   }
 
-  void Estimator::setReferenceCoordinate(double reference[2]) {
-    refCoord[0] = DUNE::Math::Angles::radians(reference[0]);
-    refCoord[1] = DUNE::Math::Angles::radians(reference[1]);
-    refCoord[2] = 0.0;
+
+  Eigen::Matrix<double, Estimator::c_states, 1> Estimator::getNED(TBRFishTag &tagIn) {
+    Eigen::Matrix<double, c_states, 1> ret;
+    ret << tagIn.N, tagIn.E, tagIn.D;
+    return ret;
   }
 
    void Estimator::initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
@@ -45,16 +44,15 @@ namespace FishTagEstimators
     std::cout << "P0_inn" << std::endl << P0_inn << std::endl;
     std::cout << "x0_inn" << std::endl << x0_inn << std::endl;
   }
-  //! Takes a NED frame position and transforms it to a WGS84 lat/lon/elevation position
-  //! @param [in] input NED frame position to transform {North, East, Down} [meters] relative to the reference coordinate
-  //! @param [in] refCoord Reference coordinate in WGS84 {lat[rad], lon [rad], elevation [m]} 
-  //! @param [out] output Input position converted to WGS84 coordinates {lat[rad], lon [rad], elevation [m]} 
-  void Estimator::fromNEDframe(const double input[3], double (&output)[3]) {
-    output[0] = refCoord[0];
-    output[1] = refCoord[1];
-    output[2] = refCoord[2];
-    DUNE::Coordinates::WGS84::displace(input[0], input[1], input[2], &(output[0]), &(output[1]), &(output[2]));
+
+  void Estimator::setPositionEstimate(const Eigen::Matrix<double, c_states, 1> &x0_inn) {
+    std::cout << "x0_inn" << std::endl << x0_inn << std::endl;
   }
+  bool Estimator::activateEstimator() {
+    std::cout << "Base" << std::endl;
+    return false;
+  }
+
    bool Estimator::isActive() const {
     return false;
   }
@@ -85,16 +83,6 @@ namespace FishTagEstimators
       return false;
   }
 
-  //! Turns the latitude and longtitude of the input to a NED representation with refCoord as origin.
-  //! @param [in] input Tag detection to take lat/lon [rad] from 
-  //! @param [in] refCoord Reference coordinate in {lat[rad], lon [rad], elevation [m]} 
-  //! @param [out] output NED frame representation of input in {North, East, Down} [meters] relative to the reference coordinate
-  void Estimator::toNEDframe(const TBRFishTag &input, std::tuple<double, double, double> &output)
-  {
-    //inf("%f, %f",Math::Angles::degrees(input.lat), Math::Angles::degrees(input.lon));
-    DUNE::Coordinates::WGS84::displacement(refCoord[0], refCoord[1], refCoord[2], input.lat, input.lon, 0.0, &(std::get<0>(output)), &(std::get<1>(output)), &(std::get<2>(output)));
-    //std::get<2>(output) = 0.0;
-  }
   void Estimator::registerParameter(std::string parameterName) {
     parameters[parameterName] = parameters.size();
   }

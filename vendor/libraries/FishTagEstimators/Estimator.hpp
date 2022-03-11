@@ -12,7 +12,9 @@ namespace FishTagEstimators
     public:
       std::string name;
       static const unsigned c_states = 3;
-      virtual void update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData);
+      //virtual void update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData);
+      virtual void update(TagBuffer *tagBuffer);
+
       virtual void predict();
 
       virtual std::tuple<double, double, double> getEstimate();
@@ -22,18 +24,14 @@ namespace FishTagEstimators
       void setTDOACovariance(double TDOACovariance);
       void setDepthCovariance(double depthCovariance);
 
-      void setReferenceCoordinate(double reference[2]);
+      Eigen::Matrix<double, c_states, 1> getNED(TBRFishTag &tagIn);
 
       virtual void initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &Q_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &P0_inn,
                                         const Eigen::Matrix<double, c_states, 1> &x0_inn);
 
-      //! Takes a NED frame position and transforms it to a WGS84 lat/lon/elevation position
-      //! @param [in] input NED frame position to transform {North, East, Down} [meters] relative to the reference coordinate
-      //! @param [in] refCoord Reference coordinate in WGS84 {lat[rad], lon [rad], elevation [m]} 
-      //! @param [out] output Input position converted to WGS84 coordinates {lat[rad], lon [rad], elevation [m]} 
-      void fromNEDframe(const double input[3], double (&output)[3]);
+      virtual void setPositionEstimate(const Eigen::Matrix<double, c_states, 1> &x0_inn);
 
       virtual bool isActive() const;
 
@@ -44,17 +42,13 @@ namespace FishTagEstimators
         return os;
       }
       bool setParameter(std::string parameterName, double value);
+      uint32_t trans_id;
     protected:
+      virtual bool activateEstimator();
       //! Check if the TDOA indicates a time shift larger than accepted
       //! @param [in] TDOA Time Difference of Arrival 
       //! @return Boolean representing accepted/not accepted
       bool timeShiftCorrect(const long int TDOA);
-
-      //! Turns the latitude and longtitude of the input to a NED representation with refCoord as origin.
-      //! @param [in] input Tag detection to take lat/lon [rad] from 
-      //! @param [in] refCoord Reference coordinate in {lat[rad], lon [rad], elevation [m]} 
-      //! @param [out] output NED frame representation of input in {North, East, Down} [meters] relative to the reference coordinate
-      void toNEDframe(const TBRFishTag &input, std::tuple<double, double, double> &output);
 
       void registerParameter(std::string parameterName);
 
@@ -68,6 +62,7 @@ namespace FishTagEstimators
       double rr_cov;
       //! Depth measurement Covariance
       double rz_cov;
+
   };
 }
 #endif // FishTag_Estimator

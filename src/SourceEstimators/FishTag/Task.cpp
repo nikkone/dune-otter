@@ -166,12 +166,14 @@ namespace SourceEstimators
       {
         estimators.push_back(&m_sekf);
         //estimators.push_back(&m_ekf);
+
         for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
+          (*it)->trans_id = m_args.tag_id;
           (*it)->setSoundSpeed(m_args.init_c_sound);
           (*it)->setAllowedTimeShift(m_args.max_time_shift_ms);
           (*it)->setTDOACovariance(m_args.rr_cov);
           (*it)->setDepthCovariance(m_args.rz_cov);
-          (*it)->setReferenceCoordinate(m_args.reference.data());
+          //(*it)->setReferenceCoordinate(m_args.reference.data());
           (*it)->initialize(
           Eigen::Matrix3d::Identity(),
           Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data()),
@@ -200,11 +202,12 @@ namespace SourceEstimators
           if(tagBuffers.find(msg->trans_id) == tagBuffers.end()) {
             // New tag found, create buffer
             tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 5);
+            tagBuffers[msg->trans_id]->setReferenceCoordinate(m_args.reference.data());
             spew("Created buffer for receiver %u", msg->serial_no);
           }
           if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
             for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
-              (*it)->update(tagBuffers[msg->trans_id]->tagBuffer, tagBuffers[msg->trans_id]->unprocessedData);
+              (*it)->update(tagBuffers[msg->trans_id]);
             }
             spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
           }
@@ -231,11 +234,17 @@ namespace SourceEstimators
       //! @param [in] in_logfilename Filename of file written to
       //! @param [in] logname Name used for the ID in the dispatched IMC::RemoteSensorInfo
       void logResult(FishTagEstimators::Estimator* est, const std::string &in_logfilename, const std::string &logname) {
+        //std::tuple<double, double, double>  estimate = est->getEstimate();
+        //double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
+        //spew("New Kalman Estimate: (N,E,D)= %.15f,%.15f,%.15f", result[0], result[1], result[2]);
+
         double lati,longi;
         std::tuple<double, double, double>  estimate = est->getEstimate();
         double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
         double latLon[3];
-        est->fromNEDframe(result, latLon);
+
+        tagBuffers[est->trans_id]->fromNEDframe(result, latLon);
+        //est->fromNEDframe(result, latLon);
         lati=latLon[0], longi=latLon[1];
 
         // Send output to Neptus/DUNE log
@@ -260,6 +269,7 @@ namespace SourceEstimators
         }   
         #endif
         spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+      
       }
 
       void

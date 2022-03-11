@@ -40,6 +40,9 @@ namespace FishTagEstimators
     Estimator::initialize(A_inn, Q_inn, P0_inn, x0_inn);
   }
     
+  void SingleReceiverEKF::setPositionEstimate(const Eigen::Matrix<double, c_states, 1> &x0_inn) {
+    ekf.xHat = x0_inn;
+  }
 
   void SingleReceiverEKF::parseParameter(unsigned parameterID, double value) {
     switch(parameterID) {
@@ -66,11 +69,12 @@ namespace FishTagEstimators
     }
   }
 
-  void SingleReceiverEKF::update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData) {
-    if(tagBuffer.find(receiver) !=tagBuffer.end()) {
+  //void SingleReceiverEKF::update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData) {
+  void SingleReceiverEKF::update(TagBuffer *tagBuffer) {
+    if(tagBuffer->tagBuffer.find(receiver) !=tagBuffer->tagBuffer.end()) {
 
       
-      const tagBuffer_t *receiverBuffer = tagBuffer.find(receiver)->second;
+      const tagBuffer_t *receiverBuffer = tagBuffer->tagBuffer.find(receiver)->second;
           unsigned int m_max_correction_attempts;
       if(max_correction_attempts == 0)
         m_max_correction_attempts = receiverBuffer->max_size()-2;
@@ -116,24 +120,19 @@ namespace FishTagEstimators
           // Depth reading from the current tag
           double depth = i->trans_data*0.392;
 
-          // Convert the WGS84 to a local NED frame
-          std::tuple<double, double, double> NED1;
-          std::tuple<double, double, double> NED2;
-          toNEDframe(*receiverBuffer->rbegin(), NED1);
-          toNEDframe(*i, NED2);
-
           // Compile all mesurements for convenience
           Eigen::Matrix<double, 9, 1> allMeasurements;
           
-          allMeasurements << std::get<0>(NED2), std::get<1>(NED2) ,receiver_depth, std::get<0>(NED1) ,std::get<1>(NED1) ,receiver_depth, rdoa, rangeSNR, depth;
+          allMeasurements << i->N, i->E ,receiver_depth, receiverBuffer->rbegin()->N,receiverBuffer->rbegin()->E ,receiver_depth, rdoa, rangeSNR, depth;
+
 
           // Update the algebraic solver
           if (aslv.addMeasurement(allMeasurements)) {
           //std::cout << "Steg2"<< std::endl;
             // Initialize kalman filters with position found with the algebraic solver
-            if(!ekf.active) {
-              ekf.xHat << aslv.x(0), aslv.x(1), aslv.x(2);
-              ekf.active = true;
+            if(!isActive()) {
+              setPositionEstimate(aslv.x);
+              activateEstimator();
             }
             
             // Log results from algebraic solver
@@ -142,7 +141,7 @@ namespace FishTagEstimators
           }
 
           // Update kalman filters with current measurement and inputs
-          if(ekf.active) {
+          if(isActive()) {
             //std::cout << "Steg3"<< std::endl;
             // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
             Eigen::Matrix<double, 3, 1> distance1 = ekf.xHat-allMeasurements.block(0,0,3,1); // X_e-X_rx0
@@ -157,8 +156,6 @@ namespace FishTagEstimators
             // Calculate estimated measurements
             ekf.ykest(0) = r2 - r1; // h is eq (2.16) in masters
             ekf.ykest(1) = ekf.xHat(2,0);
-      ////std::cout << "NED1" << std::endl << std::get<0>(NED1) << ", "<< std::get<1>(NED1) << ", "<< std::get<2>(NED1) << std::endl;
-      ////std::cout << "NED2" << std::endl << std::get<0>(NED2) << ", "<< std::get<1>(NED2) << ", "<< std::get<2>(NED2) <<std::endl;
       ////std::cout << "r1" << std::endl << r1 << std::endl;
       ////std::cout << "r2" << std::endl << r2 << std::endl;
       ////std::cout << "ykest" << std::endl << ekf.ykest << std::endl;
@@ -186,6 +183,7 @@ namespace FishTagEstimators
       //war("No good TDOA value found");
     }
   }
+  
   void SingleReceiverEKF::predict() {
     ekf.predict();
   }

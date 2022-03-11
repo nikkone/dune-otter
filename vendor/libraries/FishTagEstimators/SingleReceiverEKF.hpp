@@ -14,7 +14,8 @@ namespace FishTagEstimators
     public:
       SingleReceiverEKF() {};
       ~SingleReceiverEKF() {};
-      void update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData);
+      //void update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData);
+      void update(TagBuffer *tagBuffer);
       void predict();
 
       OFP::KalmanFilterDynamic<double, c_states> ekf;
@@ -29,6 +30,11 @@ namespace FishTagEstimators
       bool isActive() const {
         return ekf.active;
       }
+      bool activateEstimator() {
+        ekf.active = true;
+        return ekf.active;
+      };
+      void setPositionEstimate(const Eigen::Matrix<double, c_states, 1> &x0_inn);
     private:
       uint32_t receiver;
       double receiver_depth;
