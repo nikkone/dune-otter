@@ -32,6 +32,10 @@
 #include <DUNE/DUNE.hpp>
 #include <FishTagEstimators/MultipleReceiverEKF.hpp>
 #include <FishTagEstimators/SingleReceiverEKF.hpp>
+#include <FishTagEstimators/SingleReceiverUKF.hpp>
+#include <FishTagEstimators/SingleReceiverSRUKF.hpp>
+
+
 
 #include <FishTagEstimators/DUNETagBuffer.hpp>
 
@@ -86,6 +90,10 @@ namespace SourceEstimators
 
       FishTagEstimators::MultipleReceiverEKF m_ekf;
       FishTagEstimators::SingleReceiverEKF m_sekf;
+      FishTagEstimators::SingleReceiverUKF m_sukf;
+      FishTagEstimators::SingleReceiverSRUKF m_ssrukf;
+
+
 
       
       std::vector<FishTagEstimators::Estimator*> estimators;
@@ -165,6 +173,10 @@ namespace SourceEstimators
       onResourceAcquisition(void)
       {
         estimators.push_back(&m_sekf);
+        estimators.push_back(&m_sukf);
+        estimators.push_back(&m_ssrukf);
+
+
         //estimators.push_back(&m_ekf);
 
         for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
