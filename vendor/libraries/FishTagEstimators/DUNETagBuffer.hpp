@@ -10,7 +10,6 @@ namespace FishTagEstimators
     public:
 
       DUNETagBuffer(unsigned tag_id_in, unsigned buffer_size_in) : TagBuffer(tag_id_in, buffer_size_in) {
-
       };
 
       bool

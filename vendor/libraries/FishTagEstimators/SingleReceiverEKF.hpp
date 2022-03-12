@@ -4,17 +4,14 @@
 #include <Eigen/Core>
 #include <OpenFilterPack/KalmanFilterDynamic.hpp>
 #include <OpenFilterPack/AlgebraicSolution.hpp>
-#include "Estimator.hpp"
+#include "SingleReceiverBase.hpp"
 //! Task that runs source position estimation algorithms for IMC::TBRFishTag
 //! @author Nikolai Lauvås
 namespace FishTagEstimators
 {
-  class SingleReceiverEKF : public Estimator
+  class SingleReceiverEKF : public SingleReceiverBase
   {
     public:
-      SingleReceiverEKF() {};
-      ~SingleReceiverEKF() {};
-      //void update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData);
       void update(TagBuffer *tagBuffer);
       void predict();
 
@@ -26,7 +23,6 @@ namespace FishTagEstimators
                                         const Eigen::Matrix<double, c_states, 1> &x0_inn);
       std::tuple<double, double, double> getEstimate();
       void print(std::ostream& os) const;
-      void parseParameter(unsigned parameterID, double value);
       bool isActive() const {
         return ekf.active;
       }
@@ -35,13 +31,8 @@ namespace FishTagEstimators
         return ekf.active;
       };
       void setPositionEstimate(const Eigen::Matrix<double, c_states, 1> &x0_inn);
-    private:
-      uint32_t receiver;
-      double receiver_depth;
-      float tag_period;
-      float max_jitter;
-      unsigned int max_updates_per_new_measurement;
-      unsigned int max_correction_attempts;
+      SingleReceiverEKF() {};
+      ~SingleReceiverEKF() {};
   };
 }
 #endif // FishTagEstimators_SingleReceiverEKF

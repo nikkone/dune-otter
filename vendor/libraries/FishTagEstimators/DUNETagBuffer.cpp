@@ -2,6 +2,7 @@
 #include "DUNETagBuffer.hpp"
 #include <DUNE/Coordinates/WGS84.hpp>
 #include <DUNE/Math/Angles.hpp>
+//#include <DUNE/DUNE.hpp>
 namespace FishTagEstimators
 {    
 
@@ -12,6 +13,7 @@ namespace FishTagEstimators
   }
 
   void DUNETagBuffer::fromNEDframe(const double input[3], double (&output)[3]) {
+    //std::cout << refCoord[0];
     output[0] = refCoord[0];
     output[1] = refCoord[1];
     output[2] = refCoord[2];

@@ -51,6 +51,7 @@ namespace FishTagEstimators
       bool timeShiftCorrect(const long int TDOA);
 
       void registerParameter(std::string parameterName);
+      void registerParameter(std::string parameterName, unsigned id);
 
       virtual void parseParameter(unsigned parameterID, double value);
 

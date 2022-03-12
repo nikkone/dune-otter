@@ -12,7 +12,40 @@ namespace FishTagEstimators
    std::tuple<double, double, double> Estimator::getEstimate() {
     return {0.0,0.0,0.0};
   }
-
+    typedef enum 
+  { 
+    param_trans_id,
+    param_receiver_depth,
+    param_tag_period,
+    param_max_jitter,
+    param_max_updates_per_new_measurement,
+    param_max_correction_attempts
+  } t_param;
+/*  void Estimator::parseParameter(unsigned parameterID, double value) {
+    switch(parameterID) {
+      case param_trans_id:
+        trans_id = value;
+        break;
+      case param_receiver_depth:
+        //receiver_depth = value;
+        break;
+      case param_tag_period:
+        //tag_period = value;
+        break;
+      case param_max_jitter:
+        //max_jitter = value;
+        break;
+      case param_max_updates_per_new_measurement:
+        //max_updates_per_new_measurement = value;
+        break;
+      case param_max_correction_attempts:
+        //max_correction_attempts = value;
+        break;
+      default:
+        std::cout << "Error" << std::endl << std::endl;
+        break;
+    }
+  }*/
   void Estimator::setSoundSpeed(double soundSpeed) {
     c_speed = soundSpeed;
   }
@@ -43,6 +76,7 @@ namespace FishTagEstimators
     std::cout << "Q_inn" << std::endl << Q_inn << std::endl;
     std::cout << "P0_inn" << std::endl << P0_inn << std::endl;
     std::cout << "x0_inn" << std::endl << x0_inn << std::endl;
+    //registerParameter("trans_id");
   }
 
   void Estimator::setPositionEstimate(const Eigen::Matrix<double, c_states, 1> &x0_inn) {
@@ -85,6 +119,9 @@ namespace FishTagEstimators
 
   void Estimator::registerParameter(std::string parameterName) {
     parameters[parameterName] = parameters.size();
+  }
+  void Estimator::registerParameter(std::string parameterName, unsigned id) {
+    parameters[parameterName] = id;
   }
    void Estimator::parseParameter(unsigned parameterID, double value) {
     std::cout << "Error: Parameter " << parameterID << "caught at base with value" << value << std::endl;

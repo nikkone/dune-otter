@@ -35,7 +35,8 @@ namespace FishTagEstimators
     }
 
       void printNewBool(void);
-
+      double calculateRegularPeriod(unsigned receiver, unsigned numUsedDetections = 3);
+      double calculateIrregularPeriod(unsigned receiver, unsigned numUsedDetections);
     };
   typedef std::map<unsigned, FishTagEstimators::TagBuffer*> tagBuffers_t;
 }
