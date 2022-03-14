@@ -10,11 +10,11 @@ namespace FishTagEstimators
     class EstimatorMap
     {
     protected:
+      unsigned buffer_size;
+    public:
       typedef std::vector<FishTagEstimators::Estimator*> EstimatorVector_t;
       //! Used to store pairs of transmitter ID and active estimators on the tag.
       typedef std::map<uint32_t, EstimatorVector_t*> EstimatorMap_t;
-      unsigned buffer_size;
-    public:
       typedef enum { 
         estimatorType_SingleReceiverEKF,
         estimatorType_SingleReceiverUKF,
@@ -43,7 +43,9 @@ namespace FishTagEstimators
     Estimator* addEstimator(uint32_t trans_id, estimatorTypeEnum_t type);
 
     void updateAll(uint32_t trans_id, TagBuffer *tagBuffer);
+    void predictAll();
     void predictAll(uint32_t trans_id);
+
     };
   typedef std::map<unsigned, FishTagEstimators::EstimatorMap*> EstimatorMaps_t;
 }

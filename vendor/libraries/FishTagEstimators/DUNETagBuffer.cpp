@@ -64,5 +64,43 @@ namespace FishTagEstimators
     tagOut.lon = tagIn.lon;
     return tagOut;
   }
+/*
+  //! Function for logging to an external file and dispatching the result as IMC
+  //! @param [in] result The result to be logged. This is a NED value
+  //! @param [in] in_logfilename Filename of file written to
+  //! @param [in] logname Name used for the ID in the dispatched IMC::RemoteSensorInfo
+  void DUNETagBuffer::logResult(Estimator* est, const std::string &in_logfilename, const std::string &logname) {
+    double lati,longi;
+    std::tuple<double, double, double>  estimate = est->getEstimate();
+    double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
+    double latLon[3] = {0,0,0};
+      tagBuffer->fromNEDframe(result, latLon);
+      //est->fromNEDframe(result, latLon);
+      lati=latLon[0], longi=latLon[1];
+
+      // Send output to Neptus/DUNE log
+      IMC::RemoteSensorInfo tagPosition;
+      tagPosition.lat = lati;
+      tagPosition.lon = longi;
+      tagPosition.alt = -result[2];
+      tagPosition.data = std::to_string(result[0]) + std::to_string(result[1]) + "," + std::to_string(result[2]);
+      //tagPosition.data << result[0] << "," << result[1] << "," << result[2];
+      tagPosition.id = logname + std::to_string(m_args.tag_id);
+      dispatch(tagPosition);
+
+      // External Logfile
+      #if LOGFTOILE
+      std::ofstream logOutStream;
+      logOutStream.open(in_logfilename, std::fstream::app);
+      if (logOutStream.good()) {
+        logOutStream.precision(15);
+          logOutStream << Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+          //logOutStream << *est;
+          logOutStream.close();
+      }   
+      #endif
+      //spew("%s :New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", logname.c_str(), result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+    }
+  }*/
 
 }

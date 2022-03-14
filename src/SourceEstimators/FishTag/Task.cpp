@@ -35,6 +35,8 @@
 #include <FishTagEstimators/SingleReceiverUKF.hpp>
 #include <FishTagEstimators/SingleReceiverSRUKF.hpp>
 #include <FishTagEstimators/PeriodEstimator.hpp>
+#include <FishTagEstimators/EstimatorMap.hpp>
+
 
 
 
@@ -95,11 +97,8 @@ namespace SourceEstimators
       FishTagEstimators::SingleReceiverEKF m_sekf;
       FishTagEstimators::SingleReceiverUKF m_sukf;
       FishTagEstimators::SingleReceiverSRUKF m_ssrukf;
-      FishTagEstimators::PeriodEstimator m_pest;
-
-
-
-
+      FishTagEstimators::PeriodEstimator m_pest; 
+      FishTagEstimators::EstimatorMap m_emap;
       
       std::vector<FishTagEstimators::Estimator*> estimators;
       //! Timer responsible for running filter timestep
@@ -177,10 +176,10 @@ namespace SourceEstimators
       void
       onResourceAcquisition(void)
       {
-        estimators.push_back(&m_sekf);
-        estimators.push_back(&m_sukf);
-        estimators.push_back(&m_ssrukf);
-        estimators.push_back(&m_pest);
+        //estimators.push_back(&m_sekf);
+        //estimators.push_back(&m_sukf);
+        //estimators.push_back(&m_ssrukf);
+        //estimators.push_back(&m_pest);
 
         //estimators.push_back(&m_ekf);
 
@@ -228,7 +227,33 @@ namespace SourceEstimators
             tagBuffers[msg->trans_id]->setReferenceCoordinate(m_args.reference.data());
             spew("Created buffer for receiver %u", msg->serial_no);
 
-            
+            FishTagEstimators::Estimator* est = m_emap.addEstimator(msg->trans_id,FishTagEstimators::EstimatorMap::estimatorType_SingleReceiverEKF);
+          est->trans_id = m_args.tag_id;
+          est->setSoundSpeed(m_args.init_c_sound);
+          est->setAllowedTimeShift(m_args.max_time_shift_ms);
+          est->setTDOACovariance(m_args.rr_cov);
+          est->setDepthCovariance(m_args.rz_cov);
+          est->initialize(
+          Eigen::Matrix3d::Identity(),
+          Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data()),
+          Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
+          Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
+          );
+          //(*it)->setParameter("receiver", 45);
+          est->setParameter("receiver", 1000052);
+          est->setParameter("receiver_depth", -0.5);
+          //est->setParameter("trans_id", 201);
+          //est->setParameter("tag_period", 10.0);
+          est->setParameter("max_jitter", 0.01);
+          est->setParameter("max_updates_per_new_measurement", 1);
+          est->setParameter("max_correction_attempts", 0);
+          est->setParameter("interval_mode", 1);
+          std::ofstream logOutStream;
+          logOutStream.open(m_args.log_folder_and_prefix + est->name + ".csv", std::ofstream::out | std::ofstream::trunc);
+          if (logOutStream.good()) {
+              logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
+              logOutStream.close();
+          }
           }
           if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
             for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
@@ -236,6 +261,7 @@ namespace SourceEstimators
             }
             spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
           }
+          m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
       }
 
       void
@@ -293,7 +319,7 @@ namespace SourceEstimators
               logOutStream.close();
           }   
           #endif
-          spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+          spew("%s :New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", logname.c_str(), result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
         } else {
           err("Transmitter ID: %u not in buffer for estimator %s.", est->trans_id, est->name.c_str());
         }
@@ -305,6 +331,19 @@ namespace SourceEstimators
         while(!stopping()) {
           if(m_filter_timer.overflow()) {
             m_filter_timer.reset();
+            m_emap.predictAll();
+            for (FishTagEstimators::EstimatorMap::EstimatorMap_t::iterator it = m_emap.estimatorMap.begin(); it != m_emap.estimatorMap.end(); it++)
+            {
+              if (it->second != NULL)
+              {
+                for(FishTagEstimators::EstimatorMap::EstimatorVector_t::iterator est = it->second->begin();est != it->second->end();est++) {
+                  if(( *est)->isActive()) {
+                    logResult((*est), m_args.log_folder_and_prefix + (*est)->name + ".csv", (*est)->name);
+                  }
+                }
+              }
+            }
+
             for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
               (*it)->predict();
               if(( *it)->isActive()) {

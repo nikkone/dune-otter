@@ -38,6 +38,18 @@ namespace FishTagEstimators
     }
   }
 
+  void EstimatorMap::predictAll() {
+    for (EstimatorMap_t::iterator it = estimatorMap.begin(); it != estimatorMap.end(); it++)
+    {
+      if (it->second != NULL)
+      {
+        for(EstimatorVector_t::iterator est = it->second->begin();est != it->second->end();est++) {
+          (*est)->predict();
+        }
+      }
+    }
+  }
+
   void EstimatorMap::predictAll(uint32_t trans_id) {
     for(EstimatorVector_t::iterator it = estimatorMap[trans_id]->begin();it != estimatorMap[trans_id]->end();it++) {
       (*it)->predict();
