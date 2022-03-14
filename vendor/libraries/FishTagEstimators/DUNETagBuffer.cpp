@@ -6,7 +6,12 @@
 namespace FishTagEstimators
 {    
 
-  void DUNETagBuffer::setReferenceCoordinate(double reference[2]) {
+  void DUNETagBuffer::setReferenceCoordinateRad(double reference[2]) {
+    refCoord[0] = reference[0];
+    refCoord[1] = reference[1];
+    refCoord[2] = 0.0;
+  }
+  void DUNETagBuffer::setReferenceCoordinateDeg(double reference[2]) {
     refCoord[0] = DUNE::Math::Angles::radians(reference[0]);
     refCoord[1] = DUNE::Math::Angles::radians(reference[1]);
     refCoord[2] = 0.0;

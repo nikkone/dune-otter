@@ -17,7 +17,9 @@ namespace FishTagEstimators
 
       TBRFishTag toEstimatorTag(DUNE::IMC::TBRFishTag tagIn);
 
-      void setReferenceCoordinate(double reference[2]);
+      void setReferenceCoordinateRad(double reference[2]);
+      void setReferenceCoordinateDeg(double reference[2]);
+
 
 
       //! Takes a NED frame position and transforms it to a WGS84 lat/lon/elevation position
