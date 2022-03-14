@@ -61,7 +61,7 @@ namespace FishTagEstimators
   }
 
 
-  Eigen::Matrix<double, Estimator::c_states, 1> Estimator::getNED(TBRFishTag &tagIn) {
+  Eigen::Matrix<double, Estimator::c_states, 1> Estimator::getNED(const TBRFishTag &tagIn) {
     Eigen::Matrix<double, c_states, 1> ret;
     ret << tagIn.N, tagIn.E, tagIn.D;
     return ret;

@@ -20,7 +20,7 @@ namespace FishTagEstimators
     if(receiverBuffer != tagBuffer.end()) {
       unsigned minCount = 2;
       unsigned usedDetections = 0;
-      static std::map<double,unsigned> periodCount;//period as index, count as value. Overflow not handled, will only occur at extremely many tag detections before restarting (10^9 if 4 added each run)
+      std::map<double,unsigned> periodCount;//period as index, count as value. Overflow not handled, will only occur at extremely many tag detections before restarting (10^9 if 4 added each run)
       for(tagBuffer_t::const_reverse_iterator i=receiverBuffer->second->rbegin(); i != receiverBuffer->second->rend()-1;i++) {
         double measurement_millis = i->unix_timestamp + (double)i->millis/1000;
         // Time difference of arrival without correcting for period
@@ -31,7 +31,7 @@ namespace FishTagEstimators
         if(!(periodCount.emplace(temp_period,1)).second) {
           periodCount[temp_period]++;
         }
-        // Check if buffered detection satisfies conditions for use in estimator
+        numUsedDetections++;
         if(usedDetections >=numUsedDetections) {
           break;
         }
@@ -55,13 +55,13 @@ namespace FishTagEstimators
     if(receiverBuffer != tagBuffer.end()) {
       unsigned usedDetections = 0;
       for(tagBuffer_t::const_reverse_iterator i=receiverBuffer->second->rbegin(); i != receiverBuffer->second->rend()-1;i++) {
-        double measurement_millis = i->unix_timestamp + (double)i->millis/1000;
+        //double measurement_millis = i->unix_timestamp + (double)i->millis/1000;
         // Time difference of arrival without correcting for period
-        double td = measurement_millis - (i+1)->unix_timestamp - (double)(i+1)->millis/1000;
-        double temp_period = std::round(td);
+        //double td = measurement_millis - (i+1)->unix_timestamp - (double)(i+1)->millis/1000;
+        //double temp_period = std::round(td);
 
 
-        // Check if buffered detection satisfies conditions for use in estimator
+        numUsedDetections++;
         if(usedDetections >=numUsedDetections) {
           break;
         }
