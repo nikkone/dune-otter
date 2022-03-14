@@ -30,18 +30,7 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
-//#include <FishTagEstimators/MultipleReceiverEKF.hpp>
-#include <FishTagEstimators/SingleReceiverEKF.hpp>
-#include <FishTagEstimators/SingleReceiverUKF.hpp>
-#include <FishTagEstimators/SingleReceiverSRUKF.hpp>
-#include <FishTagEstimators/PeriodEstimator.hpp>
 #include <FishTagEstimators/EstimatorMap.hpp>
-
-
-
-
-
-
 #include <FishTagEstimators/DUNETagBuffer.hpp>
 
 
@@ -58,17 +47,12 @@ namespace SourceEstimators
 
     struct Arguments
     {
-      //! Tag ID
-      unsigned tag_id;
       //! Time to wait in while. In practice, this controls how regular the filter timing is
       float message_wait_time;
       //! Period between when filter is run
       float filter_timestep;
       //! Initial Speed of Sound in water
       float init_c_sound;
-// Location settings
-      //! Reference coordinate position (degrees)
-      std::vector<double> reference;
 // Kalman Filter
       //! Extended Kalman filter - Qm
       std::vector<double> ekf_Qm;      
@@ -92,15 +76,8 @@ namespace SourceEstimators
       Arguments m_args;
 
       FishTagEstimators::DUNETagBuffers_t tagBuffers;
-
-      //FishTagEstimators::MultipleReceiverEKF m_ekf;
-      FishTagEstimators::SingleReceiverEKF m_sekf;
-      FishTagEstimators::SingleReceiverUKF m_sukf;
-      FishTagEstimators::SingleReceiverSRUKF m_ssrukf;
-      FishTagEstimators::PeriodEstimator m_pest; 
       FishTagEstimators::EstimatorMap m_emap;
       
-      std::vector<FishTagEstimators::Estimator*> estimators;
       //! Timer responsible for running filter timestep
       Time::Counter<float> m_filter_timer;
 
@@ -111,10 +88,6 @@ namespace SourceEstimators
         .description("The timestep of the filter")
         .units(Units::Second)
         .defaultValue("7.0");
-
-        param("Tag ID", m_args.tag_id)
-        .description("The ID of the tracked fish tag")
-        .defaultValue("40");
 
         param("Initial Speed Of Sound", m_args.init_c_sound)
         .units(Units::MeterPerSecond)
@@ -156,13 +129,6 @@ namespace SourceEstimators
         .size(c_states*c_states)
         .description("Process noise covariance matrix for the extended Kalman filter")
         .defaultValue("1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.1");
-// Others
-
-        param("Reference Coordinate", m_args.reference)
-        .defaultValue("63.334, 10.084333")
-        .units(Units::Degree)
-        .size(2)
-        .description("Origin of the reference coordinate system");
 
         bind<IMC::TBRFishTag>(this);
       }
@@ -176,45 +142,8 @@ namespace SourceEstimators
       void
       onResourceAcquisition(void)
       {
-        //estimators.push_back(&m_sekf);
-        //estimators.push_back(&m_sukf);
-        //estimators.push_back(&m_ssrukf);
-        //estimators.push_back(&m_pest);
 
-        //estimators.push_back(&m_ekf);
-
-        for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
-          (*it)->trans_id = m_args.tag_id;
-          (*it)->setSoundSpeed(m_args.init_c_sound);
-          (*it)->setAllowedTimeShift(m_args.max_time_shift_ms);
-          (*it)->setTDOACovariance(m_args.rr_cov);
-          (*it)->setDepthCovariance(m_args.rz_cov);
-          //(*it)->setReferenceCoordinate(m_args.reference.data());
-          (*it)->initialize(
-          Eigen::Matrix3d::Identity(),
-          Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data()),
-          Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
-          Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
-          );
-          //(*it)->setParameter("receiver", 45);
-          (*it)->setParameter("receiver", 1000052);
-          (*it)->setParameter("receiver_depth", -2.0);
-          (*it)->setParameter("trans_id", 201);
-          (*it)->setParameter("tag_period", 10.0);
-          (*it)->setParameter("max_jitter", 0.01);
-          (*it)->setParameter("max_updates_per_new_measurement", 1);
-          (*it)->setParameter("max_correction_attempts", 0);
-          (*it)->setParameter("interval_mode", 1);
-
-          std::ofstream logOutStream;
-          logOutStream.open(m_args.log_folder_and_prefix + (*it)->name + ".csv", std::ofstream::out | std::ofstream::trunc);
-          if (logOutStream.good()) {
-              logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
-              logOutStream.close();
-          }
-        }
       }
-
 
       //! Each unique transmitter ID gets its own buffer, which in turn stores it in separate buffers according to receiver serials.
       void
@@ -224,44 +153,43 @@ namespace SourceEstimators
           if(tagBuffers.find(msg->trans_id) == tagBuffers.end()) {
             // New tag found, create buffer
             tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 5);
-            tagBuffers[msg->trans_id]->setReferenceCoordinate(m_args.reference.data());
+            // Set NED frame for tag to location of first tag location
+            double ref[] = {msg->lat, msg->lon};
+            tagBuffers[msg->trans_id]->setReferenceCoordinateRad(ref);
             spew("Created buffer for receiver %u", msg->serial_no);
-
+            // Configure Estimator
             FishTagEstimators::Estimator* est = m_emap.addEstimator(msg->trans_id,FishTagEstimators::EstimatorMap::estimatorType_SingleReceiverEKF);
-          est->trans_id = m_args.tag_id;
-          est->setSoundSpeed(m_args.init_c_sound);
-          est->setAllowedTimeShift(m_args.max_time_shift_ms);
-          est->setTDOACovariance(m_args.rr_cov);
-          est->setDepthCovariance(m_args.rz_cov);
-          est->initialize(
-          Eigen::Matrix3d::Identity(),
-          Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data()),
-          Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
-          Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
-          );
-          //(*it)->setParameter("receiver", 45);
-          est->setParameter("receiver", 1000052);
-          est->setParameter("receiver_depth", -0.5);
-          //est->setParameter("trans_id", 201);
-          //est->setParameter("tag_period", 10.0);
-          est->setParameter("max_jitter", 0.01);
-          est->setParameter("max_updates_per_new_measurement", 1);
-          est->setParameter("max_correction_attempts", 0);
-          est->setParameter("interval_mode", 1);
-          std::ofstream logOutStream;
-          logOutStream.open(m_args.log_folder_and_prefix + est->name + ".csv", std::ofstream::out | std::ofstream::trunc);
-          if (logOutStream.good()) {
-              logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
-              logOutStream.close();
-          }
+            est->trans_id = msg->trans_id;
+            est->setSoundSpeed(m_args.init_c_sound);
+            est->setAllowedTimeShift(m_args.max_time_shift_ms);
+            est->setTDOACovariance(m_args.rr_cov);
+            est->setDepthCovariance(m_args.rz_cov);
+            est->initialize(
+            Eigen::Matrix3d::Identity(),
+            Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data()),
+            Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
+            Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
+            );
+            //(*it)->setParameter("receiver", 45);
+            est->setParameter("receiver", 1000052);
+            est->setParameter("receiver_depth", -0.5);
+            //est->setParameter("tag_period", 10.0);
+            est->setParameter("max_jitter", 0.01);
+            est->setParameter("max_updates_per_new_measurement", 1);
+            est->setParameter("max_correction_attempts", 0);
+            est->setParameter("interval_mode", 1);
+            // Create/clear csv logfile for estimator with header
+            std::ofstream logOutStream;
+            logOutStream.open(m_args.log_folder_and_prefix + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
+            if (logOutStream.good()) {
+                logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
+                logOutStream.close();
+            }
           }
           if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
-            for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
-              (*it)->update(tagBuffers[msg->trans_id]);
-            }
+            m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
             spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
           }
-          m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
       }
 
       void
@@ -285,17 +213,12 @@ namespace SourceEstimators
       //! @param [in] in_logfilename Filename of file written to
       //! @param [in] logname Name used for the ID in the dispatched IMC::RemoteSensorInfo
       void logResult(FishTagEstimators::Estimator* est, const std::string &in_logfilename, const std::string &logname) {
-        //std::tuple<double, double, double>  estimate = est->getEstimate();
-        //double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
-        //spew("New Kalman Estimate: (N,E,D)= %.15f,%.15f,%.15f", result[0], result[1], result[2]);
-
         double lati,longi;
         std::tuple<double, double, double>  estimate = est->getEstimate();
         double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
         double latLon[3] = {0,0,0};
         if(tagBuffers.find(est->trans_id) != tagBuffers.end()) {
           tagBuffers[est->trans_id]->fromNEDframe(result, latLon);
-          //est->fromNEDframe(result, latLon);
           lati=latLon[0], longi=latLon[1];
 
           // Send output to Neptus/DUNE log
@@ -304,8 +227,7 @@ namespace SourceEstimators
           tagPosition.lon = longi;
           tagPosition.alt = -result[2];
           tagPosition.data = std::to_string(result[0]) + std::to_string(result[1]) + "," + std::to_string(result[2]);
-          //tagPosition.data << result[0] << "," << result[1] << "," << result[2];
-          tagPosition.id = logname + std::to_string(m_args.tag_id);
+          tagPosition.id = logname + std::to_string(est->trans_id);
           dispatch(tagPosition);
 
           // External Logfile
@@ -315,11 +237,10 @@ namespace SourceEstimators
           if (logOutStream.good()) {
             logOutStream.precision(15);
               logOutStream << Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
-              //logOutStream << *est;
               logOutStream.close();
           }   
           #endif
-          spew("%s :New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", logname.c_str(), result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+          spew("%s :New Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", logname.c_str(), result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
         } else {
           err("Transmitter ID: %u not in buffer for estimator %s.", est->trans_id, est->name.c_str());
         }
@@ -338,16 +259,9 @@ namespace SourceEstimators
               {
                 for(FishTagEstimators::EstimatorMap::EstimatorVector_t::iterator est = it->second->begin();est != it->second->end();est++) {
                   if(( *est)->isActive()) {
-                    logResult((*est), m_args.log_folder_and_prefix + (*est)->name + ".csv", (*est)->name);
+                    logResult((*est), m_args.log_folder_and_prefix + (*est)->name + std::to_string((*est)->trans_id) + ".csv", (*est)->name);
                   }
                 }
-              }
-            }
-
-            for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
-              (*it)->predict();
-              if(( *it)->isActive()) {
-                logResult((*it), m_args.log_folder_and_prefix + (*it)->name + ".csv", (*it)->name);
               }
             }
           }
