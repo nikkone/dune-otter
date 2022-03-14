@@ -10,6 +10,7 @@ namespace FishTagEstimators
   class Estimator
   {
     public:
+      virtual ~Estimator() {}
       std::string name;
       static const unsigned c_states = 3;
       //virtual void update(const tagBufferMap_t &tagBuffer, tagBool_t &unprocessedData);

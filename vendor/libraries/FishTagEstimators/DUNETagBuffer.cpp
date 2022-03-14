@@ -13,7 +13,6 @@ namespace FishTagEstimators
   }
 
   void DUNETagBuffer::fromNEDframe(const double input[3], double (&output)[3]) {
-    //std::cout << refCoord[0];
     output[0] = refCoord[0];
     output[1] = refCoord[1];
     output[2] = refCoord[2];
@@ -44,11 +43,6 @@ namespace FishTagEstimators
       tagBuffer[msg->serial_no]->push_back(tag);
       
       unprocessedData[msg->serial_no] = true;
-      //printNewBool();
-      //for(std::vector<Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
-      //  (*it)->update(tagBuffer, unprocessedData);
-      //}
-      //printNewBool();
       return true;
     }
     // Ignore other tags

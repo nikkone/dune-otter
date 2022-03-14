@@ -73,6 +73,8 @@ namespace Sensors
     static const unsigned c_rot_fields = 3;
     //! Minimum number of fields of PSATHPR sentence.
     static const unsigned c_psathpr_fields = 7;
+    //! Minimum number of fields of ROT sentence.
+    static const unsigned c_hev_fields = 2;
     //! Power on delay.
     static const double c_pwr_on_delay = 5.0;
 
@@ -99,6 +101,8 @@ namespace Sensors
       IMC::EulerAngles m_euler;
       //! Angular velocity message.
       IMC::AngularVelocity m_agvel;
+      //! Heave message.
+      IMC::Heave m_heave;
       //! Task arguments.
       Arguments m_args;
       //! Input watchdog.
@@ -111,6 +115,8 @@ namespace Sensors
       std::string m_init_line;
       //! Buffer forEntityState
       char m_bufer_entity[64];
+      //! True if we have heave.
+      bool m_has_heave;
 
       struct gps_data_t m_gpsdata;
       char m_message_buffer[GPS_JSON_RESPONSE_MAX];
@@ -118,6 +124,7 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
         m_has_agvel(false),
+        m_has_heave(false),
         m_has_euler(false)
       {
         // Define configuration parameters.
@@ -329,6 +336,7 @@ namespace Sensors
           m_fix.setTimeStamp();
           m_euler.setTimeStamp(m_fix.getTimeStamp());
           m_agvel.setTimeStamp(m_fix.getTimeStamp());
+          m_heave.setTimeStamp(m_fix.getTimeStamp());
         }
 
         if (hasNMEAMessageCode(parts[0], "ZDA"))
@@ -365,6 +373,10 @@ namespace Sensors
         {
           interpretROT(parts);
         }
+        else if (hasNMEAMessageCode(parts[0], "HEV"))
+        {
+          interpretHEV(parts);
+        }
 
         if (parts[0] == m_args.stn_order.back())
         {
@@ -376,7 +388,13 @@ namespace Sensors
             dispatch(m_euler);
             m_has_euler = false;
           }
-
+          
+          if (m_has_heave)
+          {
+            dispatch(m_heave);
+            m_has_heave = false;
+          }
+          
           if (m_has_agvel)
           {
             dispatch(m_agvel);
@@ -402,6 +420,23 @@ namespace Sensors
       hasNMEAMessageCode(const std::string& str, const std::string& code)
       {
         return String::startsWith(str, "G") && String::endsWith(str, code);
+      }
+
+      //! Interpret HEV sentence (rate of turn).
+      //! @param[in] parts vector of strings from sentence.
+      void
+      interpretHEV(const std::vector<std::string>& parts)
+      {
+        if (parts.size() < c_hev_fields)
+        {
+          war(DTR("invalid HEV sentence"));
+          return;
+        }
+
+        if (readNumber(parts[1], m_heave.value))
+        {
+          m_has_heave = true;
+        }
       }
 
       //! Interpret ZDA sentence (UTC date and time).

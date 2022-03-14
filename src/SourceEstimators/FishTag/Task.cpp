@@ -30,10 +30,13 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
-#include <FishTagEstimators/MultipleReceiverEKF.hpp>
+//#include <FishTagEstimators/MultipleReceiverEKF.hpp>
 #include <FishTagEstimators/SingleReceiverEKF.hpp>
 #include <FishTagEstimators/SingleReceiverUKF.hpp>
 #include <FishTagEstimators/SingleReceiverSRUKF.hpp>
+#include <FishTagEstimators/PeriodEstimator.hpp>
+
+
 
 
 
@@ -88,10 +91,12 @@ namespace SourceEstimators
 
       FishTagEstimators::DUNETagBuffers_t tagBuffers;
 
-      FishTagEstimators::MultipleReceiverEKF m_ekf;
+      //FishTagEstimators::MultipleReceiverEKF m_ekf;
       FishTagEstimators::SingleReceiverEKF m_sekf;
       FishTagEstimators::SingleReceiverUKF m_sukf;
       FishTagEstimators::SingleReceiverSRUKF m_ssrukf;
+      FishTagEstimators::PeriodEstimator m_pest;
+
 
 
 
@@ -175,7 +180,7 @@ namespace SourceEstimators
         estimators.push_back(&m_sekf);
         estimators.push_back(&m_sukf);
         estimators.push_back(&m_ssrukf);
-
+        estimators.push_back(&m_pest);
 
         //estimators.push_back(&m_ekf);
 
@@ -192,12 +197,16 @@ namespace SourceEstimators
           Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
           Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
           );
+          //(*it)->setParameter("receiver", 45);
           (*it)->setParameter("receiver", 1000052);
           (*it)->setParameter("receiver_depth", -2.0);
+          (*it)->setParameter("trans_id", 201);
           (*it)->setParameter("tag_period", 10.0);
           (*it)->setParameter("max_jitter", 0.01);
           (*it)->setParameter("max_updates_per_new_measurement", 1);
           (*it)->setParameter("max_correction_attempts", 0);
+          (*it)->setParameter("interval_mode", 1);
+
           std::ofstream logOutStream;
           logOutStream.open(m_args.log_folder_and_prefix + (*it)->name + ".csv", std::ofstream::out | std::ofstream::trunc);
           if (logOutStream.good()) {
@@ -207,6 +216,8 @@ namespace SourceEstimators
         }
       }
 
+
+      //! Each unique transmitter ID gets its own buffer, which in turn stores it in separate buffers according to receiver serials.
       void
       consume(const IMC::TBRFishTag* msg)
       {
@@ -216,6 +227,8 @@ namespace SourceEstimators
             tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 5);
             tagBuffers[msg->trans_id]->setReferenceCoordinate(m_args.reference.data());
             spew("Created buffer for receiver %u", msg->serial_no);
+
+            
           }
           if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
             for(std::vector<FishTagEstimators::Estimator*>::iterator it = estimators.begin();it != estimators.end();it++) {
@@ -253,35 +266,37 @@ namespace SourceEstimators
         double lati,longi;
         std::tuple<double, double, double>  estimate = est->getEstimate();
         double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
-        double latLon[3];
+        double latLon[3] = {0,0,0};
+        if(tagBuffers.find(est->trans_id) != tagBuffers.end()) {
+          tagBuffers[est->trans_id]->fromNEDframe(result, latLon);
+          //est->fromNEDframe(result, latLon);
+          lati=latLon[0], longi=latLon[1];
 
-        tagBuffers[est->trans_id]->fromNEDframe(result, latLon);
-        //est->fromNEDframe(result, latLon);
-        lati=latLon[0], longi=latLon[1];
+          // Send output to Neptus/DUNE log
+          IMC::RemoteSensorInfo tagPosition;
+          tagPosition.lat = lati;
+          tagPosition.lon = longi;
+          tagPosition.alt = -result[2];
+          tagPosition.data = std::to_string(result[0]) + std::to_string(result[1]) + "," + std::to_string(result[2]);
+          //tagPosition.data << result[0] << "," << result[1] << "," << result[2];
+          tagPosition.id = logname + std::to_string(m_args.tag_id);
+          dispatch(tagPosition);
 
-        // Send output to Neptus/DUNE log
-        IMC::RemoteSensorInfo tagPosition;
-        tagPosition.lat = lati;
-        tagPosition.lon = longi;
-        tagPosition.alt = -result[2];
-        tagPosition.data = std::to_string(result[0]) + std::to_string(result[1]) + "," + std::to_string(result[2]);
-        //tagPosition.data << result[0] << "," << result[1] << "," << result[2];
-        tagPosition.id = logname + std::to_string(m_args.tag_id);
-        dispatch(tagPosition);
-
-        // External Logfile
-        #if LOGFTOILE
-        std::ofstream logOutStream;
-        logOutStream.open(in_logfilename, std::fstream::app);
-        if (logOutStream.good()) {
-          logOutStream.precision(15);
-            logOutStream << Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
-            //logOutStream << *est;
-            logOutStream.close();
-        }   
-        #endif
-        spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
-      
+          // External Logfile
+          #if LOGFTOILE
+          std::ofstream logOutStream;
+          logOutStream.open(in_logfilename, std::fstream::app);
+          if (logOutStream.good()) {
+            logOutStream.precision(15);
+              logOutStream << Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
+              //logOutStream << *est;
+              logOutStream.close();
+          }   
+          #endif
+          spew("New Kalman Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+        } else {
+          err("Transmitter ID: %u not in buffer for estimator %s.", est->trans_id, est->name.c_str());
+        }
       }
 
       void
