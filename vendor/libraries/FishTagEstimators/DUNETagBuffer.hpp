@@ -47,5 +47,8 @@ namespace FishTagEstimators
   };
   //! A map of tag buffers, where the index is used for transmitter ID and the second is a pointer to a DUNETagBuffers_t
   typedef std::map<unsigned, FishTagEstimators::DUNETagBuffer*> DUNETagBuffers_t;
+  //!
+  //! [inout]
+  void clearDUNETagBuffers_t(DUNETagBuffers_t *tagBuffers);
 }
 #endif // FishTag_TagBuffer

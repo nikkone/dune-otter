@@ -68,4 +68,12 @@ namespace FishTagEstimators
     tagOut.lon = tagIn->lon;
     return tagOut;
   }
+  void clearDUNETagBuffers_t(DUNETagBuffers_t *tagBuffers) {
+    for (DUNETagBuffers_t::iterator it = tagBuffers->begin(); it != tagBuffers->end(); it++)
+    {
+      delete it->second;
+    }
+    tagBuffers->clear();
+  }
+
 }
