@@ -33,8 +33,10 @@ namespace FishTagEstimators
   }
 
   void EstimatorMap::updateAll(uint32_t trans_id, TagBuffer *tagBuffer) {
-    for(EstimatorVector_t::iterator it = estimatorMap[trans_id]->begin();it != estimatorMap[trans_id]->end();it++) {
-      (*it)->update(tagBuffer);
+    if(estimatorMap.find(trans_id) != estimatorMap.end()) {
+      for(EstimatorVector_t::iterator it = estimatorMap[trans_id]->begin();it != estimatorMap[trans_id]->end();it++) {
+        (*it)->update(tagBuffer);
+      }
     }
   }
 
@@ -51,8 +53,10 @@ namespace FishTagEstimators
   }
 
   void EstimatorMap::predictAll(uint32_t trans_id) {
-    for(EstimatorVector_t::iterator it = estimatorMap[trans_id]->begin();it != estimatorMap[trans_id]->end();it++) {
-      (*it)->predict();
+    if(estimatorMap.find(trans_id) != estimatorMap.end()) {
+      for(EstimatorVector_t::iterator it = estimatorMap[trans_id]->begin();it != estimatorMap[trans_id]->end();it++) {
+        (*it)->predict();
+      }
     }
   }
 
@@ -66,5 +70,20 @@ namespace FishTagEstimators
         }
       }
     }
+  }
+
+  void EstimatorMap::clear() {
+    for (EstimatorMap_t::iterator it = estimatorMap.begin(); it != estimatorMap.end(); it++)
+    {
+      if (it->second != NULL)
+      {
+        for (EstimatorVector_t::iterator est = it->second->begin(); est != it->second->end(); est++) {
+          delete *est;
+        }
+        delete it->second;
+        it->second = NULL;
+      }
+    }
+    estimatorMap.clear();
   }
 }
