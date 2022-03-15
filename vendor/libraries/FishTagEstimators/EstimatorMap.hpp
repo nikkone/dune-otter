@@ -6,8 +6,8 @@
 #include "Estimator.hpp"
 namespace FishTagEstimators
 {
-    //! Class that stores an EstimatorMap_t and contains often used functions for it.
-    class EstimatorMap
+  //! Class that stores an EstimatorMap_t and contains often used functions for it.
+  class EstimatorMap
     {
     protected:
       unsigned buffer_size;
@@ -45,6 +45,7 @@ namespace FishTagEstimators
     void updateAll(uint32_t trans_id, TagBuffer *tagBuffer);
     void predictAll();
     void predictAll(uint32_t trans_id);
+    void setSoundSpeed(float c_speed_in);
 
     };
   typedef std::map<unsigned, FishTagEstimators::EstimatorMap*> EstimatorMaps_t;

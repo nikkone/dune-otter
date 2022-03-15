@@ -3,7 +3,7 @@
 #include <Eigen/Core>
 
 #include "TagBuffer.hpp"
-  //! Base class for source position estimator algorithms on IMC::TBRFishTag
+  //! Base class for source position estimator algorithms on TBRFishTag
   //! @author Nikolai Lauvås
 namespace FishTagEstimators
 {

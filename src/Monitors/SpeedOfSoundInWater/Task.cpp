@@ -37,8 +37,6 @@ namespace Monitors
   {
     using DUNE_NAMESPACES;
 
-    static const unsigned c_buffer_size = 5;
-
     struct Arguments
     {
 // Initial Parameters for calculating Speed of Sound
@@ -63,10 +61,6 @@ namespace Monitors
       bool update_c_sound_salinity;
       //! Entity delivering water salinity for updating the Speed of Sound in water
       std::string entity_c_sound_salinity;
-
-      uint32_t receiver_serial;
-      //! Time to wait in while. In practice, this controls how regular the filter timing is
-      float message_wait_time;
 
     };
     struct Task: public DUNE::Tasks::Periodic
@@ -96,10 +90,6 @@ namespace Monitors
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Periodic(name, ctx)
       {
-        param("Receiver Serial Number", m_args.receiver_serial)
-        .description("The serial number of the receiver to accept tag registrations from.")
-        .defaultValue("634");
-
 // Initial Parameters for calculating Speed of Sound
         param("Initial Speed Of Sound", m_args.init_c_sound)
         .units(Units::MeterPerSecond)
@@ -145,11 +135,6 @@ namespace Monitors
         .description("The entity delivering the Speed of Sound in water")
         .defaultValue("CTD");        
 
-        param("Message Wait Time", m_args.message_wait_time)
-        .description("The time to wait for new messages in the while loop between checking timer.")
-        .units(Units::Second)
-        .defaultValue("0.01");
-
         bind<IMC::Temperature>(this);
         bind<IMC::Salinity>(this);
         bind<IMC::SoundSpeed>(this);
@@ -159,15 +144,25 @@ namespace Monitors
       void
       onUpdateParameters(void)
       {
-        m_c_speed=m_args.init_c_sound;
-        m_c_speed_salinity = m_args.init_salinity;
-        m_c_speed_temp = m_args.init_temperature;
-        m_c_speed_depth = m_args.init_depth;
+        if(paramChanged(m_args.init_c_sound))
+          m_c_speed=m_args.init_c_sound;
+
+        if(paramChanged(m_args.init_salinity))
+          m_c_speed_salinity = m_args.init_salinity;
+
+        if(paramChanged(m_args.init_temperature))
+          m_c_speed_temp = m_args.init_temperature;
+
+        if(paramChanged(m_args.init_depth))
+          m_c_speed_depth = m_args.init_depth;
+
 
         if(!m_args.update_c_sound) {
           if(m_args.update_c_sound_salinity || m_args.update_c_sound_temp) {
             m_c_speed=calculateSpeedOfSound(m_c_speed_temp, m_c_speed_salinity, m_c_speed_depth);
-            spew("Calculated initial c_speed: %f", m_c_speed);
+            m_c_speed_msg.value = m_c_speed;
+            dispatch(m_c_speed_msg);
+            spew("Calculated c_speed: %f", m_c_speed);
           }
         }
       }
@@ -231,6 +226,8 @@ namespace Monitors
         if(msg->getSourceEntity() == m_c_sound_eid) {
           if(m_args.update_c_sound) {
             m_c_speed = msg->value;
+            m_c_speed_msg.value = m_c_speed;
+            dispatch(m_c_speed_msg);
             spew("Setting c_sound to: %f", msg->value);
           }
         }
@@ -243,6 +240,8 @@ namespace Monitors
           if(m_args.update_c_sound_temp) {
             m_c_speed_temp = msg->value;
             m_c_speed = calculateSpeedOfSound(m_c_speed_temp, m_c_speed_salinity, m_c_speed_depth);
+            m_c_speed_msg.value = m_c_speed;
+            dispatch(m_c_speed_msg);
             spew("Recalculating c_sound with temperature: %f, Result: %f", msg->value, m_c_speed);
           }
         }
@@ -255,6 +254,8 @@ namespace Monitors
           if(m_args.update_c_sound_salinity) {
             m_c_speed_salinity = msg->value;
             m_c_speed = calculateSpeedOfSound(m_c_speed_temp, m_c_speed_salinity, m_c_speed_depth);
+            m_c_speed_msg.value = m_c_speed;
+            dispatch(m_c_speed_msg);
             spew("Recalculating c_sound with salinity: %f, Result: %f", msg->value, m_c_speed);
           }
         }

@@ -55,4 +55,16 @@ namespace FishTagEstimators
       (*it)->predict();
     }
   }
+
+  void EstimatorMap::setSoundSpeed(float c_speed_in) {
+    for (EstimatorMap_t::iterator it = estimatorMap.begin(); it != estimatorMap.end(); it++)
+    {
+      if (it->second != NULL)
+      {
+        for(EstimatorVector_t::iterator est = it->second->begin();est != it->second->end();est++) {
+          (*est)->setSoundSpeed(c_speed_in);
+        }
+      }
+    }
+  }
 }

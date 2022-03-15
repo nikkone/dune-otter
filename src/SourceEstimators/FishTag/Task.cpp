@@ -53,6 +53,12 @@ namespace SourceEstimators
       float filter_timestep;
       //! Initial Speed of Sound in water
       float init_c_sound;
+      //! Location and prefix of logfiles
+      std::string log_folder_and_prefix;
+      //! Should the Speed of Sound in water be updated from measurement
+      bool update_c_sound;
+      //! Entity providing the Speed of Sound in water
+      std::string entity_c_sound;
 // Kalman Filter
       //! Extended Kalman filter - Qm
       std::vector<double> ekf_Qm;      
@@ -66,18 +72,22 @@ namespace SourceEstimators
       double rz_cov;
       //! Maximum allowed time [ms] shift between receivers' messages
       double max_time_shift_ms;
-
-      std::string log_folder_and_prefix;
+// Single receiver estimator arguments
+      uint32_t ss_serial_no;
     };
 
     struct Task: public DUNE::Tasks::Task
     {
       //! Datastructure to hold task arguments/parameters
       Arguments m_args;
-
+      //!
       FishTagEstimators::DUNETagBuffers_t tagBuffers;
+      //!
       FishTagEstimators::EstimatorMap m_emap;
-      
+      //! Speed of sound provider entity label.
+      int m_c_sound_eid;
+      //! Current Speed of sound in water
+      float m_c_sound;
       //! Timer responsible for running filter timestep
       Time::Counter<float> m_filter_timer;
 
@@ -93,6 +103,15 @@ namespace SourceEstimators
         .units(Units::MeterPerSecond)
         .description("The ID of the tracked fish tag")
         .defaultValue("1485.0");
+
+        param("Use Speed Of Sound Measurement", m_args.update_c_sound)
+        .description("If speed of sound is provided through IMC messages.")
+        .defaultValue("false");
+
+         param("Speed Of Sound - Entity", m_args.entity_c_sound)
+        .units(Units::MeterPerSecond)
+        .description("The entity delivering the Speed of Sound in water")
+        .defaultValue("CTD");
 
         param("Message Wait Time", m_args.message_wait_time)
         .description("The time to wait for new messages in the while loop between checking timer.")
@@ -113,6 +132,11 @@ namespace SourceEstimators
         .description("Initial P matrix value for the extended Kalman filter, first row")
         .defaultValue("1, 0, 0, 0, 1, 0, 0, 0, 1.0}");
 
+        param("Qm", m_args.ekf_Qm)
+        .size(c_states*c_states)
+        .description("Process noise covariance matrix for the extended Kalman filter")
+        .defaultValue("1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.1");
+        
         param("ToA Cov", m_args.rr_cov)
         .description("Time of Arrival Covariance")
         .defaultValue("0");
@@ -121,16 +145,18 @@ namespace SourceEstimators
         .description("Depth measurement Covariance")
         .defaultValue("0");
 
-        param("Max time shift [ms]", m_args.max_time_shift_ms)
+// Single Source parameters
+        param("SS - Max time shift [ms]", m_args.max_time_shift_ms)
         .description("Maximum allowed time [ms] shift between receivers' messages")
         .defaultValue("500");
 
-        param("Qm", m_args.ekf_Qm)
-        .size(c_states*c_states)
-        .description("Process noise covariance matrix for the extended Kalman filter")
-        .defaultValue("1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.1");
+        param("SS - Receiver Serial number", m_args.ss_serial_no)
+        .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
+        .defaultValue("0");
 
         bind<IMC::TBRFishTag>(this);
+        bind<IMC::SoundSpeed>(this);
+
       }
       //! Update internal state with new parameter values.
       void
@@ -138,58 +164,94 @@ namespace SourceEstimators
       {
         if(paramChanged(m_args.filter_timestep))
           m_filter_timer.setTop(m_args.filter_timestep);
+        if(paramChanged(m_args.init_c_sound)) {
+          m_c_sound = m_args.init_c_sound;
+          m_emap.setSoundSpeed(m_c_sound);
+        }
       }
       void
       onResourceAcquisition(void)
       {
 
       }
-
+      //! Resolve entity names.
+      void
+      onEntityResolution(void)
+      {
+        try
+          {
+            m_c_sound_eid = resolveEntity(m_args.entity_c_sound);
+          }
+        catch (...)
+          {
+            if(m_args.update_c_sound) {
+              err("Could not find entity: %s", m_args.entity_c_sound.c_str());
+            }
+            m_c_sound_eid = 0;
+          }
+      }
       //! Each unique transmitter ID gets its own buffer, which in turn stores it in separate buffers according to receiver serials.
       void
       consume(const IMC::TBRFishTag* msg)
       {
-
-          if(tagBuffers.find(msg->trans_id) == tagBuffers.end()) {
-            // New tag found, create buffer
-            tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 5);
-            // Set NED frame for tag to location of first tag location
-            double ref[] = {msg->lat, msg->lon};
-            tagBuffers[msg->trans_id]->setReferenceCoordinateRad(ref);
-            spew("Created buffer for receiver %u", msg->serial_no);
-            // Configure Estimator
-            FishTagEstimators::Estimator* est = m_emap.addEstimator(msg->trans_id,FishTagEstimators::EstimatorMap::estimatorType_SingleReceiverEKF);
-            est->trans_id = msg->trans_id;
-            est->setSoundSpeed(m_args.init_c_sound);
-            est->setAllowedTimeShift(m_args.max_time_shift_ms);
-            est->setTDOACovariance(m_args.rr_cov);
-            est->setDepthCovariance(m_args.rz_cov);
-            est->initialize(
+        // Action taken on first reception of a transmitter ID: Add estimators, configure and initialize logfile
+        if(tagBuffers.find(msg->trans_id) == tagBuffers.end()) {
+          // New transmitter found, create buffer
+          tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 5);
+          // Set NED frame used on specific tag to location of first tag location
+          double ref[] = {msg->lat, msg->lon, 0.0};
+          tagBuffers[msg->trans_id]->setReferenceCoordinateRad(ref);
+          spew("Created buffer for receiver %u", msg->serial_no);
+          // Configure Estimator
+          FishTagEstimators::Estimator* est = m_emap.addEstimator(msg->trans_id,FishTagEstimators::EstimatorMap::estimatorType_SingleReceiverUKF);
+          est->trans_id = msg->trans_id;
+          est->setSoundSpeed(m_c_sound);
+          est->setAllowedTimeShift(m_args.max_time_shift_ms);
+          est->setTDOACovariance(m_args.rr_cov);
+          est->setDepthCovariance(m_args.rz_cov);
+          est->initialize(
             Eigen::Matrix3d::Identity(),
             Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data()),
             Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
             Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
-            );
-            //(*it)->setParameter("receiver", 45);
-            est->setParameter("receiver", 1000052);
-            est->setParameter("receiver_depth", -0.5);
-            //est->setParameter("tag_period", 10.0);
-            est->setParameter("max_jitter", 0.01);
-            est->setParameter("max_updates_per_new_measurement", 1);
-            est->setParameter("max_correction_attempts", 0);
-            est->setParameter("interval_mode", 1);
-            // Create/clear csv logfile for estimator with header
-            std::ofstream logOutStream;
-            logOutStream.open(m_args.log_folder_and_prefix + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
-            if (logOutStream.good()) {
-                logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
-                logOutStream.close();
-            }
+          );
+          if(m_args.ss_serial_no == 0) {
+            est->setParameter("receiver", msg->serial_no);
+          } else {
+            est->setParameter("receiver", m_args.ss_serial_no);
           }
-          if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
-            m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
-            spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
+          
+          est->setParameter("receiver_depth", -0.5);
+          est->setParameter("max_jitter", 0.01);
+          est->setParameter("max_updates_per_new_measurement", 1);
+          est->setParameter("max_correction_attempts", 0);
+          est->setParameter("interval_mode", 1);
+          //est->setParameter("tag_period", 10.0);
+          // Create/clear csv logfile for estimator with header
+          std::ofstream logOutStream;
+          logOutStream.open(m_args.log_folder_and_prefix + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
+          if (logOutStream.good()) {
+              logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
+              logOutStream.close();
           }
+        }
+        // Action taken for all receptions: Add to buffer and run measurment update on estimators.
+        if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
+          m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
+          spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
+        }
+      }
+
+      void
+      consume(const IMC::SoundSpeed* msg)
+      {
+        if(msg->getSourceEntity() == m_c_sound_eid) {
+          if(m_args.update_c_sound) {
+            m_c_sound = msg->value;
+            m_emap.setSoundSpeed(m_c_sound);
+            spew("Setting c_sound to: %f", msg->value);
+          }
+        }
       }
 
       void
