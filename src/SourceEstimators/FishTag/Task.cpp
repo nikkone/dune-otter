@@ -59,6 +59,9 @@ namespace SourceEstimators
       bool update_c_sound;
       //! Entity providing the Speed of Sound in water
       std::string entity_c_sound;
+
+      //! Reset toggle for buffers and estimators
+      bool reset_toggle;
 // Kalman Filter
       //! Extended Kalman filter - Qm
       std::vector<double> ekf_Qm;      
@@ -111,7 +114,6 @@ namespace SourceEstimators
         .defaultValue("false");
 
          param("Speed Of Sound - Entity", m_args.entity_c_sound)
-        .units(Units::MeterPerSecond)
         .description("The entity delivering the Speed of Sound in water")
         .defaultValue("CTD");
 
@@ -123,6 +125,11 @@ namespace SourceEstimators
         param("Log Folder and Prefix", m_args.log_folder_and_prefix)
         .description("")
         .defaultValue("log/predict-"); 
+
+        param("Reset Toggle", m_args.reset_toggle)
+        .description("When changed, resets buffers and estimators.")
+        .defaultValue("false");
+
 // Kalman Filter Parameters
         param("x0", m_args.ekf_x0)
         .size(c_states)
@@ -169,6 +176,10 @@ namespace SourceEstimators
         if(paramChanged(m_args.init_c_sound)) {
           m_c_sound = m_args.init_c_sound;
           m_emap.setSoundSpeed(m_c_sound);
+        }
+        if(paramChanged(m_args.reset_toggle)) {
+          m_emap.clear();
+          clearDUNETagBuffers_t(&tagBuffers);
         }
       }
       void
@@ -263,12 +274,7 @@ namespace SourceEstimators
 
       void
       onResourceRelease(void) {
-        for (FishTagEstimators::DUNETagBuffers_t::iterator it = tagBuffers.begin(); it != tagBuffers.end(); it++)
-        {
-          Memory::clear(it->second);
-          spew("Cleared buffer for tag %u", it->first);
-        }
-        tagBuffers.clear();
+        clearDUNETagBuffers_t(&tagBuffers);
       }
 
       void
