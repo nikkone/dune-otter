@@ -27,6 +27,8 @@ namespace FishTagEstimators
     if(tagBuffer->tagBuffer.size() <2)
       return;
 
+
+    
     Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA(1  ,1);
     Eigen::Matrix<double, Eigen::Dynamic, 1> depth(tagBuffer->tagBuffer.size(),1);
     ekf.ykest.resize(1,1);
@@ -47,13 +49,19 @@ namespace FishTagEstimators
               depth.row(baselines) << (outerreceiver->second->rbegin()->trans_data + receiver->second->rbegin()->trans_data)/2;
 
               if(ekf.active) {
-
+                //std::cout << "xHat" <<ekf.xHat << std::endl; 
                 Eigen::Matrix<double, c_states, 1> distance1 = ekf.xHat-getNED(*(outerreceiver->second->rbegin()));
                 Eigen::Matrix<double, c_states, 1> distance2 = ekf.xHat-getNED(*(receiver->second->rbegin()));
-
+                //std::cout << "Dist 1 and two: " << distance1 << ", " << distance2 << std::endl;
                 double r1 = distance1.norm();//  ||X_e-X_rx0||
                 double r2 = distance2.norm();// ||X_e-X_rx1||
-
+                // Division by zero mitigation
+                if(r1 == 0) {
+                  r1=0.01;
+                }
+                if(r2 == 0) {
+                  r2=0.01;
+                }
                 // Update ykest
                 ekf.ykest(ekf.ykest.rows() -1,0) = r1 - r2;
                 ekf.ykest.conservativeResize(ekf.ykest.rows()+1,1);
@@ -91,14 +99,19 @@ namespace FishTagEstimators
     ekf.C.row(ekf.C.rows()-1) << 0, 0, 1;
 
     //std::cout << "RDOA" << std::endl << RDOA << std::endl;
-    Eigen::Matrix<double, Eigen::Dynamic, 1> measurements(RDOA.cols()*RDOA.rows(),1);
+    Eigen::VectorXd measurements(RDOA.cols()*RDOA.rows(),1);
     measurements << Eigen::Map<Eigen::VectorXd>(RDOA.data(), RDOA.cols()*RDOA.rows());
-    measurements(measurements.rows() -1,1) = avgDepth;
+//return;
+measurements.tail(1) << avgDepth;
+    //measurements(RDOA.cols()*RDOA.rows()-1,1) = avgDepth;
 
+//return;
     //ekf.R.resize(measurements.rows(), measurements.rows());
     ekf.R = rr_cov*Eigen::MatrixXd::Identity(ekf.C.rows(), ekf.C.rows());
     ekf.R(ekf.C.rows() - 1, ekf.C.rows() - 1) = rz_cov;
     //std::cout << "measurements" << std::endl << measurements << std::endl;
+    //print(std::cout);
+//return;
     ekf.update(measurements);
   }
   

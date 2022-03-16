@@ -5,7 +5,7 @@
 #include "Estimator.hpp"
 
 
-//! Task that runst source position estimation algorithms for IMC::TBRFishTag
+//! Task that runs source position estimation algorithms for TBRFishTag
 //! @author Nikolai Lauvås
 namespace FishTagEstimators
 {
