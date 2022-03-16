@@ -77,6 +77,10 @@ namespace SourceEstimators
       double max_time_shift_ms;
 // Single receiver estimator arguments
       uint32_t ss_serial_no;
+      //!
+      std::vector<std::string> ss_extra_param_name;
+      //!
+      std::vector<double> ss_extra_param_value;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -90,6 +94,7 @@ namespace SourceEstimators
       std::vector<FishTagEstimators::EstimatorMap::estimatorTypeEnum_t> SingleReceiverEstimatorTypeToUse;
       std::vector<FishTagEstimators::EstimatorMap::estimatorTypeEnum_t> MultiReceiverEstimatorTypeToUse;
 
+      bool m_ss_valid;
       //! Speed of sound provider entity label.
       int m_c_sound_eid;
       //! Current Speed of sound in water
@@ -98,7 +103,8 @@ namespace SourceEstimators
       Time::Counter<float> m_filter_timer;
 
       Task(const std::string& name, Tasks::Context& ctx):
-        DUNE::Tasks::Task(name, ctx)
+        DUNE::Tasks::Task(name, ctx),
+        m_ss_valid(false)
       {
         param("Filter Timestep", m_args.filter_timestep)
         .description("The timestep of the filter")
@@ -163,7 +169,12 @@ namespace SourceEstimators
         param("SS - Receiver Serial number", m_args.ss_serial_no)
         .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
         .defaultValue("0");
-
+        param("SS - Extra Parameters - Name", m_args.ss_extra_param_name)
+        .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
+        .defaultValue("receiver_depth,max_jitter,max_updates_per_new_measurement,max_correction_attempts,interval_mode,tag_period");
+        param("SS - Extra Parameters - Value", m_args.ss_extra_param_value)
+        .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
+        .defaultValue("-0.5,0.01,1,0,1,7");
         bind<IMC::TBRFishTag>(this);
         bind<IMC::SoundSpeed>(this);
 
@@ -182,14 +193,25 @@ namespace SourceEstimators
           m_emap.clear();
           clearDUNETagBuffers_t(&tagBuffers);
         }
+        if(paramChanged(m_args.ss_extra_param_name) || paramChanged(m_args.ss_extra_param_value)) {
+          if(m_args.ss_extra_param_name.size() == m_args.ss_extra_param_value.size()) {
+            for(unsigned i = 0; i<m_args.ss_extra_param_name.size(); i++) {
+              inf("%s = %lf", m_args.ss_extra_param_name[i].c_str(), m_args.ss_extra_param_value[i]);
+              m_emap.setParameterAll(m_args.ss_extra_param_name[i].c_str(), m_args.ss_extra_param_value[i]);
+            }
+            m_ss_valid = true;
+          } else {
+            m_ss_valid = false;
+          }
+        }
       }
       void
       onResourceAcquisition(void)
       {
         SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverEKF);
-        SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverUKF);
-        SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverSRUKF);
-        MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
+        //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverUKF);
+        //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverSRUKF);
+        //MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
       }
       //! Resolve entity names.
       void
@@ -239,12 +261,16 @@ namespace SourceEstimators
             } else {
               est->setParameter("receiver", m_args.ss_serial_no);
             }
-            
-            est->setParameter("receiver_depth", -0.5);
-            est->setParameter("max_jitter", 0.01);
-            est->setParameter("max_updates_per_new_measurement", 1);
-            est->setParameter("max_correction_attempts", 0);
-            est->setParameter("interval_mode", 1);
+            if(m_ss_valid) {
+              for(unsigned i = 0; i<m_args.ss_extra_param_name.size(); i++) {
+                est->setParameter(m_args.ss_extra_param_name[i].c_str(), m_args.ss_extra_param_value[i]);
+              }
+            }
+            //est->setParameter("receiver_depth", -0.5);
+            //est->setParameter("max_jitter", 0.01);
+            //est->setParameter("max_updates_per_new_measurement", 1);
+            //est->setParameter("max_correction_attempts", 0);
+            //est->setParameter("interval_mode", 1);
             //est->setParameter("tag_period", 10.0);
             // Create/clear csv logfile for estimator with header
             std::ofstream logOutStream;

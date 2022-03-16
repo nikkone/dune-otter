@@ -56,7 +56,8 @@ namespace FishTagEstimators
       void predictAll(uint32_t trans_id);
       //! 
       void setSoundSpeed(float c_speed_in);
-      //! 
+      //!
+      void setParameterAll(std::string parameterName, double value);
     };
 }
 #endif // FishTag_EstimatorMap

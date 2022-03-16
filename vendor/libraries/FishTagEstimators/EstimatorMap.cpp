@@ -71,6 +71,17 @@ namespace FishTagEstimators
       }
     }
   }
+  void EstimatorMap::setParameterAll(std::string parameterName, double value) {
+    for (EstimatorMap_t::iterator it = estimatorMap.begin(); it != estimatorMap.end(); it++)
+    {
+      if (it->second != NULL)
+      {
+        for(EstimatorVector_t::iterator est = it->second->begin();est != it->second->end();est++) {
+          (*est)->setParameter(parameterName, value);
+        }
+      }
+    }
+  }
 
   void EstimatorMap::clear() {
     for (EstimatorMap_t::iterator it = estimatorMap.begin(); it != estimatorMap.end(); it++)
