@@ -21,31 +21,7 @@ namespace FishTagEstimators
     param_max_updates_per_new_measurement,
     param_max_correction_attempts
   } t_param;
-/*  void Estimator::parseParameter(unsigned parameterID, double value) {
-    switch(parameterID) {
-      case param_trans_id:
-        trans_id = value;
-        break;
-      case param_receiver_depth:
-        //receiver_depth = value;
-        break;
-      case param_tag_period:
-        //tag_period = value;
-        break;
-      case param_max_jitter:
-        //max_jitter = value;
-        break;
-      case param_max_updates_per_new_measurement:
-        //max_updates_per_new_measurement = value;
-        break;
-      case param_max_correction_attempts:
-        //max_correction_attempts = value;
-        break;
-      default:
-        std::cout << "Error" << std::endl << std::endl;
-        break;
-    }
-  }*/
+
   void Estimator::setSoundSpeed(double soundSpeed) {
     c_speed = soundSpeed;
   }
