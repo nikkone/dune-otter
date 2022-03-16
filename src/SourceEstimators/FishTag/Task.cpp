@@ -88,7 +88,8 @@ namespace SourceEstimators
       //!
       FishTagEstimators::EstimatorMap m_emap;
       std::vector<FishTagEstimators::EstimatorMap::estimatorTypeEnum_t> SingleReceiverEstimatorTypeToUse;
-      
+      std::vector<FishTagEstimators::EstimatorMap::estimatorTypeEnum_t> MultiReceiverEstimatorTypeToUse;
+
       //! Speed of sound provider entity label.
       int m_c_sound_eid;
       //! Current Speed of sound in water
@@ -133,8 +134,8 @@ namespace SourceEstimators
 // Kalman Filter Parameters
         param("x0", m_args.ekf_x0)
         .size(c_states)
-        .description("Initial X value for the extended Kalman filter")
-        .defaultValue("0.0, 0.0, 0.0");
+        .description("Initial X value for the extended Kalman filter (Should not be 0,0,0, as this may give division by zero in estimators.)")
+        .defaultValue("1.0, 1.0, 1.0");
 
         param("P0", m_args.ekf_P0)
         .size(c_states*c_states)
@@ -188,6 +189,7 @@ namespace SourceEstimators
         SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverEKF);
         SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverUKF);
         SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverSRUKF);
+        MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
       }
       //! Resolve entity names.
       void
@@ -218,7 +220,7 @@ namespace SourceEstimators
           double ref[] = {msg->lat, msg->lon, 0.0};
           tagBuffers[msg->trans_id]->setReferenceCoordinateRad(ref);
           spew("Created buffer for receiver %u", msg->serial_no);
-          // Configure Estimators
+          // Configure Single Receiver Estimators
           for(auto it = SingleReceiverEstimatorTypeToUse.begin();it !=SingleReceiverEstimatorTypeToUse.end();it++) {
             FishTagEstimators::Estimator* est = m_emap.addEstimator(msg->trans_id,*it);
             est->trans_id = msg->trans_id;
@@ -253,8 +255,38 @@ namespace SourceEstimators
             }
           }
         }
+
         // Action taken for all receptions: Add to buffer and run measurment update on estimators.
+        size_t prev = tagBuffers[msg->trans_id]->size();
         if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
+          // Add MultiReceiver Estimators when going from 2 to 3 receiving receivers
+          if((prev == 2) && tagBuffers[msg->trans_id]->size() == 3) {
+            for(auto it = MultiReceiverEstimatorTypeToUse.begin();it !=MultiReceiverEstimatorTypeToUse.end();it++) {
+              FishTagEstimators::Estimator* est = m_emap.addEstimator(msg->trans_id,*it);
+              spew("Added MultiReceiver Estimator");
+              // Configure a multiReceiverEstimator
+              est->trans_id = msg->trans_id;
+              est->setSoundSpeed(m_c_sound);
+              est->setAllowedTimeShift(m_args.max_time_shift_ms);
+              est->setTDOACovariance(m_args.rr_cov);
+              est->setDepthCovariance(m_args.rz_cov);
+              est->initialize(
+                Eigen::Matrix3d::Identity(),
+                Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data()),
+                Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
+                Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
+              );
+              // Create/clear csv logfile for estimator with header
+              std::ofstream logOutStream;
+              logOutStream.open(m_args.log_folder_and_prefix + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
+              if (logOutStream.good()) {
+                  logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
+                  logOutStream.close();
+              }
+            }
+          }
+
+          spew("%lu", tagBuffers[msg->trans_id]->size());
           m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
           spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
         }
