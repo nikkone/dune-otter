@@ -50,6 +50,10 @@ namespace FishTagEstimators
     return -1;
   }
 
+  size_t TagBuffer::size() {
+    return tagBuffer.size();
+  }
+
   double TagBuffer::calculateIrregularPeriod(unsigned receiver, unsigned numUsedDetections) { // Currently not functional
     tagBufferMap_t::iterator receiverBuffer = tagBuffer.find(receiver);
     if(receiverBuffer != tagBuffer.end()) {

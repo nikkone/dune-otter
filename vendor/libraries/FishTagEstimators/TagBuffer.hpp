@@ -64,6 +64,9 @@ namespace FishTagEstimators
       //! @param [in] numUsedDetections How far back in the buffer to look
       //! @return calculated current irregular period given in seconds [s].
       double calculateIrregularPeriod(unsigned receiver, unsigned numUsedDetections);
+
+      //!
+      size_t size();
   };
 
   //! A map of tag buffers, where the index is used for transmitter ID and the second is a pointer to a tagBuffers_t
