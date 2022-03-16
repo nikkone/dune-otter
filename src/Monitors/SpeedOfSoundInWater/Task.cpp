@@ -131,7 +131,6 @@ namespace Monitors
         .defaultValue("false");
 
          param("Speed Of Sound - Entity", m_args.entity_c_sound)
-        .units(Units::MeterPerSecond)
         .description("The entity delivering the Speed of Sound in water")
         .defaultValue("CTD");        
 
