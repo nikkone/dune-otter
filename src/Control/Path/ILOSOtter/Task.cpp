@@ -58,6 +58,7 @@ namespace Control
         double lookahead;
         double int_gain;
         double int_init;
+        double loiterCorridor;
         bool out_vec;
         bool out_los;
       };
@@ -99,6 +100,13 @@ namespace Control
           param("Corridor -- Out LOS", m_args.out_los)
           .defaultValue("false")
           .description("Out of corridor guidance law: LOS");
+
+          param("Corridor -- Loiter", m_args.loiterCorridor)
+          .minimumValue("1.0")
+          .maximumValue("50.0")
+          .defaultValue("5.0")
+          .units(Units::Meter)
+          .description("Width of corridor to start loitering");
 
           param("ILOS Lookahead Distance", m_args.lookahead)
           .minimumValue("1.0")
@@ -253,6 +261,34 @@ namespace Control
           m_heading.value = Angles::normalizeRadian(ref);
           dispatch(m_heading);
         }
+        
+        //!
+        //! From base class PathController
+        double
+        getEta(const TrackingState& ts)
+        {
+          if(ts.loiter.radius > 0) {
+            //double range = Coordinates::getRange(ts.track_pos, ts.loiter.center);
+            static bool wait_another = true;
+            //inf("%f %f", ts.track_pos.x, ts.track_pos.y);
+            //inf("Range %f %f %f %f %f %f %f %f %f", range, ts.range, ts.track_pos.y, ts.loiter.center.x, ts.loiter.center.x, ts.end.x, ts.end.y, ts.start.x, ts.start.y);
+            spew("Range: %f", ts.range);
+            if(!wait_another) {
+              if(( ts.range <= ts.loiter.radius + m_args.loiterCorridor) && (ts.range >= ts.loiter.radius - m_args.loiterCorridor)) {
+                return 0;
+              }
+            }
+
+            if((ts.delta> 0.0)) {
+              wait_another = false;
+
+            } else {
+              wait_another = true;
+            }
+          }
+          return DUNE::Control::PathController::getEta(ts);
+        }
+
       };
     }
   }
