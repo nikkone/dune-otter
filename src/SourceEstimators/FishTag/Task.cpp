@@ -2,15 +2,6 @@
 // Copyright 2013-2022 Norwegian University of Science and Technology (NTNU)*
 // Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
-// This file is part of DUNE: Unified Navigation Environment.               *
-//                                                                          *
-// Commercial Licence Usage                                                 *
-// Licencees holding valid commercial DUNE licences may use this file in    *
-// accordance with the commercial licence agreement provided with the       *
-// Software or, alternatively, in accordance with the terms contained in a  *
-// written agreement between you and Faculdade de Engenharia da             *
-// Universidade do Porto. For licensing terms, conditions, and further      *
-// information contact lsts@fe.up.pt.                                       *
 //                                                                          *
 // Modified European Union Public Licence - EUPL v.1.1 Usage                *
 // Alternatively, this file may be used under the terms of the Modified     *
@@ -27,7 +18,16 @@
 // Author: Nikolai Lauvås                                                   *
 //***************************************************************************
  
-
+/* TODO:
+Test with KTHdata
+Better way to get estimator custom parameters to task arguments
+Irregular timing interval finder.
+Check depth estimates not seeming right
+Update parameters to estimators online, such as covariance
+Move more parameters to custom/common interface
+Max/min tag period as estimator parameter
+Fix large number period being set at first regular
+*/
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <FishTagEstimators/EstimatorMap.hpp>
@@ -169,6 +169,7 @@ namespace SourceEstimators
         param("SS - Receiver Serial number", m_args.ss_serial_no)
         .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
         .defaultValue("0");
+
         param("SS - Extra Parameters - Name", m_args.ss_extra_param_name)
         .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
         .defaultValue("receiver_depth,max_jitter,max_updates_per_new_measurement,max_correction_attempts,interval_mode,tag_period");
