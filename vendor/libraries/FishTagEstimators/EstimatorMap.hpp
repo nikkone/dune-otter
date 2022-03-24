@@ -7,6 +7,7 @@
 namespace FishTagEstimators
 {
   //! Class that stores an EstimatorMap_t and contains often used functions for it.
+  //! @author Nikolai Lauvås
   class EstimatorMap
     {
     protected:
