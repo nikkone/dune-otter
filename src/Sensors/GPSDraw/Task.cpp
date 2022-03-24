@@ -75,6 +75,11 @@ namespace Sensors
     static const unsigned c_psathpr_fields = 7;
     //! Minimum number of fields of ROT sentence.
     static const unsigned c_hev_fields = 2;
+    //! Minimum number of fields of PASHR sentence.
+    static const unsigned c_pashr_fields = 11;
+        //! Minimum number of fields of PASHR sentence.
+    static const unsigned c_psatfvi_fields = 31;
+
     //! Power on delay.
     static const double c_pwr_on_delay = 5.0;
 
@@ -109,14 +114,14 @@ namespace Sensors
       Time::Counter<float> m_wdog;
       //! True if we have angular velocity.
       bool m_has_agvel;
+      //! True if we have heave.
+      bool m_has_heave;
       //! True if we have euler angles.
       bool m_has_euler;
       //! Last initialization line read.
       std::string m_init_line;
       //! Buffer forEntityState
       char m_bufer_entity[64];
-      //! True if we have heave.
-      bool m_has_heave;
 
       struct gps_data_t m_gpsdata;
       char m_message_buffer[GPS_JSON_RESPONSE_MAX];
@@ -355,6 +360,10 @@ namespace Sensors
         {
           if (parts[1] == "HPR")
             interpretPSATHPR(parts);
+        }
+        else if (parts[0] == "PASHR")
+        {
+          interpretPASHR(parts);
         }
         else if (parts[0] == "PUBX")
         {
@@ -667,6 +676,112 @@ namespace Sensors
         {
           m_euler.phi = Angles::normalizeRadian(Angles::radians(m_euler.phi));
           m_has_euler = true;
+        }
+      }
+/*
+      //! Interpret PSATFVI sentence (Proprietary NMEA message that
+      //! provides the heading, pitch, roll, and time in a single message).
+      //! @param[in] parts vector of strings from sentence.
+      void
+      interpretPSATFVI(const std::vector<std::string>& parts)
+      {
+        if (parts.size() < c_psatfvi_fields)
+        {
+          war(DTR("invalid PSATFVI sentence"));
+          return;
+        }
+        // Read time.
+        readNumber(parts[2], m_euler.time);
+
+        if (readNumber(parts[9], m_euler.psi))
+        {
+          m_euler.psi = Angles::normalizeRadian(Angles::radians(m_euler.psi));
+          m_has_euler = true;
+        }
+
+        if (readNumber(parts[11], m_euler.theta))
+        {
+          m_euler.theta = Angles::normalizeRadian(Angles::radians(m_euler.theta));
+          m_has_euler = true;
+        }
+
+        if (readNumber(parts[13], m_euler.phi))
+        {
+          m_euler.phi = Angles::normalizeRadian(Angles::radians(m_euler.phi));
+          m_has_euler = true;
+        }
+
+        int quality = 0;
+        readDecimal(parts[27], quality);
+        if (quality == 1)
+        {
+          m_fix.type = IMC::GpsFix::GFT_STANDALONE;
+          m_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
+        }
+        else if (quality == 2)
+        {
+          m_fix.type = IMC::GpsFix::GFT_DIFFERENTIAL;
+          m_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
+        }
+
+
+        if()
+        if (readLatitude(parts[2], parts[3], m_fix.lat)
+            && readLongitude(parts[4], parts[5], m_fix.lon)
+            && readNumber(parts[9], m_fix.height)
+            && readDecimal(parts[7], m_fix.satellites))
+        {
+          // Convert altitude above sea level to altitude above ellipsoid.
+          double geoid_sep = 0;
+          if (readNumber(parts[24], geoid_sep))
+            m_fix.height += geoid_sep;
+
+          // Convert coordinates to radians.
+          m_fix.lat = Angles::radians(m_fix.lat);
+          m_fix.lon = Angles::radians(m_fix.lon);
+          m_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
+        }
+        else
+        {
+          m_fix.validity &= ~IMC::GpsFix::GFV_VALID_POS;
+        }
+
+      }
+*/
+      //! Interpret PASHR sentence (Proprietary NMEA message that
+      //! provides the heave(and standard deviation),heading, pitch(and standard deviation), roll(and standard deviation), and time in a single message).
+      //! @param[in] parts vector of strings from sentence.
+      void
+      interpretPASHR(const std::vector<std::string>& parts)
+      {
+        if (parts.size() < c_pashr_fields)
+        {
+          war(DTR("invalid PASHR sentence"));
+          return;
+        }
+        // Read time.
+        readNumber(parts[1], m_euler.time);
+
+        if (readNumber(parts[2], m_euler.psi))
+        {
+          m_euler.psi = Angles::normalizeRadian(Angles::radians(m_euler.psi));
+          m_has_euler = true;
+        }
+
+        if (readNumber(parts[5], m_euler.theta))
+        {
+          m_euler.theta = Angles::normalizeRadian(Angles::radians(m_euler.theta));
+          m_has_euler = true;
+        }
+
+        if (readNumber(parts[4], m_euler.phi))
+        {
+          m_euler.phi = Angles::normalizeRadian(Angles::radians(m_euler.phi));
+          m_has_euler = true;
+        }
+        if (readNumber(parts[6], m_heave.value))
+        {
+          m_has_heave = true;
         }
       }
 
