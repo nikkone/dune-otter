@@ -137,6 +137,7 @@ namespace Monitors
         bind<IMC::Temperature>(this);
         bind<IMC::Salinity>(this);
         bind<IMC::SoundSpeed>(this);
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
       }
 
       //! Update internal state with new parameter values.
