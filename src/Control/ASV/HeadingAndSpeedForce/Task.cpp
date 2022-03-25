@@ -25,7 +25,7 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <USER/DUNE.hpp>
-
+#include <Ottermodel/thruster.hpp>
 namespace Control
 {
   namespace ASV
@@ -387,7 +387,7 @@ namespace Control
           }
 
             float force[2] = {thrust_com + thrust_diff, thrust_com - thrust_diff};
-            spew("Thrust com: %f, diff: %f", thrust_com, thrust_diff);
+            //spew("Thrust com: %f, diff: %f", thrust_com, thrust_diff);
 
             // Positive saturation
             if(force[0] > m_args.max_force) {
@@ -410,16 +410,16 @@ namespace Control
               force[0] = -m_args.min_force;
               force[1] = m_args.min_force;
             }
-            spew("Force: %f, %f", force[0], force[1]);
+            //spew("Force: %f, %f", force[0], force[1]);
 
-            m_act[0].value = forceToThrust(force[0]);
-            m_act[1].value = forceToThrust(force[1]);
+            m_act[0].value = Ottermodel::Thruster::forceToThrust(force[0]);
+            m_act[1].value = Ottermodel::Thruster::forceToThrust(force[1]);
 
             m_act[0].value = Math::trimValue(m_act[0].value, -1.0, 1.0);
 
             m_act[1].value = Math::trimValue(m_act[1].value, -1.0, 1.0);
 
-            spew("act: %f, %f", m_act[0].value, m_act[1].value);
+            //spew("act: %f, %f", m_act[0].value, m_act[1].value);
 
             // TODO: Hva viss negativ går i metning?
             // TODO: 
@@ -454,7 +454,7 @@ namespace Control
         {
           if (!(msg->mask & (IMC::CL_YAW | IMC::CL_SPEED)))
             return;
-
+          inf("msg->scope_ref: %u", msg->scope_ref);
           if (msg->scope_ref < m_scope_ref)
             return;
 
@@ -485,23 +485,8 @@ namespace Control
           return desired_rpm / m_args.rpm_eos;
         }
 
-        //! Model converting force to thrust actuation level (Untrimmed)
-        //! @param[in] force value of force currently in the motor
-        //! @return thrust actuation.
-        float forceToThrust(float force){
-          if(force > 0) {
-            float weights[] = {0.01137,-7.549e-05,1.86e-07};
-            return weights[0]*force+weights[1]*force*force+weights[2]*force*force*force; // ax+bx^2+cx^3
-          } else if(force < 0) {
-            float weights[] = {0.01912, 0.0002268, 1.012e-06};
-            return weights[0]*force+weights[1]*force*force+weights[2]*force*force*force; // ax+bx^2+cx^3
-          } else { // Force is 0
-            return 0.0;
-          }
-          return 0.0;
-        }
-
-        //! Convert meters per second to a desired force value.
+        //! Runs PID speed controler taking in reference in meters per second
+        //! and returns the desired force value.
         //! @param[in] vel absolute ground velocity.
         //! @param[in] timestep amount of time since last control step.
         //! @return desired force value.        
