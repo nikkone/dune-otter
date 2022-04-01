@@ -61,6 +61,8 @@ namespace Control
         double loiterCorridor;
         bool out_vec;
         bool out_los;
+        //! Log the size of each PID parcel
+        bool log_parcels;
       };
 
       struct Task: public DUNE::Control::PathController
@@ -73,6 +75,8 @@ namespace Control
         double m_gain;
         //! Outgoing desired heading message.
         IMC::DesiredHeading m_heading;
+        //! Control Parcels for meters per second controller returning force
+        IMC::ControlParcel m_parcel_ilos;
         //! Task arguments.
         Arguments m_args;
 
@@ -127,6 +131,10 @@ namespace Control
           .defaultValue("0")
           .description("M_Integrator inital value");
 
+          param("Log ILOS Parcels", m_args.log_parcels)
+          .defaultValue("true")
+          .description("Log the contributions from ILOS.");
+
           // Everything is ok so set task entity state at normal with 'Active' message.
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         }
@@ -148,6 +156,10 @@ namespace Control
         onEntityReservation(void)
         {
           PathController::onEntityReservation();
+          //if (m_args.log_parcels)
+          //{
+          //  m_parcel_ilos.setSourceEntity(reserveEntity("ILOS Parcel"));
+          //}
         }
 
         void
@@ -220,26 +232,39 @@ namespace Control
           {
             // Past the track goal: this should never happen but ...
             ref = getBearing(state, ts.end);
+            war("Past the track goal: this should never happen");
           }
           else if (akcorr > 1 && m_args.out_vec && !m_args.out_los)
           {
             // Outside corridor, m_integrator OFF, vector field guidance
             ref = ts.track_bearing - std::atan(m_gain * ts.track_pos.y);
+            m_parcel_ilos.p = ref;
+            m_parcel_ilos.a = 0;
+            //m_parcel_ilos.i = m_int_err;
           }
           else if (akcorr > 1 && !m_args.out_vec && m_args.out_los)
           {
             // Outside corridor, m_integrator OFF, LOS guidance
             ref = ts.track_bearing - std::atan(ts.track_pos.y / m_args.lookahead);
+            m_parcel_ilos.p = ref;
+            m_parcel_ilos.a = 0;
           }
           else
           {
             // Inside corridor, m_integrator ON, ILOS guidance
             ref = ts.track_bearing - std::atan((ts.track_pos.y + m_args.int_gain * m_integrator) / m_args.lookahead);
+            m_parcel_ilos.p = ts.track_bearing - std::atan(ts.track_pos.y / m_args.lookahead);
+            m_parcel_ilos.i = m_parcel_ilos.p-ref;
+            m_parcel_ilos.a = 1;
           }
 
           // Dispatch heading reference
           m_heading.value = Angles::normalizeRadian(ref);
           dispatch(m_heading);
+          if (m_args.log_parcels)
+          {
+            dispatch(m_parcel_ilos);
+          }
         }
 
         //! Execute a loiter control step
