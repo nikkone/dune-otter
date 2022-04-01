@@ -30,7 +30,7 @@ namespace Control
 {
   namespace ASV
   {
-    namespace HeadingAndSpeedForce
+    namespace HeadingAndSpeedForceAngVel
     {
       //! Tolerance for very low meters per second speed.
       static const float c_mps_tol = 0.1;
@@ -52,6 +52,10 @@ namespace Control
         int16_t max_force_accel;
         //! Maximum heading error to thrust.
         float yaw_max;
+        //! YAW rate feedforward gain
+        float yaw_ffgain;
+        //! YAW limit for the integral term
+        float yaw_max_int;
         //! PID gains for heading controller.
         std::vector<float> yaw_gains;
         //! Control logic for saturation.
@@ -75,18 +79,31 @@ namespace Control
         double minCourseSpeed;
         //! Minimum timestep accepted
         double min_timestep_accepted;
+
+        //! PID gains for mps to force controller.
+        std::vector<float> yaw_rate_gains;
+        //! YAW rate feedforward gain
+        float yaw_rate_ffgain;
+        //! YAW rate limit for integral term
+        float yaw_rate_max_int;
       };
 
       struct Task: public Tasks::Task
       {
-        //! MPS(speed) to thrustforce PID controller
+        //! MPS(speed) to desired force PID controller
         USER::Control::DiscretePID m_mps_force_pid;
         //! YAW(Heading) PID controller
         USER::Control::DiscretePID m_yaw_pid;
+        //! YAW(Heading) rate  PID controller
+        USER::Control::DiscretePID m_yaw_rate_pid;        
         //! Control Parcels for meters per second controller returning force
         IMC::ControlParcel m_parcel_mps_force;
         //! Control Parcels for yaw controller
         IMC::ControlParcel m_parcel_yaw;
+        //! Control Parcels for yaw controller
+        IMC::ControlParcel m_parcel_yaw_rate;
+        //! Desired Yaw Rate for logging
+        IMC::DesiredHeadingRate m_desired_yaw_rate;
         //! Desired heading.
         float m_desired_yaw;
         //! Desired speed.
@@ -110,7 +127,7 @@ namespace Control
         //! Task arguments.
         Arguments m_args;
         //! Current course from GPS
-        float m_current_course;
+        double m_current_course;
 
         Task(const std::string& name, Tasks::Context& ctx):
           Tasks::Task(name, ctx),
@@ -120,24 +137,37 @@ namespace Control
           param("Maximum Thrust Actuation", m_args.act_max)
           .defaultValue("1.0")
           .description("Maximum Motor Command");
-
+// Yaw control
           param("Yaw PID Gains", m_args.yaw_gains)
           .defaultValue("")
           .size(3)
           .description("PID gains for YAW controller");
 
+          param("Yaw Feedforward Gain", m_args.yaw_ffgain)
+          .defaultValue("0.0")
+          .description("MPS Force controller feedforward gain");
+
+          param("Yaw Integral Limit", m_args.yaw_max_int)
+          .defaultValue("-1.0")
+          .description("Limit for the integral term mps to Force");
+
           param("Maximum Heading Error to Thrust", m_args.yaw_max)
           .defaultValue("30.0")
           .description("Maximum admissable heading error to thrust");
+// Yaw rate control
+          param("Yaw Rate PID Gains", m_args.yaw_rate_gains)
+          .defaultValue("")
+          .size(3)
+          .description("PID gains for YAW controller");
 
-          param("Share Saturation", m_args.share)
-          .defaultValue("false")
-          .description("Share saturation");
-
-          param("Ramp Actuation Limit", m_args.act_ramp)
+          param("Yaw Rate Feedforward Gain", m_args.yaw_rate_ffgain)
           .defaultValue("0.0")
-          .description("Ramp actuation limit when the value is rising in actuation per second");
+          .description("MPS Force controller feedforward gain");
 
+          param("Yaw Rate Integral Limit", m_args.yaw_rate_max_int)
+          .defaultValue("-1.0")
+          .description("Limit for the integral term mps to Force");
+// MPS control
           param("MPS Force PID Gains", m_args.mps_force_gains)
           .defaultValue("200.0, 5.0, 0.0")
           .size(3)
@@ -150,6 +180,14 @@ namespace Control
           param("MPS Force Integral Limit", m_args.mps_force_max_int)
           .defaultValue("-1.0")
           .description("Limit for the integral term mps to Force");
+
+          param("Share Saturation", m_args.share)
+          .defaultValue("false")
+          .description("Share saturation");
+
+          param("Ramp Actuation Limit", m_args.act_ramp)
+          .defaultValue("0.0")
+          .description("Ramp actuation limit when the value is rising in actuation per second");
 
           param("Minimum Force Limit", m_args.min_force)
           .defaultValue("-135")
@@ -210,6 +248,11 @@ namespace Control
             m_args.yaw_max = Angles::radians(m_args.yaw_max);
 
           if (paramChanged(m_args.yaw_gains) ||
+              paramChanged(m_args.yaw_ffgain) ||
+              paramChanged(m_args.yaw_max_int) ||
+              paramChanged(m_args.yaw_rate_gains) ||
+              paramChanged(m_args.yaw_rate_ffgain) ||
+              paramChanged(m_args.yaw_rate_max_int) ||
               paramChanged(m_args.mps_force_gains) ||
               paramChanged(m_args.mps_force_ffgain) ||
               paramChanged(m_args.mps_force_max_int) ||
@@ -229,6 +272,7 @@ namespace Control
             std::string label = getEntityLabel();
             m_parcel_mps_force.setSourceEntity(reserveEntity(label + " - MPS Parcel"));
             m_parcel_yaw.setSourceEntity(reserveEntity(label + " - Yaw Parcel"));
+            m_parcel_yaw_rate.setSourceEntity(reserveEntity(label + " - Yaw Rate Parcel"));
           }
         }
 
@@ -265,6 +309,7 @@ namespace Control
         reset(void)
         {
           m_yaw_pid.reset();
+          m_yaw_rate_pid.reset();
           m_mps_force_pid.reset();
 
           m_previous_force = 0;
@@ -289,12 +334,18 @@ namespace Control
           m_mps_force_pid.setIntegralLimits(m_args.mps_force_max_int);
 
           m_yaw_pid.setGains(m_args.yaw_gains);
+          m_yaw_pid.setIntegralLimits(m_args.yaw_max_int);
+
+          m_yaw_rate_pid.setGains(m_args.yaw_rate_gains);
+          m_yaw_rate_pid.setIntegralLimits(m_args.yaw_rate_max_int);
 
           // Log parcels.
           if (m_args.log_parcels)
           {
             m_mps_force_pid.enableParcels(this, &m_parcel_mps_force);
             m_yaw_pid.enableParcels(this, &m_parcel_yaw);
+            m_yaw_rate_pid.enableParcels(this, &m_parcel_yaw_rate);
+
           }
         }
 
@@ -331,12 +382,13 @@ namespace Control
           if (msg->getSource() != getSystemId())
             return;
 
-          float direction;
+          double direction;
           if( (m_args.minCourseSpeed != -1.0) && (msg->u > m_args.minCourseSpeed) ) {
             direction = m_current_course;
           } else {
             direction = msg->psi;
           }
+          double yaw_rate = msg->r;
           // Compute time delta.
           double tstep = m_delta.getDelta();
           if (!isActive())
@@ -362,9 +414,16 @@ namespace Control
           float err_yaw = Angles::normalizeRadian(m_desired_yaw - direction);
 
           // Yaw controller.
-          float thrust_diff = m_yaw_pid.step(tstep, err_yaw);
-
-
+          m_desired_yaw_rate.value = m_yaw_pid.step(tstep, err_yaw);
+          m_parcel_yaw.a = m_desired_yaw * m_args.yaw_ffgain;
+          m_desired_yaw_rate.value += m_parcel_yaw.a;
+          dispatch(m_desired_yaw_rate);
+          // Yaw rate error
+          float err_yaw_rate = m_desired_yaw_rate.value - yaw_rate;
+          // Yaw rate controller
+          float thrust_diff = m_yaw_rate_pid.step(tstep, err_yaw_rate);
+          m_parcel_yaw_rate.a = m_desired_yaw_rate.value * m_args.yaw_rate_ffgain;
+          thrust_diff +=m_parcel_yaw_rate.a;
           // Thrust forward.
           if (thrustForward(err_yaw))
           {
