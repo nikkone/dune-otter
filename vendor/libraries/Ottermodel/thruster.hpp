@@ -1,5 +1,7 @@
 #include <Eigen/Core>
 
+#ifndef OTTERMODEL_THRUSTER
+#define OTTERMODEL_THRUSTER
 namespace Ottermodel
 {
   namespace Thruster
@@ -8,3 +10,4 @@ namespace Ottermodel
     float thrustToForce(float thrust);
   }
 }
+#endif
