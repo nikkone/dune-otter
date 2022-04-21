@@ -37,7 +37,7 @@ namespace ob = ompl::base;
         //! @param[in] treeName The table to store the tree in. Needs to have been created before this function is called.
         //! @param[in] tree Pointer to tree database object.
         void pathToTree(og::PathGeometric states, std::string treeName, ENCGIS::DBTree* tree);
-
+        void pathToTree(og::PathGeometric states, std::string treeName, ENCGIS::DBTree* tree, unsigned pathid);
         //! This (utility) method generates a PlanSpecification
         //! consisting in the given maneuver sequence.
         //! This function is sourced from the plan.generator task.

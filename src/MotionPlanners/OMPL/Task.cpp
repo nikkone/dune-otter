@@ -253,28 +253,30 @@ namespace MotionPlanners
 
         og::SimpleSetup setup = OMPLintegrationENCGIS::createSetup(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck, lineCheck, m_args.searchDepth); // Ned nidelven
         //og::SimpleSetup setup = OMPLintegrationENCGIS::createSetup2(m_args.startAndEnd[0],m_args.startAndEnd[1],m_args.startAndEnd[2],m_args.startAndEnd[3], bounds, pointCheck,lineCheck, lineCheck2, m_args.searchDepth); // Ned nidelven
+          // Write path to DB for visualization purposes
+          ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 32632);
+          ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_writable);
+          m_writable->runNoOutputQuery("select InitSpatialMetadata(1);");
 
         // Run/benchmark current setup
         #if OMPL_BENCHMARK
-          OMPLintegrationENCGIS::multiBmarkPath(setup, m_args.benchmark_name, m_args.benchmark_maxTime, m_args.benchmark_maxMem, m_args.benchmark_runCount);
+          tree->resetTree("tree");
+          tree->createTree("tree");
+          OMPLintegrationENCGIS::multiBmarkPath(setup, m_args.benchmark_name, m_args.benchmark_maxTime, m_args.benchmark_maxMem, m_args.benchmark_runCount,tree);
         #else
           og::PathGeometric states = OMPLintegrationENCGIS::findPath(setup, m_args.maxPlaningTime, OMPLintegrationENCGIS::C_KBIT);
           //// Dispatch and activate returned path
           IMC::PlanDB pdb = OMPLforDUNE::createPlanDBEntryUTM(states, "autoPlan", 1.0, 32);
           dispatch(pdb);
           activatePlan("autoPlan");
-          //OMPLforDUNE::printPath(states);
-          // Write path to DB for visualization purposes
-          ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 32632);
-          ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_writable);
-          m_writable->runNoOutputQuery("select InitSpatialMetadata(1);");
           tree->resetTree("tree");
           tree->createTree("tree");
           OMPLforDUNE::pathToTree(states, "tree", tree);
           inf("Wrote to tree");
+
+        #endif
           Memory::clear(tree);
           Memory::clear(m_writable);
-        #endif
         //findPathExtended(setup);
         inf("findPath finnished");
         while (!stopping())

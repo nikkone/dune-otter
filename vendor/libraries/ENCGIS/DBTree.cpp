@@ -20,7 +20,7 @@ namespace ENCGIS
     bool result_c_stmt1 = m_con->runNoOutputQuery(c_stmt1);
     return result_c_stmt1 || result_c_stmt;
   }
-
+/*
   bool DBTree::createTree(std::string dbTreeName) {
     std::string c_stmt = "CREATE TABLE `" + dbTreeName + "` (`ID`	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,`ParentID`	integer);";
     std::string c_stmt1 = "SELECT AddGeometryColumn('" + dbTreeName + "', 'geom', " + std::to_string(m_con->epsg) + ", 'POINT', 'XY');";
@@ -28,11 +28,19 @@ namespace ENCGIS
     bool result_c_stmt1 = m_con->runNoOutputQuery(c_stmt1);
     return result_c_stmt1 || result_c_stmt;
   }
-
+*/
+  bool DBTree::createTree(std::string dbTreeName) {
+    std::string c_stmt = "CREATE TABLE `" + dbTreeName + "` (`ID`	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,`ParentID`	integer, `runID`	integer);";
+    std::string c_stmt1 = "SELECT AddGeometryColumn('" + dbTreeName + "', 'geom', " + std::to_string(m_con->epsg) + ", 'POINT', 'XY');";
+    bool result_c_stmt = m_con->runNoOutputQuery(c_stmt);
+    bool result_c_stmt1 = m_con->runNoOutputQuery(c_stmt1);
+    return result_c_stmt1 || result_c_stmt;
+  }
   bool DBTree::deleteTree(std::string dbTreeName) {
     std::string c_stmt = "select DropGeoTable('" + dbTreeName + "');";
     return m_con->runNoOutputQuery(c_stmt);
   }
+/*
   bool DBTree::insertNode(std::string tableName, unsigned ParentID,double X, double Y, unsigned ID) {
     std::string IDStr;
     if(ID==0) {
@@ -43,7 +51,18 @@ namespace ENCGIS
     std::string c_stmt = "insert into " + tableName + " values(" + IDStr + "," + std::to_string(ParentID) + ",MakePoint(" + std::to_string(X) + ", " + std::to_string(Y) + "," + std::to_string(m_con->epsg) + " ));";
     return m_con->runNoOutputQuery(c_stmt);
   }
-  
+*/
+  bool DBTree::insertNode(std::string tableName, unsigned ParentID,double X, double Y, unsigned pathid, unsigned ID) {
+    std::string IDStr;
+    if(ID==0) {
+      IDStr="NULL";
+    } else {
+      IDStr=std::to_string(ID);
+    }
+    std::string c_stmt = "insert into " + tableName + " values(" + IDStr + "," + std::to_string(ParentID) + "," + std::to_string(pathid) + ",MakePoint(" + std::to_string(X) + ", " + std::to_string(Y) + "," + std::to_string(m_con->epsg) + " ));";
+    return m_con->runNoOutputQuery(c_stmt);
+  }
+
   std::pair<double, double> DBTree::getNodeLocation(std::string tableName, unsigned ID) {
     std::string sql_stmt = "select X(geom), Y(geom) from (select geom from " + tableName + " where ID="+std::to_string(ID)+")";
   

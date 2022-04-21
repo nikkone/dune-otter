@@ -38,6 +38,20 @@
             }
         }
     }
+    //! Warning: Hacky solution to multi-run-benchmark
+    void pathToTree(og::PathGeometric states, std::string treeName, ENCGIS::DBTree* tree, unsigned pathid) {
+      static unsigned nodes = 0;
+        for(unsigned i=0;i<states.getStateCount();i++) {
+            const auto state= static_cast<const ompl::base::RealVectorStateSpace::StateType *>(states.getState(i));
+            if(i!=0)
+                tree->insertNode(treeName,i+nodes,state->values[1], state->values[0], pathid);
+            else
+            {
+                tree->insertNode(treeName,1+nodes,state->values[1], state->values[0], pathid);
+            }
+        }
+        nodes += states.getStateCount();
+    }
 
       ompl::base::PlannerTerminationCondition exactSolnPlannerTerminationCondition(const bool *stop, DUNE::Tasks::Task *inTask, double maxPlaningTime)
   {

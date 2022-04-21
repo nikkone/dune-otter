@@ -28,7 +28,6 @@
 #include <vector> 
 #include <utility>
 
-#include <ENCGIS/DBTree.hpp>
 #include <OMPL/OMPLfunctions.hpp>
 #include <OMPL/OMPLMotionValidator.hpp>
 #include <OMPL/OMPLMotionValidator2.hpp>
@@ -148,6 +147,22 @@ namespace OMPLintegrationENCGIS
 
 #endif
 #if OMPL_BENCHMARK
+      void postRunEvent(const ompl::base::PlannerPtr &planner, ompl::tools::Benchmark::RunProperties &run, ENCGIS::DBTree* tree)
+      {
+        const ompl::base::ProblemDefinitionPtr pdef = planner->getProblemDefinition();
+        if (pdef)
+        {
+            const ompl::base::PathPtr &p = pdef->getSolutionPath();
+            if (p) {
+              static unsigned runs = 0;
+              
+              OMPLforDUNE::pathToTree(static_cast<ompl::geometric::PathGeometric &>(*p), "tree", tree, runs);
+              //OMPLforDUNE::printPath(static_cast<ompl::geometric::PathGeometric &>(*p));
+              runs++;
+            }
+        }
+          run["some extra property name INTEGER"] = "some value";
+      }
       //! Function for performing benchmarks on a setup.
       void bmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount)
       {
@@ -172,7 +187,7 @@ namespace OMPLintegrationENCGIS
           b.saveResultsToFile();
       }
 
-      void multiBmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount)
+      void multiBmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount, ENCGIS::DBTree* tree)
       {
 
           // Bencmarking code
@@ -211,26 +226,29 @@ namespace OMPLintegrationENCGIS
 //b.addPlannerAllocator(std::bind(&kbitstar1, std::placeholders::_1, "kBITstar15" , true, 2.1, 100, 0.05, false, true));
 
 b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::FMT(ss.getSpaceInformation())));
-
-b.addPlannerAllocator(std::bind(&kbitstar, std::placeholders::_1, "kBITstar1"));
-b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::ABITstar(ss.getSpaceInformation())));
-b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTstar(ss.getSpaceInformation())));
-b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTsharp(ss.getSpaceInformation())));
-b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::AITstar(ss.getSpaceInformation())));
-b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::InformedRRTstar(ss.getSpaceInformation())));
-b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::TRRT(ss.getSpaceInformation())));
-b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::LBTRRT(ss.getSpaceInformation())));
-b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTXstatic(ss.getSpaceInformation())));
+//b.addPlannerAllocator(std::bind(&kbitstar, std::placeholders::_1, "kBITstar1"));
+//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::ABITstar(ss.getSpaceInformation())));
+//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTstar(ss.getSpaceInformation())));
+//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTsharp(ss.getSpaceInformation())));
+//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::AITstar(ss.getSpaceInformation())));
+//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::InformedRRTstar(ss.getSpaceInformation())));
+//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::TRRT(ss.getSpaceInformation())));
+//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::LBTRRT(ss.getSpaceInformation())));
+//b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::RRTXstatic(ss.getSpaceInformation())));
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::SST(ss.getSpaceInformation())));
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::SPARS(ss.getSpaceInformation())));
 //b.addPlanner(ompl::base::PlannerPtr(new ompl::geometric::SPARStwo(ss.getSpaceInformation())));
 
+ 
           // Configure planner through the request class
           ompl::tools::Benchmark::Request req = ompl::tools::Benchmark::Request();
           req.maxTime = benchmark_maxTime;
           req.maxMem = benchmark_maxMem;
           req.runCount = benchmark_runCount;
           req.displayProgress = true;
+
+          // After the Benchmark class is defined, the events can be optionally registered:
+          b.setPostRunEvent(std::bind(&postRunEvent, std::placeholders::_1, std::placeholders::_2, tree));
 
           // Run the configured benchmark
           b.benchmark(req);

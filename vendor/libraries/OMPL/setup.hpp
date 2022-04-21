@@ -16,6 +16,8 @@
 #include <ompl/util/Time.h>
 #if OMPL_BENCHMARK
 #include <ompl/tools/benchmark/Benchmark.h> // Only used for benchmarking, remove before deployment
+#include <ENCGIS/DBTree.hpp>
+#include <ENCGIS/DBconnection.hpp>
 #endif
 
 namespace ob = ompl::base;
@@ -73,7 +75,7 @@ namespace OMPLintegrationENCGIS
   //! @param[in]benchmark_maxTime Max time per run
   //! @param[in]benchmark_maxMem Max memory usage. It does not seem like memory is released before benchmark is finnished, so set as high as possible
   //! @param[in]benchmark_runCount How many runs is performed per planner
-  void multiBmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount);
+  void multiBmarkPath(og::SimpleSetup &ss, std::string &benchmark_name, double benchmark_maxTime, double benchmark_maxMem,int benchmark_runCount, ENCGIS::DBTree* tree);
 #endif
 
 }
