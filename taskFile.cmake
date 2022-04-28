@@ -1,5 +1,5 @@
 dune_add_tasks(${PROJECT_SOURCE_DIR}/user/src)
-dune_add_tasks(${PROJECT_SOURCE_DIR}/private/src)
+#dune_add_tasks(${PROJECT_SOURCE_DIR}/private/src)
 
 dune_add_task(${PROJECT_SOURCE_DIR}/src Transports/Announce/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Transports/Discovery/Task.cmake)
@@ -21,7 +21,6 @@ dune_add_task(${PROJECT_SOURCE_DIR}/src Sensors/ThermalZone/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src UserInterfaces/LEDs/Task.cmake)
 
 dune_add_task(${PROJECT_SOURCE_DIR}/src Supervisors/Vehicle/Task.cmake)
-#dune_add_task(${PROJECT_SOURCE_DIR}/src Supervisors/AUV/LostComms/Task.cmake)
 
 dune_add_task(${PROJECT_SOURCE_DIR}/src Monitors/Clock/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/src Monitors/Entities/Task.cmake)
