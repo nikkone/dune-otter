@@ -397,8 +397,8 @@ namespace Control
             }
             if(force[1] > m_args.max_force) {
               thrust_com -= force[1] - m_args.max_force;
-              force[0] = thrust_com + thrust_diff;
-              force[1] = thrust_com - thrust_diff;
+              force[0] = thrust_com - thrust_diff;
+              force[1] = thrust_com + thrust_diff;
             }
 
             // Negative saturation

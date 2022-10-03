@@ -212,7 +212,7 @@ namespace SourceEstimators
         SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverEKF);
         //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverUKF);
         //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverSRUKF);
-        //MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
+        MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
       }
       //! Resolve entity names.
       void
