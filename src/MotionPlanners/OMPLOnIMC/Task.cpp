@@ -244,7 +244,7 @@ namespace MotionPlanners
           return;*/
 
         // Only accept feasible path problems
-        if (msg->problem_type != IMC::PlanProbSpec::TypeEnum::TBR_fpath)
+        if (msg->problem_type != IMC::PlanProbSpec::TypeEnum::PPT_fpath)
           return;
 
         spew("Checking size");

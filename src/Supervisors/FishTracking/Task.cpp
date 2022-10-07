@@ -159,7 +159,7 @@ namespace Supervisors
           IMC::PlanProbSpec spec;
           spec.setDestination(getSystemId());
           spec.vehicle = getSystemId();
-          spec.problem_type = IMC::PlanProbSpec::TypeEnum::TBR_fpath;
+          spec.problem_type = IMC::PlanProbSpec::TypeEnum::PPT_fpath;
           spec.start_lat = m_current_lat;
           spec.start_lon = m_current_lon;
           spec.end_lat = Math::Angles::radians(m_args.search_start_point[0]);

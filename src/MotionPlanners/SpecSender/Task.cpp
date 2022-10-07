@@ -119,7 +119,7 @@ namespace MotionPlanners
           IMC::PlanProbSpec spec;
           spec.setDestination(getSystemId());
           spec.vehicle = 0x2810;
-          spec.problem_type = IMC::PlanProbSpec::TypeEnum::TBR_fpath;
+          spec.problem_type = IMC::PlanProbSpec::TypeEnum::PPT_fpath;
           spec.start_lat = m_args.startAndEnd[1];
           spec.start_lon = m_args.startAndEnd[0];
           spec.end_lat = m_args.startAndEnd[3];

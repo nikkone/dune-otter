@@ -111,7 +111,7 @@ namespace Control
                 .defaultValue("569142.113652, 7035964.208531")
                 .description("A starting point to use while developing");
 
-
+                bind<IMC::PlanProbSpec>(this);
                 }
                 //! Update internal state with new parameter values.
                 void
@@ -149,28 +149,103 @@ namespace Control
                 }
 
 
-
                 void
-                onMain(void)
+                consume(const IMC::PlanProbSpec* msg)
                 {
+                    spew("Message received");
+                    spew("Destination: %i", msg->getDestination());
+                    spew("Problem Type%i", msg->problem_type);
+
+                    // Only accept messages to this system
+                    if (msg->getDestination() != getSystemId())
+                    return;
+
+                    /*if (msg->getDestinationEntity() != getEntityId())
+                    return;*/
+
+                    // Only accept feasible path problems
+                    if (msg->problem_type != IMC::PlanProbSpec::TypeEnum::PPT_coverage)
+                    return;
+
+                    spew("Checking size");
+                    if(msg->area.size() != 2)
+                    return;
+                    spew("All checks correct");
+
+                    // Parse Custom Parameters
+                    /*
+                    Supported custom parameters:
+                        a = [0,x], activate resulting plan
+                        p = [], Planning algorithm/configuration to use, follows enum OMPLintegrationENCGIS::configurations_t
+                        t = [0.0,inf), Max planning time
+                    */
+                    DUNE::Utils::TupleList custom = DUNE::Utils::TupleList(msg->custom);
+                    std::map<std::string, std::string> custommap = custom.getMapReversed();
+                    /*unsigned planner = 0;
+                    auto parameterit = custommap.find("t");
+                    if (parameterit != custommap.end()) {
+                    try{
+                        maxPlaningTime = std::stof(parameterit->second);
+                        spew("Found t=%f", maxPlaningTime);
+                    } catch(...) {
+                        err("Parameter \'t\' not float");
+                    }
+                    }
+                    parameterit = custommap.find(std::string("p"));
+                    if (parameterit != custommap.end()) {
+                    spew("Found p=%s", parameterit->second.c_str());
+                    try{
+                        planner = std::stoul(parameterit->second);
+                    } catch(...) {
+                        err("Parameter \'p\' not unsigned");
+                    }
+                    }
+                    parameterit = custommap.find(std::string("a"));
+                    bool activateResultingPlan= false;
+                    if (parameterit != custommap.end()) {
+                    try{
+                        spew("Found a=%i", std::stoi(parameterit->second));
+                        activateResultingPlan = (std::stoi(parameterit->second)) ? true : false;
+                    } catch(...) {
+                        err("Parameter \a\' not bool(int)");
+                    }
+                    }*/
+                    // Store plan specific parameters
+                    //vehicle = msg->vehicle;
+                    //speed = msg->speed;
+                    //speed_units = msg->speed_units;
+
+                    // Create planning bound
+                    IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = msg->area.begin();
+                    for (unsigned i = 0; itr != msg->area.end(); ++itr, ++i)
+                    {
+                        spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
+                    }
+                    itr = msg->area.begin();
+                    double planningBounds[4];
+                    m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[0], planningBounds[1], 32632);
+                    ++itr;
+                    m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
+
+
+                    // Convert from WGS-84 to EPSG32632
+                    double start_northing, start_easting, end_northing, end_easting;
+                    m_con->transformSRID(Math::Angles::degrees(msg->start_lon), Math::Angles::degrees(msg->start_lat), 4326, start_easting, start_northing, 32632);
+                    m_con->transformSRID(Math::Angles::degrees(msg->end_lon), Math::Angles::degrees(msg->end_lat), 4326, end_easting, end_northing, 32632);
+
+                    spew("Planning start/goal: %f, %f, %f, %f", start_easting, start_northing, end_easting, end_northing);
+                    spew("Args bounds:  %f, %f, %f, %f", m_args.planningBounds[1], m_args.planningBounds[3], m_args.planningBounds[0], m_args.planningBounds[2]);
+                    spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
+
                     inf("Bounds: %f %f - %f %f", m_args.planningBounds[0], m_args.planningBounds[1], m_args.planningBounds[2], m_args.planningBounds[3]);
                     inf("Start: %f %f", m_args.start[0], m_args.start[1]);
                     auto start = std::chrono::high_resolution_clock::now();
-                    m_searchGrid->createGrid(m_args.planningBounds[0], m_args.planningBounds[1], m_args.planningBounds[2], m_args.planningBounds[3], m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType));
 
-                    int cell = m_searchGrid->getClosestCell(m_args.start[0], m_args.start[1]);
-                    std::vector<int> cells;
                     
-                    // Greedy algorithm
-                    while(cell != 0) {
-                        cells.push_back(cell);
-                        m_searchGrid->setCellWeight(cell,-1);
-                        cell = m_searchGrid->getLocalOptimalNeighbour(cell);
-                        if(cell == 0) {
-                            cell = m_searchGrid->getClosestUnsearchedCell(cells.back());
-                        }
-                        //inf("Cell: %d", cell);
-                    }
+                    m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType));
+                    m_searchGrid->setGridWeights(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);
+                    int cell = m_searchGrid->getClosestCell(start_easting, start_northing);
+                    std::vector<int> cells = m_searchGrid->calculateSearchPathAzimuth(cell);
 
                     auto stop1 = std::chrono::high_resolution_clock::now();
                     auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start);
@@ -178,20 +253,108 @@ namespace Control
                     << duration1.count() << " microseconds" << std::endl;
 
                     auto planVec = m_searchGrid->locationsFromCells(cells);
-                    /*inf("Optimal neighbor: %d", m_searchGrid->getLocalOptimalNeighbour(414));
+                    IMC::PlanDB pdb = createPlanDBEntry(planVec, "autoPlan", 1.0);
+                    dispatch(pdb);
+                    activatePlan("autoPlan");
+                    // Write plan to spatialite DBTree
+                    ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 32632);
+                    ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_writable);
+                    m_writable->runNoOutputQuery("select InitSpatialMetadata(1);");
+                    tree->resetTree("tree");
+                    tree->createTree("tree");
+                    auto planVec32632 = m_searchGrid->locationsFromCells(cells, 32632);
+                    m_searchGrid->pathToDBTree(planVec32632, "tree", tree);
+                    inf("Wrote to tree");
+                    Memory::clear(tree);
+                    Memory::clear(m_writable);
+
+                    m_searchGrid->setGridWeights(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);
+                }
+
+                void
+                sequentialPlan(std::string plan_id, const DUNE::IMC::MessageList<DUNE::IMC::Maneuver>* maneuvers, DUNE::IMC::PlanSpecification& result)
+                {
+                    DUNE::IMC::PlanManeuver last_man;
+
+                    DUNE::IMC::MessageList<DUNE::IMC::Maneuver>::const_iterator itr;
+                    unsigned i = 0;
+                    for (itr = maneuvers->begin(); itr != maneuvers->end(); itr++, i++)
+                    {
+                    if (*itr == NULL)
+                        continue;
+
+                    DUNE::IMC::PlanManeuver man_spec;
+
+                    man_spec.data.set(*(*itr));
+                    man_spec.maneuver_id = DUNE::Utils::String::str(i + 1);
+                    if (itr == maneuvers->begin())
+                    {
+                        // no transitions.
+                    }
+                    else
+                    {
+                        DUNE::IMC::PlanTransition trans;
+                        trans.conditions = "ManeuverIsDone";
+                        trans.dest_man = man_spec.maneuver_id;
+                        trans.source_man = last_man.maneuver_id;
+
+                        result.transitions.push_back(trans);
+                    }
+
+                    result.maneuvers.push_back(man_spec);
+
+                    last_man = man_spec;
+                    }
+
+                    result.plan_id = plan_id;
+                    result.start_man_id = "1";
+                }
+
+
+
+                DUNE::IMC::PlanDB createPlanDBEntry(std::vector<std::pair<double, double>> planVec, std::string plan_id, fp32_t speed) {
+
+                DUNE::IMC::MessageList<DUNE::IMC::Maneuver> maneuvers; //Define list of meneuvers
+
+                    // Make maneuvers
                     for(auto i = planVec.begin(); i < planVec.end();i++) {
                         inf("%f, %f", i->first, i->second);
-                    }*/
+                        DUNE::IMC::Goto* go_near = new DUNE::IMC::Goto();
+                        go_near->lat = DUNE::Math::Angles::radians(i->second);
+                        go_near->lon = DUNE::Math::Angles::radians(i->first);
+                        go_near->speed_units = DUNE::IMC::SUNITS_METERS_PS;
+                        go_near->speed = speed;
+                        maneuvers.push_back(*go_near);
 
-          ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 32632);
-          ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_writable);
-          m_writable->runNoOutputQuery("select InitSpatialMetadata(1);");
-          tree->resetTree("tree");
-          tree->createTree("tree");
-          m_searchGrid->pathToDBTree(planVec, "tree", tree);
-          inf("Wrote to tree");
-          Memory::clear(tree);
-          Memory::clear(m_writable);
+                        delete go_near;
+                    }
+                    DUNE::IMC::PlanSpecification pspec;
+                    sequentialPlan(plan_id, &maneuvers, pspec);
+                    DUNE::IMC::PlanDB pdb;
+                    pdb.op = DUNE::IMC::PlanDB::DBOP_SET;
+                    pdb.type = DUNE::IMC::PlanDB::DBT_REQUEST;
+                    pdb.plan_id = pspec.plan_id;
+                    pdb.arg.set(pspec);
+                    pdb.request_id = 0;
+
+                    return pdb;
+                }
+                void activatePlan(std::string plan_id) {
+                    bool ignore_errors = true;
+                    IMC::PlanControl pcontrol;
+                    pcontrol.type = IMC::PlanControl::PC_REQUEST;
+                    pcontrol.op = IMC::PlanControl::PC_START;
+                    pcontrol.plan_id = plan_id;
+                    pcontrol.setDestination(m_ctx.resolver.id());
+                    if (ignore_errors)
+                    pcontrol.flags = IMC::PlanControl::FLG_IGNORE_ERRORS;
+                    dispatch(pcontrol);
+                    spew("Plan start request sent");
+                }
+                void
+                onMain(void)
+                {
+
                     while(!stopping()) {
 
                     //consumeMessages();
