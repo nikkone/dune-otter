@@ -11,7 +11,8 @@
 
 // ISO C++ 98 headers.
 #include <string>
-
+#include <vector>
+#include <utility>
 // DUNE headers.
 #include "DBconnection.hpp"
 namespace ENCGIS
@@ -53,6 +54,12 @@ namespace ENCGIS
       //! @param[in] ID The ID whos location is returned
       //! @return The position of the node as a longtitude, latitude pair in degrees.
       std::pair<double, double> getNodeLocation(std::string dbTreeName, unsigned ID);
+
+      //! Inserets a series of nodes to the tree stored in the database.
+      //! @param waypoints Waypoints to add to tree
+      //! @param treeName Name of tree/table to edit.
+      //! @param tree DBtree object to edit.
+      void pathToDBTree(std::string treeName, std::vector<std::pair<double, double>> waypoints);
 
       protected:
       ENCGIS::DBconnection* m_con;

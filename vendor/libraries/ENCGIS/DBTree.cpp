@@ -73,4 +73,21 @@ namespace ENCGIS
       sqlite3_finalize(m_handle);
     return ret;
   }
+
+  void DBTree::pathToDBTree(std::string treeName, std::vector<std::pair<double, double>> waypoints) {
+      //try{
+          resetTree(treeName);
+      //} catch(...) {
+      //    err("treeName cant be reset");
+      //    return;
+      //}
+      for(unsigned i=0;i<waypoints.size();i++) {
+          if(i!=0)
+              insertNode(treeName,i,waypoints[i].first, waypoints[i].second);
+          else
+          {
+              insertNode(treeName,1,waypoints[i].first, waypoints[i].second);
+          }
+      }
+  }
 }
