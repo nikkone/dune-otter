@@ -54,4 +54,4 @@ dune_add_task(${PROJECT_SOURCE_DIR}/private/src SourceEstimators/MultipleReceive
 dune_add_task(${PROJECT_SOURCE_DIR}/private/src SourceEstimators/MultipleReceiverXKF/Task.cmake)
 dune_add_task(${PROJECT_SOURCE_DIR}/private/src SourceEstimators/MultipleReceivers/Task.cmake)
 
-dune_add_task(${PROJECT_SOURCE_DIR}/private/src Sensors/RemoteSensorSender/Task.cmake)
+#dune_add_task(${PROJECT_SOURCE_DIR}/private/src Sensors/RemoteSensorSender/Task.cmake)

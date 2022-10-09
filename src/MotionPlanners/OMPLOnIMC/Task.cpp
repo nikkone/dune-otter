@@ -75,7 +75,7 @@ namespace MotionPlanners
       Arguments m_args;
       //! Database connection
       ENCGIS::DBconnection* m_con;
-      ENCGIS::isPointInLayerStatement       *pointCheck;
+      ENCGIS::isPointInLayerStatement *pointCheck;
       ENCGIS::lineIntersectLayerStatement *lineCheck;
       ENCGIS::getClosestIntersectWithOffset *lineCheck2;
       bool m_intermediate;
