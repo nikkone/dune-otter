@@ -12,9 +12,6 @@ namespace ENCGIS {
         }
 
         void SearchGrid::createGrid(double minX, double minY, double maxX, double maxY, unsigned gridsize, gridtypes_t gridType){
-            //unsigned gridsize = 75;
-            //unsigned SRID = 32632;
-            //gridtypes_t geometrynr = HEXAGONAL;
             std::string geometry;
             switch(gridType) {
                 case HEXAGONAL:
@@ -37,7 +34,7 @@ namespace ENCGIS {
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = '" + landTable + "' AND "
           "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) as land where intersects(" + dbGridTable + ".geometry, land.geometry))";
-            std::cout << create << std::endl;
+            //std::cout << create << std::endl;
             // Create sql statements
             sqlite3_stmt* m_createHandle;
 
@@ -107,12 +104,104 @@ namespace ENCGIS {
             sqlite3_finalize(m_createHandle);
 
         }
-        bool SearchGrid::setGridWeights(double minX, double minY, double maxX, double maxY){
+
+        void SearchGrid::createGrid(std::string EWKTpolygon, unsigned gridsize, gridtypes_t gridType) {
+            //unsigned gridsize = 75;
+            //unsigned SRID = 32632;
+            //gridtypes_t geometrynr = HEXAGONAL;
+            std::string geometry;
+            switch(gridType) {
+                case HEXAGONAL:
+                    geometry = "Hexagonal";
+                    break;
+                case SQUARE:
+                    geometry = "Square";
+                    break;
+                case TRIANGULAR:
+                    geometry = "Triangular";
+                    break;
+                default:
+                    geometry = "Square";
+            }
+            std::string create = "create table " + dbGridTable + "raw as select " + geometry + "Grid(transform("
+            "GeomFromEWKT('" + EWKTpolygon + "'), " + std::to_string(SRID) + "), " +std::to_string(gridsize)+ ") as geometry";
+            //std::string create = "create table " + dbGridTable + "raw as select " + geometry + "Grid(BuildMbr(?1,?2,?3,?4, " + std::to_string(SRID) + "), " +std::to_string(gridsize)+ ") as geometry";
+            
+            std::string recoverMultiTable = "SELECT RecoverGeometryColumn('" + dbGridTable + "raw', 'geometry', " + std::to_string(SRID) + ", 'MULTIPOLYGON', 'XY')";
+            std::string polygonFromMultipolygon = "SELECT ElementaryGeometries('" + dbGridTable + "raw', 'geometry', '" + dbGridTable + "','gid','weight') as geom FROM " + dbGridTable + "raw";
+
+            std::string deleteLandCells = "delete from " + dbGridTable + " where gid in (select " + dbGridTable + ".gid from " + dbGridTable + ", (select geometry from " + landTable + " where " + landTable + ".ROWID IN ("
+        "SELECT ROWID FROM SpatialIndex "
+        "WHERE f_table_name = '" + landTable + "' AND "
+          "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) as land where intersects(" + dbGridTable + ".geometry, land.geometry))";
+            //std::cout << create << std::endl;
+
+            // Execute sql statements
+           
+// Create
+
+            int errors = 0;
+            sqlite3_stmt* m_handle;
+            if (sqlite3_prepare_v2(m_db, create.c_str(), create.length(), &m_handle, 0) != SQLITE_OK)
+            {
+                errors++;//Error("Failed to prepare statement", recoverMultiTable.c_str());
+            }
+         
+            // Execute
+            /*int rc = */sqlite3_step(m_handle);
+
+            // Teardown
+            if (m_handle)
+                sqlite3_finalize(m_handle);
+// recoverMultiTable      
+            if (sqlite3_prepare_v2(m_db, recoverMultiTable.c_str(), recoverMultiTable.length(), &m_handle, 0) != SQLITE_OK)
+            {
+                errors++;//Error("Failed to prepare statement", recoverMultiTable.c_str());
+            }
+         
+            // Execute
+            /*int rc = */sqlite3_step(m_handle);
+
+            // Teardown
+            if (m_handle)
+                sqlite3_finalize(m_handle);
+// polygonFromMultipolygon
+            if (sqlite3_prepare_v2(m_db, polygonFromMultipolygon.c_str(), polygonFromMultipolygon.length(), &m_handle, 0) != SQLITE_OK)
+            {
+                errors++;//Error("Failed to prepare statement", polygonFromMultipolygon.c_str());
+            }
+            // Execute
+            /*rc = */sqlite3_step(m_handle);
+
+            // Teardown
+            if (m_handle)
+                sqlite3_finalize(m_handle);
+// deleteLandHandle
+            // Execute
+            /*if(sqlite3_step(m_deleteLandHandle) == SQLITE_ROW) {
+                sqlite3_reset(m_deleteLandHandle);
+            } else {
+                sqlite3_reset(m_deleteLandHandle);
+            }*/
+            if (sqlite3_prepare_v2(m_db, deleteLandCells.c_str(), deleteLandCells.length(), &m_handle, 0) != SQLITE_OK)
+            {
+                errors++;//Error("Failed to prepare statement", deleteLandCells.c_str());
+            }
+            // Execute
+            /*rc = */sqlite3_step(m_handle);
+
+            // Teardown
+            if (m_handle)
+                sqlite3_finalize(m_handle);   
+
+        }
+        bool SearchGrid::setGridWeightsFromLandDistance(){
             std::string weights = "update " + dbGridTable + " set weight = distweight from ("
             "select gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select geometry as i from " + landTable + " WHERE ROWID IN ("
             "SELECT ROWID FROM SpatialIndex "
             "WHERE f_table_name = '" + landTable + "' AND "
-            "search_frame = BuildMbr(" + std::to_string(minX) + "," + std::to_string(minY) + "," + std::to_string(maxX) + "," + std::to_string(maxY) + "))) group by gid) where gid = gidsel";
+            "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid) where gid = gidsel";
+            //std::cout << weights << std::endl;
 
             int errors = 0;
             sqlite3_stmt* m_handle;
@@ -130,8 +219,8 @@ namespace ENCGIS {
             return false;
         }
         void SearchGrid::deleteGrid(){
-            std::string deleteQuery = "select DropGeoTable('" + dbGridTable + "')";
-            std::string deleteQueryraw = "select DropGeoTable('" + dbGridTable + "raw')";
+            std::string deleteQuery = "select DropTable(NULL, '" + dbGridTable + "', TRUE)";
+            std::string deleteQueryraw = "select DropTable(NULL, '" + dbGridTable + "raw', TRUE)";
             int errors = 0;
             sqlite3_stmt* m_handle;
 
@@ -197,21 +286,42 @@ namespace ENCGIS {
             return out;
         }
 
-        void SearchGrid::pathToDBTree(std::vector<std::pair<double, double>> waypoints, std::string treeName, ENCGIS::DBTree* tree) {
-            //try{
-                tree->resetTree(treeName);
-            //} catch(...) {
-            //    err("treeName cant be reset");
-            //    return;
-            //}
-            for(unsigned i=0;i<waypoints.size();i++) {
-                if(i!=0)
-                    tree->insertNode(treeName,i,waypoints[i].first, waypoints[i].second);
-                else
-                {
-                    tree->insertNode(treeName,1,waypoints[i].first, waypoints[i].second);
-                }
+        void SearchGrid::normalizeWeights(bool invert) {
+            // Find max/min weight
+            std::string maxmin = "select min(weight), max(weight) from " + dbGridTable;
+            int errors = 0;
+            sqlite3_stmt* m_handle;
+
+            if (sqlite3_prepare_v2(m_db, maxmin.c_str(), maxmin.length(), &m_handle, 0) != SQLITE_OK)
+            {
+                errors++;
             }
+            int m_idx = 0;
+            // Execute
+            /*int rc = */sqlite3_step(m_handle);
+            double min = sqlite3_column_double(m_handle, m_idx++);
+            double max = sqlite3_column_double(m_handle, m_idx++);
+            // Teardown
+            if (m_handle)
+                sqlite3_finalize(m_handle);
+
+            // Recalculate weights
+            std::string recalculateWeights;
+            if(invert) {
+                recalculateWeights = "update " + dbGridTable + " set weight = 1 + (" + std::to_string(min) + " - weight)/" + std::to_string(max-min) + "";
+            } else {
+                recalculateWeights = "update " + dbGridTable + " set weight = (weight - " + std::to_string(min) + ")/" + std::to_string(max-min) + "";
+            }
+
+            if (sqlite3_prepare_v2(m_db, recalculateWeights.c_str(), recalculateWeights.length(), &m_handle, 0) != SQLITE_OK)
+            {
+                errors++;
+            }
+            // Execute
+            /*int rc = */sqlite3_step(m_handle);
+            // Teardown
+            if (m_handle)
+                sqlite3_finalize(m_handle);
         }
 
         std::pair<double,double> SearchGrid::getCellLocation(int cell, unsigned outputSRID) {

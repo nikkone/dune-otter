@@ -53,10 +53,6 @@ namespace Control
                 std::string dbNavigableLayerName;
                 //! Innavigable Layer Name
                 std::string dbInnavigableLayerName;
-                //! Defines the bounds of the area the search path planner operates on.
-                std::vector<double> planningBounds;
-                //! Defines the start and end point to use while developing
-                std::vector<double> start;
                 //! Size of the grid cells
                 unsigned gridSize;
                 //! Geometry type of grid, see ENCGIS::SearchGrid::gridtypes_t
@@ -101,16 +97,6 @@ namespace Control
                 .defaultValue("0")
                 .description("Geometry type of grid, 0=HEX, 1=Square, 2=Triangular.");
 
-                param("Planning Bounds", m_args.planningBounds)
-                .size(4)
-                .defaultValue("568399.476507, 7031678.685762, 571101.488332, 7038044.467683")
-                .description("Define the area searched for a solution (minLat, minLon, maxLat, maxLon)");
-
-                param("Start", m_args.start)
-                .size(2)
-                .defaultValue("569142.113652, 7035964.208531")
-                .description("A starting point to use while developing");
-
                 bind<IMC::PlanProbSpec>(this);
                 }
                 //! Update internal state with new parameter values.
@@ -148,7 +134,15 @@ namespace Control
                 {
                 }
 
-
+                std::string polygonToEWKT(const IMC::MessageList<IMC::PolygonVertex> &polygon) {
+                    std::string EWKT = "SRID=4326;POLYGON((";
+                    for(IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = polygon.begin();itr < polygon.end();itr++) {
+                        //spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
+                        EWKT += std::to_string(DUNE::Math::Angles::degrees((*itr)->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*itr)->lat)) + ",";
+                    }
+                    EWKT += std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lat)) + "))";
+                    return EWKT;
+                }
                 void
                 consume(const IMC::PlanProbSpec* msg)
                 {
@@ -167,10 +161,44 @@ namespace Control
                     if (msg->problem_type != IMC::PlanProbSpec::TypeEnum::PPT_coverage)
                     return;
 
+                    // Convert from WGS-84 to EPSG32632
+                    double start_northing, start_easting;
+                    m_con->transformSRID(Math::Angles::degrees(msg->start_lon), Math::Angles::degrees(msg->start_lat), 4326, start_easting, start_northing, 32632);
+                    spew("Planning start: %f, %f", start_easting, start_northing);
+
                     spew("Checking size");
-                    if(msg->area.size() != 2)
-                    return;
-                    spew("All checks correct");
+                    if(msg->area.size() == 2) {
+                        m_searchGrid->deleteGrid();
+                        // Create planning bound
+                        IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = msg->area.begin();
+                        for (unsigned i = 0; itr != msg->area.end(); ++itr, ++i)
+                        {
+                            spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
+                        }
+                        itr = msg->area.begin();
+                        double planningBounds[4];
+                        m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[0], planningBounds[1], 32632);
+                        ++itr;
+
+
+                        //m_con->transformSRID(Math::Angles::degrees(msg->end_lon), Math::Angles::degrees(msg->end_lat), 4326, end_easting, end_northing, 32632);
+                        spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
+
+                        
+
+                        m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
+                        m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType));
+                        m_searchGrid->setGridWeightsFromLandDistance();
+                    } else if(msg->area.size() > 2) {
+                        m_searchGrid->deleteGrid();
+                        m_searchGrid->createGrid(polygonToEWKT(msg->area), m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType));
+                        debug("Grid Created from EKWT");
+                        m_searchGrid->setGridWeightsFromLandDistance();
+                        spew("Weights of grid set");
+                    } else {
+                        spew("Polygon too small.");
+                    }
+                    
 
                     // Parse Custom Parameters
                     /*
@@ -181,6 +209,7 @@ namespace Control
                     */
                     DUNE::Utils::TupleList custom = DUNE::Utils::TupleList(msg->custom);
                     std::map<std::string, std::string> custommap = custom.getMapReversed();
+                    
                     /*unsigned planner = 0;
                     auto parameterit = custommap.find("t");
                     if (parameterit != custommap.end()) {
@@ -200,7 +229,8 @@ namespace Control
                         err("Parameter \'p\' not unsigned");
                     }
                     }
-                    parameterit = custommap.find(std::string("a"));
+                    */
+                    auto parameterit = custommap.find(std::string("a"));
                     bool activateResultingPlan= false;
                     if (parameterit != custommap.end()) {
                     try{
@@ -209,66 +239,66 @@ namespace Control
                     } catch(...) {
                         err("Parameter \a\' not bool(int)");
                     }
-                    }*/
+                    }
                     // Store plan specific parameters
                     //vehicle = msg->vehicle;
                     //speed = msg->speed;
                     //speed_units = msg->speed_units;
 
-                    // Create planning bound
-                    IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = msg->area.begin();
-                    for (unsigned i = 0; itr != msg->area.end(); ++itr, ++i)
-                    {
-                        spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
-                    }
-                    itr = msg->area.begin();
-                    double planningBounds[4];
-                    m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[0], planningBounds[1], 32632);
-                    ++itr;
-                    m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
 
 
-                    // Convert from WGS-84 to EPSG32632
-                    double start_northing, start_easting, end_northing, end_easting;
-                    m_con->transformSRID(Math::Angles::degrees(msg->start_lon), Math::Angles::degrees(msg->start_lat), 4326, start_easting, start_northing, 32632);
-                    m_con->transformSRID(Math::Angles::degrees(msg->end_lon), Math::Angles::degrees(msg->end_lat), 4326, end_easting, end_northing, 32632);
-
-                    spew("Planning start/goal: %f, %f, %f, %f", start_easting, start_northing, end_easting, end_northing);
-                    spew("Args bounds:  %f, %f, %f, %f", m_args.planningBounds[1], m_args.planningBounds[3], m_args.planningBounds[0], m_args.planningBounds[2]);
-                    spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
-
-                    inf("Bounds: %f %f - %f %f", m_args.planningBounds[0], m_args.planningBounds[1], m_args.planningBounds[2], m_args.planningBounds[3]);
-                    inf("Start: %f %f", m_args.start[0], m_args.start[1]);
+                    // Start time for computation measurments.
                     auto start = std::chrono::high_resolution_clock::now();
 
-                    
-                    m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType));
-                    m_searchGrid->setGridWeights(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);
+                    // Find coverage path
                     int cell = m_searchGrid->getClosestCell(start_easting, start_northing);
                     std::vector<int> cells = m_searchGrid->calculateSearchPathAzimuth(cell);
 
+                    // End time for computation time measurement
                     auto stop1 = std::chrono::high_resolution_clock::now();
                     auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start);
-                    std::cout << "Time taken by function1: "
+                    std::cout << "Path found in: "
                     << duration1.count() << " microseconds" << std::endl;
-
+                    
+                    // Create vector of path waypoints
                     auto planVec = m_searchGrid->locationsFromCells(cells);
-                    IMC::PlanDB pdb = createPlanDBEntry(planVec, "autoPlan", 1.0);
-                    dispatch(pdb);
-                    activatePlan("autoPlan");
-                    // Write plan to spatialite DBTree
+                    debug("Got locations from cells");
+
+                    // Write plan to spatialite DBTree, not needed for functionality
                     ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 32632);
                     ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_writable);
                     m_writable->runNoOutputQuery("select InitSpatialMetadata(1);");
                     tree->resetTree("tree");
                     tree->createTree("tree");
                     auto planVec32632 = m_searchGrid->locationsFromCells(cells, 32632);
-                    m_searchGrid->pathToDBTree(planVec32632, "tree", tree);
+                    tree->pathToDBTree("tree", planVec32632);
                     inf("Wrote to tree");
                     Memory::clear(tree);
                     Memory::clear(m_writable);
 
-                    m_searchGrid->setGridWeights(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);
+                    // Set weights in grid for visualization purposes, not needed for functionality
+                    m_searchGrid->setGridWeightsFromLandDistance();
+                    m_searchGrid->normalizeWeights(true);
+
+                    // Turn vector of waypoints into a IMC::PlanDB and dispatch/submit it to the plan database
+                    IMC::PlanDB pdb = createPlanDBEntry(planVec, "autoPlan", 1.0);
+                    debug("IMC plan created");
+                    
+                    // Check if path is too long to use
+                    unsigned total = pdb.getSerializationSize();
+                    if (total > DUNE_IMC_CONST_MAX_SIZE) {
+                        err("Path IMC message too long, cannot be activated.(%u > %u)", total, DUNE_IMC_CONST_MAX_SIZE);
+                        return;
+                    }
+                    dispatch(pdb);
+                    debug("IMC plan dispatched");
+
+                    // Activate the created plan if a=1 in custom parameters
+                    if(activateResultingPlan) {
+                        activatePlan("autoPlan");
+                        debug("Plan activated");
+                    }
+
                 }
 
                 void
@@ -318,7 +348,7 @@ namespace Control
 
                     // Make maneuvers
                     for(auto i = planVec.begin(); i < planVec.end();i++) {
-                        inf("%f, %f", i->first, i->second);
+                        //inf("%f, %f", i->first, i->second);
                         DUNE::IMC::Goto* go_near = new DUNE::IMC::Goto();
                         go_near->lat = DUNE::Math::Angles::radians(i->second);
                         go_near->lon = DUNE::Math::Angles::radians(i->first);

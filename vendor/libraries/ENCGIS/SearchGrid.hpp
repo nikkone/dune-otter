@@ -33,76 +33,94 @@ namespace ENCGIS
       } gridtypes_t;
         SearchGrid(sqlite3 *db);
         ~SearchGrid();
-        /// @brief 
-        /// @param minX 
-        /// @param minY 
-        /// @param maxX 
-        /// @param maxY 
-        /// @param gridsize 
-        /// @param gridType 
-        /// @param SRID 
+
+        /// @brief Creates a grid within the square with minXY and maxXY as the diagonal. 
+        /// @param minX Lower X coordinate defined in this.SRID
+        /// @param minY Lover Y coordinate defined in this.SRID
+        /// @param maxX Upper X coordinate defined in this.SRID
+        /// @param maxY Upper Y coordinate defined in this.SRID
+        /// @param gridsize Edge length
+        /// @param gridType The shape of the grid cells
         void createGrid(double minX, double minY, double maxX, double maxY, unsigned gridsize, gridtypes_t gridType = SQUARE);
-        /// @brief 
-        /// @param minX 
-        /// @param minY 
-        /// @param maxX 
-        /// @param maxY 
-        /// @return 
-        bool setGridWeights(double minX, double minY, double maxX, double maxY);
-        /// @brief 
+
+        /// @brief Creates a grid within the polygon defined in EWKTpolygon
+        /// @param EKWTpolygon An extended well-known text representation of the desired area the grid should cover.
+        /// @param gridsize Edge length
+        /// @param gridType The shape of the grid cells
+        void createGrid(std::string EWKTpolygon, unsigned gridsize, gridtypes_t gridType = SQUARE);
+
+        /// @brief Set grid weights as distance to landTable
+        /// @return TODO: currently unused
+        bool setGridWeightsFromLandDistance();
+
+        /// @brief Delete the grid from the database (The tables this.dbGridTable and dbGridTable + raw in the db opened by m_db)
         void deleteGrid();
-        /// @brief 
-        /// @param startCell 
-        /// @return 
+
+        /// @brief Uses a greedy algorithm to create a path covering all grid cells.
+        /// @param startCell The first cell to be visited
+        /// @return A vector of describing the cell visitation order
         std::vector<int> calculateSearchPath(int startCell);
-        /// @brief 
-        /// @param startCell 
-        /// @return 
+
+        /// @brief Uses a greedy algorithm to create a path covering all grid cells. Penalizes azimuth changes.
+        /// @param startCell The first cell to be visited
+        /// @return A vector of describing the cell visitation order
         std::vector<int> calculateSearchPathAzimuth(int startCell);
-        /// @brief 
-        /// @param  
-        /// @return 
-        std::vector<std::pair<double, double>> locationsFromCells(std::vector<int>, unsigned outputSRID = 4326);
-        /// @brief 
-        /// @param  
-        /// @param treeName 
-        /// @param tree 
-        void pathToDBTree(std::vector<std::pair<double, double>>, std::string treeName, ENCGIS::DBTree* tree);
-        /// @brief 
-        /// @param cell 
-        /// @return 
+
+        /// @brief Get locations from a vector of cell numbers. Returns in same order as input.
+        /// @param cells The cells to get locations from
+        /// @param outputSRID Desired SRID of the returned cells
+        /// @return A vector with the (X, Y) coordinates of cells with ids given in cells, specified in outputSRID
+        std::vector<std::pair<double, double>> locationsFromCells(std::vector<int> cells, unsigned outputSRID = 4326);
+
+        /// @brief Finds the maximum and minimum weights, and calculates weights in the intervall [0,1]
+        /// @param invert Invert the resulting weights (Ex. For distance.)
+        void normalizeWeights(bool invert);
+
+        /// @brief Get the coordinates of a cell in the specified SRID
+        /// @param cell The cell in the grid for which the coordinates are returned
+        /// @param outputSRID The desired SRID of the location
+        /// @return The (X, Y) coordinates of the cell in specified in SRID
         std::pair<double,double> getCellLocation(int cell, unsigned outputSRID = 4326);
-        /// @brief 
-        /// @param X 
-        /// @param Y 
-        /// @return 
+
+        /// @brief Find the closest cell to a given location
+        /// @param X Coordinate in this.SRID
+        /// @param Y Coordinate in this.SRID
+        /// @return cell ID of closest cell to XY
         int getClosestCell(double X, double Y);
-        /// @brief 
-        /// @param cell 
-        /// @return 
+
+        /// @brief Finds the closest cell that has yet to be visited (has weight that is not -1).
+        /// @param cell Id of the cell to search from
+        /// @return The closest unvisited/unsearched cell id.
         int getClosestUnsearchedCell(int cell);
-        /// @brief 
-        /// @param cell 
-        /// @return 
+
+        /// @brief Get the neighbor with the lowest weight
+        /// @param cell The cell id for which to check the neighbors
+        /// @return the neighbor with the lowest weight.
         int getLocalOptimalNeighbour(int cell);
-        /// @brief 
-        /// @param cell 
-        /// @return 
+
+        /// @brief Get the neighbor with the lowest weight and lowest change of azimuth
+        /// @param cell The cell id for which to check the neighbors
+        /// @return the neighbor with the lowest weight.
         int getLocalOptimalNeighbourAzimuth(int cell);
-        /// @brief 
+
+        /// @brief Get the azimuth/angle of the span between two cells
         /// @param cell1 
         /// @param cell2 
-        /// @return 
+        /// @return The azimuth/angle between two cells
         double getAzimuth(int cell1, int cell2);
-        /// @brief 
-        /// @param cell 
-        /// @param weight 
+
+        /// @brief Set the weight of a single cell
+        /// @param cell The cell whose weight will be set
+        /// @param weight The weight which the cell is to have
         void setCellWeight(int cell, int weight);
       private:
+        /// @brief Active DB connection with activated spatialite extension (Tested with 5.0.1)
         sqlite3* m_db;
+        /// @brief Table of POLYGON geometry considered as obstacle
         std::string landTable;
-        /// dbGridTable The name of the grid layer/table in the Spatialite database
+        /// @brief The name of the grid layer/table in the Spatialite database
         std::string dbGridTable;
+        /// @brief The SRID to use for the created table
         unsigned SRID;
 
     };
