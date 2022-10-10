@@ -6,7 +6,10 @@
 #define OMPL_BENCHMARK 1
 
 // ENCGIS header
-#include <ENCGIS/DBconnection.hpp>
+//#include <ENCGIS/DBconnection.hpp>
+#include <ENCGIS/isPointInLayerStatement.hpp>
+#include <ENCGIS/lineIntersectLayerStatement.hpp>
+
 
 // OMPL headers
 #include <ompl/base/SpaceInformation.h>

@@ -114,7 +114,7 @@ namespace Control
                     err(DTR("Problem opening charts database: %s"), e.what());
                     // Set task state to failure
                     }
-                    m_searchGrid = new ENCGIS::SearchGrid(m_con->db);
+                    m_searchGrid = new ENCGIS::SearchGrid(m_con);
                 }
 
 
@@ -143,6 +143,7 @@ namespace Control
                     EWKT += std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lat)) + "))";
                     return EWKT;
                 }
+
                 void
                 consume(const IMC::PlanProbSpec* msg)
                 {
@@ -340,9 +341,7 @@ namespace Control
                     result.start_man_id = "1";
                 }
 
-
-
-                DUNE::IMC::PlanDB createPlanDBEntry(std::vector<std::pair<double, double>> planVec, std::string plan_id, fp32_t speed) {
+                DUNE::IMC::PlanDB createPlanDBEntry(const std::vector<std::pair<double, double>> &planVec, std::string plan_id, fp32_t speed) {
 
                 DUNE::IMC::MessageList<DUNE::IMC::Maneuver> maneuvers; //Define list of meneuvers
 
@@ -369,6 +368,7 @@ namespace Control
 
                     return pdb;
                 }
+
                 void activatePlan(std::string plan_id) {
                     bool ignore_errors = true;
                     IMC::PlanControl pcontrol;
@@ -381,6 +381,7 @@ namespace Control
                     dispatch(pcontrol);
                     spew("Plan start request sent");
                 }
+
                 void
                 onMain(void)
                 {

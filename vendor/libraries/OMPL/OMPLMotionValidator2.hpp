@@ -4,8 +4,8 @@
 #include <ompl/base/MotionValidator.h>
 #include <ompl/base/SpaceInformation.h>
 //#include <USER/ChartsDatabase/Connection.hpp>
-#include <ENCGIS/DBconnection.hpp>
-
+//#include <ENCGIS/DBconnection.hpp>
+#include <ENCGIS/lineIntersectLayerStatement.hpp>
  namespace ob = ompl::base;
 
   //! @author Nikolai Lauvås

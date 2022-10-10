@@ -6,13 +6,12 @@
 // Author: Nikolai Lauvås                                                   *
 //***************************************************************************
 
-#ifndef ENCGIS_TEST_HPP_INCLUDED
-#define ENCGIS_TEST_HPP_INCLUDED
+#ifndef ENCGIS_DBCONNECTION_HPP_INCLUDED
+#define ENCGIS_DBCONNECTION_HPP_INCLUDED
 
 
 // SQLITE3 headers.
 #include <sqlite3/sqlite3.h>
-
 
 #include <stdexcept>
 namespace ENCGIS
@@ -21,6 +20,8 @@ namespace ENCGIS
   class DBconnection
   {
   public:
+
+    /// @brief 
     class Error: public std::runtime_error
     {
     public:
@@ -28,15 +29,44 @@ namespace ENCGIS
         std::runtime_error("Error (" + op + "): " + msg)
       { }
     };
-    DBconnection(std::string filename, int flag, int epsgIn);
+
+    /// @brief 
+    /// @param filename 
+    /// @param flag 
+    /// @param SRIDin 
+    DBconnection(std::string filename, int flag, int SRIDin);
+
+    /// @brief 
     ~DBconnection();
 
 
+    /// @brief 
+    /// @param in_x 
+    /// @param in_y 
+    /// @param in_srid 
+    /// @param out_x 
+    /// @param out_y 
+    /// @param out_srid 
     void transformSRID(double in_x, double in_y, unsigned in_srid, double &out_x, double &out_y, unsigned out_srid);
 
-    void runQuery(std::string sqlstmt);
-    bool runNoOutputQuery(std::string sql_stmt);
+    /// @brief 
+    /// @param sql_stmt 
+    void runQuery(const std::string &sql_stmt);
+
+    /// @brief 
+    /// @param sql_stmt 
+    /// @return 
+    bool runNoOutputQuery(const std::string &sql_stmt);
+
+    /// @brief 
+    /// @param NotUsed 
+    /// @param argc 
+    /// @param argv 
+    /// @param azColName 
+    /// @return 
     static int callback(void *NotUsed, int argc, char **argv, char **azColName);
+
+    /// @brief 
     void loadSpatialite();
 
     //! Checks whether a point lies within the the polygons of a layer.
@@ -60,36 +90,8 @@ namespace ENCGIS
     int checkTransectLanding(double startLat, double startLon, double endLat, double endLon, std::string table="lndaretable", bool useSpatialIndex=true);
 
     sqlite3 *db;
-    int epsg;
+    int SRID;
   };
-      class isPointInLayerStatement {
-      public:
-      isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg);
-      ~isPointInLayerStatement();
-        int run(double lat, double lon);
-      private:
-        sqlite3_stmt* m_handle;
-        //int statusLastResult;
-    };
-
-      class lineIntersectLayerStatement {
-      public:
-      lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg);
-      ~lineIntersectLayerStatement();
-        int run(double startLat, double startLon, double endLat, double endLon);
-      private:
-        sqlite3_stmt* m_handle;
-        //int statusLastResult;
-    };
-    class getClosestIntersectWithOffset {
-      public:
-      getClosestIntersectWithOffset(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg, double offset = 0.9);
-      ~getClosestIntersectWithOffset();
-        double run(double startX, double startY, double endX, double endY, double &bestOptionX, double &bestOptionLon);
-      private:
-        sqlite3_stmt* m_handle;
-        double statusLastResult;
-    };
 }
 
 #endif //ENCGIS_HPP_INCLUDED

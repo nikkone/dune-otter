@@ -23,7 +23,7 @@ namespace ENCGIS
 
   bool DBTree::createTree(std::string dbTreeName) {
     std::string c_stmt = "CREATE TABLE `" + dbTreeName + "` (`ID`	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,`ParentID`	integer);";
-    std::string c_stmt1 = "SELECT AddGeometryColumn('" + dbTreeName + "', 'geom', " + std::to_string(m_con->epsg) + ", 'POINT', 'XY');";
+    std::string c_stmt1 = "SELECT AddGeometryColumn('" + dbTreeName + "', 'geom', " + std::to_string(m_con->SRID) + ", 'POINT', 'XY');";
     bool result_c_stmt = m_con->runNoOutputQuery(c_stmt);
     bool result_c_stmt1 = m_con->runNoOutputQuery(c_stmt1);
     return result_c_stmt1 || result_c_stmt;
@@ -40,7 +40,7 @@ namespace ENCGIS
     } else {
       IDStr=std::to_string(ID);
     }
-    std::string c_stmt = "insert into " + tableName + " values(" + IDStr + "," + std::to_string(ParentID) + ",MakePoint(" + std::to_string(X) + ", " + std::to_string(Y) + "," + std::to_string(m_con->epsg) + " ));";
+    std::string c_stmt = "insert into " + tableName + " values(" + IDStr + "," + std::to_string(ParentID) + ",MakePoint(" + std::to_string(X) + ", " + std::to_string(Y) + "," + std::to_string(m_con->SRID) + " ));";
     return m_con->runNoOutputQuery(c_stmt);
   }
   

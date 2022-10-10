@@ -15,6 +15,7 @@
 
 // SQLITE3 headers.
 #include <sqlite3/sqlite3.h>
+#include <ENCGIS/DBconnection.hpp>
 #include <ENCGIS/DBTree.hpp>
 
 #include <vector>
@@ -31,8 +32,13 @@ namespace ENCGIS
         SQUARE = 1,
         TRIANGULAR = 2,
       } gridtypes_t;
-        SearchGrid(sqlite3 *db);
+        SearchGrid(ENCGIS::DBconnection *db);
         ~SearchGrid();
+
+        /// @brief Turns gridtypes_t ENUM into string
+        /// @param gridType 
+        /// @return String containing written grid type according to spatialite/GEOS functions.
+        std::string gridTypeToString(gridtypes_t gridType);
 
         /// @brief Creates a grid within the square with minXY and maxXY as the diagonal. 
         /// @param minX Lower X coordinate defined in this.SRID
@@ -41,13 +47,13 @@ namespace ENCGIS
         /// @param maxY Upper Y coordinate defined in this.SRID
         /// @param gridsize Edge length
         /// @param gridType The shape of the grid cells
-        void createGrid(double minX, double minY, double maxX, double maxY, unsigned gridsize, gridtypes_t gridType = SQUARE);
+        bool createGrid(double minX, double minY, double maxX, double maxY, unsigned gridsize, gridtypes_t gridType = SQUARE);
 
         /// @brief Creates a grid within the polygon defined in EWKTpolygon
         /// @param EKWTpolygon An extended well-known text representation of the desired area the grid should cover.
         /// @param gridsize Edge length
         /// @param gridType The shape of the grid cells
-        void createGrid(std::string EWKTpolygon, unsigned gridsize, gridtypes_t gridType = SQUARE);
+        bool createGrid(const std::string &EWKTpolygon, unsigned gridsize, gridtypes_t gridType = SQUARE);
 
         /// @brief Set grid weights as distance to landTable
         /// @return TODO: currently unused
@@ -70,7 +76,7 @@ namespace ENCGIS
         /// @param cells The cells to get locations from
         /// @param outputSRID Desired SRID of the returned cells
         /// @return A vector with the (X, Y) coordinates of cells with ids given in cells, specified in outputSRID
-        std::vector<std::pair<double, double>> locationsFromCells(std::vector<int> cells, unsigned outputSRID = 4326);
+        std::vector<std::pair<double, double>> locationsFromCells(const std::vector<int> &cells, unsigned outputSRID = 4326);
 
         /// @brief Finds the maximum and minimum weights, and calculates weights in the intervall [0,1]
         /// @param invert Invert the resulting weights (Ex. For distance.)
@@ -112,10 +118,10 @@ namespace ENCGIS
         /// @brief Set the weight of a single cell
         /// @param cell The cell whose weight will be set
         /// @param weight The weight which the cell is to have
-        void setCellWeight(int cell, int weight);
+        /// @return 
+        bool setCellWeight(int cell, int weight);
       private:
-        /// @brief Active DB connection with activated spatialite extension (Tested with 5.0.1)
-        sqlite3* m_db;
+        ENCGIS::DBconnection* m_con;
         /// @brief Table of POLYGON geometry considered as obstacle
         std::string landTable;
         /// @brief The name of the grid layer/table in the Spatialite database

@@ -32,6 +32,9 @@
 // ENC database to use with the OMPL integration for DUNE
 #include <ENCGIS/DBconnection.hpp>
 #include <ENCGIS/DBTree.hpp>
+#include <ENCGIS/isPointInLayerStatement.hpp>
+#include <ENCGIS/lineIntersectLayerStatement.hpp>
+#include <ENCGIS/getClosestIntersectWithOffset.hpp>
 
 // OMPL integration for DUNE
 #include <OMPL/setup.hpp>
@@ -77,7 +80,6 @@ namespace MotionPlanners
       ENCGIS::DBconnection* m_con;
       ENCGIS::isPointInLayerStatement *pointCheck;
       ENCGIS::lineIntersectLayerStatement *lineCheck;
-      ENCGIS::getClosestIntersectWithOffset *lineCheck2;
       bool m_intermediate;
 
       //! Target vehicle.
@@ -195,16 +197,7 @@ namespace MotionPlanners
         } catch(std::runtime_error& e) {
           err(DTR("Problem creating query for innavigable layer: %s"), e.what());
           // Set task state to failure
-        }
-        try{
-          lineCheck2 = new ENCGIS::getClosestIntersectWithOffset(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632, 0.99);
-        } catch(std::runtime_error& e) {
-          err(DTR("Problem creating query for innavigable layer: %s"), e.what());
-          // Set task state to failure
-        }
-
-                  
-          
+        }  
       }
 
       //! Initialize resources.
