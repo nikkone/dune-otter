@@ -66,11 +66,13 @@ namespace ENCGIS
         /// @param startCell The first cell to be visited
         /// @return A vector of describing the cell visitation order
         std::vector<int> calculateSearchPath(int startCell);
-
+        
         /// @brief Uses a greedy algorithm to create a path covering all grid cells. Penalizes azimuth changes.
         /// @param startCell The first cell to be visited
+        /// @param initialAzimuth Azimuth at startCell
+        /// @param azimuthWeight Absolute azimuth change is multiplied with this weight.
         /// @return A vector of describing the cell visitation order
-        std::vector<int> calculateSearchPathAzimuth(int startCell);
+        std::vector<int> calculateSearchPathAzimuth(int startCell, double initialAzimuth, double azimuthWeight = 0.1);
 
         /// @brief Get locations from a vector of cell numbers. Returns in same order as input.
         /// @param cells The cells to get locations from
@@ -106,8 +108,10 @@ namespace ENCGIS
 
         /// @brief Get the neighbor with the lowest weight and lowest change of azimuth
         /// @param cell The cell id for which to check the neighbors
-        /// @return the neighbor with the lowest weight.
-        int getLocalOptimalNeighbourAzimuth(int cell);
+        /// @param azimuth [in] previous azimuth [out] next azimuth
+        /// @param azimuthWeight Absolute azimuth change is multiplied with this weight.
+        /// @return The neighbor with the lowest weight and azimuth change.
+        int getLocalOptimalNeighbourAzimuth(int cell, double &azimuth, double azimuthWeight);
 
         /// @brief Get the azimuth/angle of the span between two cells
         /// @param cell1 

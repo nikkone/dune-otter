@@ -180,13 +180,8 @@ namespace Control
                         double planningBounds[4];
                         m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[0], planningBounds[1], 32632);
                         ++itr;
-
-
                         //m_con->transformSRID(Math::Angles::degrees(msg->end_lon), Math::Angles::degrees(msg->end_lat), 4326, end_easting, end_northing, 32632);
                         spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
-
-                        
-
                         m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
                         m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType));
                         m_searchGrid->setGridWeightsFromLandDistance();
@@ -198,8 +193,9 @@ namespace Control
                         spew("Weights of grid set");
                     } else {
                         spew("Polygon too small.");
+                        return;
                     }
-                    
+                    m_searchGrid->normalizeWeights(true);
 
                     // Parse Custom Parameters
                     /*
@@ -241,6 +237,26 @@ namespace Control
                         err("Parameter \a\' not bool(int)");
                     }
                     }
+
+                    parameterit = custommap.find(std::string("gg"));
+                    if (parameterit != custommap.end()) {
+                    spew("Found gg=%s", parameterit->second.c_str());
+                    try{
+                        m_args.gridType = std::stoul(parameterit->second);
+                    } catch(...) {
+                        err("Parameter \'gg\' not unsigned");
+                    }
+                    }
+
+                    parameterit = custommap.find(std::string("gs"));
+                    if (parameterit != custommap.end()) {
+                    spew("Found gs=%s", parameterit->second.c_str());
+                    try{
+                        m_args.gridSize = std::stof(parameterit->second);
+                    } catch(...) {
+                        err("Parameter \'gs\' not unsigned");
+                    }
+                    }
                     // Store plan specific parameters
                     //vehicle = msg->vehicle;
                     //speed = msg->speed;
@@ -253,7 +269,7 @@ namespace Control
 
                     // Find coverage path
                     int cell = m_searchGrid->getClosestCell(start_easting, start_northing);
-                    std::vector<int> cells = m_searchGrid->calculateSearchPathAzimuth(cell);
+                    std::vector<int> cells = m_searchGrid->calculateSearchPathAzimuth(cell, 0.0, 0.05);
 
                     // End time for computation time measurement
                     auto stop1 = std::chrono::high_resolution_clock::now();

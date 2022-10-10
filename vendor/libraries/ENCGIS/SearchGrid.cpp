@@ -91,14 +91,15 @@ namespace ENCGIS {
         return cells;
     }
     
-    std::vector<int> SearchGrid::calculateSearchPathAzimuth(int startCell) {
+    std::vector<int> SearchGrid::calculateSearchPathAzimuth(int startCell, double initialAzimuth, double azimuthWeight) {
         std::vector<int> cells;
         int cell = startCell;
-        // Greedy algorithm
+        // Greedy algorithm with azimuth weights
+        double azimuth = initialAzimuth;
         while(cell != 0) {
             cells.push_back(cell);
             setCellWeight(cell,-1);
-            cell = getLocalOptimalNeighbourAzimuth(cell);
+            cell = getLocalOptimalNeighbourAzimuth(cell, azimuth, azimuthWeight);
             if(cell == 0) {
                 cell = getClosestUnsearchedCell(cells.back());
             }
@@ -216,7 +217,7 @@ namespace ENCGIS {
     }
     
     int SearchGrid::getLocalOptimalNeighbour(int cell) {
-        std::string query = "select gid from (select min(weight) as mw,gid from " + dbGridTable + " where weight > 0 and st_touches(geometry, (select geometry from " + dbGridTable + " where gid = " + std::to_string(cell) + ")))";
+        std::string query = "select gid from (select max(weight) as mw,gid from " + dbGridTable + " where weight > 0 and st_touches(geometry, (select geometry from " + dbGridTable + " where gid = " + std::to_string(cell) + ")))";
         int errors = 0;
         sqlite3_stmt* m_handle;
 
@@ -235,9 +236,15 @@ namespace ENCGIS {
         return value;
     }
     
-    int SearchGrid::getLocalOptimalNeighbourAzimuth(int cell) {
+    int SearchGrid::getLocalOptimalNeighbourAzimuth(int cell, double &azimuth, double azimuthWeight) {
+        std::string query = "select gid, azimuth from ("
+        "select gid, azimuth, max(weight - " + std::to_string(azimuthWeight) + "*(abs(" + std::to_string(azimuth) + " - azimuth)/(2*PI()))  ) from ("
+        "select weight,gid,azimuth(centroid(geometry), (select centroid(geometry) from " + dbGridTable + " where gid = " + std::to_string(cell) + ")) as azimuth"
+        " from " + dbGridTable + " where weight > 0 and st_touches(geometry, (select geometry from " + dbGridTable + " where gid = " + std::to_string(cell) + "))"
+        "))";
+
         
-        std::string query = "select gid from (select min(weight) as mw,gid from " + dbGridTable + " where weight > 0 and st_touches(geometry, (select geometry from " + dbGridTable + " where gid = " + std::to_string(cell) + ")))";
+        //std::string query = "select gid from (select max(weight) as mw,gid from " + dbGridTable + " where weight > 0 and st_touches(geometry, (select geometry from " + dbGridTable + " where gid = " + std::to_string(cell) + ")))";
         int errors = 0;
         sqlite3_stmt* m_handle;
 
@@ -249,6 +256,8 @@ namespace ENCGIS {
         // Execute
         /*int rc = */sqlite3_step(m_handle);
         int value = sqlite3_column_int(m_handle, m_idx++);
+        azimuth = sqlite3_column_double(m_handle, m_idx++);
+
         // Teardown
         if (m_handle)
             sqlite3_finalize(m_handle);
