@@ -441,7 +441,7 @@ namespace Actuators
         uint8_t master_error = m_can_bfr[1];
         uint8_t error_count = m_can_bfr[2];
         uint8_t firmware_ver = m_can_bfr[3];
-        trace(DTR("MSG_TQ_BATCTL: Motor#%u - Master error: %u; Error count %u; Firmware version: %u"),
+        trace(DTR("MSG_TQ_BATCTL: Battery#%u - Master error: %u; Error count %u; Firmware version: %u"),
               motor_index, master_error, error_count, firmware_ver);
 
       }
