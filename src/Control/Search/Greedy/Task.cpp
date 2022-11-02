@@ -66,7 +66,10 @@ namespace Control
                 //! Database connection
                 ENCGIS::DBconnection* m_con;
                 ENCGIS::SearchGrid* m_searchGrid;
-
+                //! Size of the grid cells
+                unsigned m_gridSize;
+                //! Geometry type of grid, see ENCGIS::SearchGrid::gridtypes_t
+                unsigned m_gridType;
 
                 Task(const std::string& name, Tasks::Context& ctx):
                     DUNE::Tasks::Task(name, ctx),
@@ -103,7 +106,12 @@ namespace Control
                 void
                 onUpdateParameters(void)
                 {
-
+                    if(paramChanged(m_args.gridSize)) {
+                        m_gridSize = m_args.gridSize;
+                    }
+                    if(paramChanged(m_args.gridType)) {
+                        m_gridType = m_args.gridType;
+                    }
                 }
                 void
                 onResourceAcquisition(void)
@@ -162,6 +170,81 @@ namespace Control
                     if (msg->problem_type != IMC::PlanProbSpec::TypeEnum::PPT_coverage)
                     return;
 
+                    // Parse Custom Parameters
+                    /*
+                    Supported custom parameters:
+                        a = [0,x], activate resulting plan
+                        gg = Grid geometry
+                        gs = Grid geometry edge size
+                        p = Planner
+                        paw = Planner azimuth weight
+                        pdw = Planner distance weight
+                    */
+                    DUNE::Utils::TupleList custom = DUNE::Utils::TupleList(msg->custom);
+                    std::map<std::string, std::string> custommap = custom.getMapReversed();
+
+                    auto parameterit = custommap.find(std::string("a"));
+                    bool activateResultingPlan= false;
+                    if (parameterit != custommap.end()) {
+                    try{
+                        spew("Found a=%i", std::stoi(parameterit->second));
+                        activateResultingPlan = (std::stoi(parameterit->second)) ? true : false;
+                    } catch(...) {
+                        err("Parameter \a\' not bool(int)");
+                    }
+                    }
+
+                    parameterit = custommap.find(std::string("gg"));
+                    if (parameterit != custommap.end()) {
+                    spew("Found gg=%s", parameterit->second.c_str());
+                    try{
+                        m_gridType = std::stoul(parameterit->second);
+                    } catch(...) {
+                        err("Parameter \'gg\' not unsigned");
+                    }
+                    }
+
+                    parameterit = custommap.find(std::string("gs"));
+                    if (parameterit != custommap.end()) {
+                    spew("Found gs=%s", parameterit->second.c_str());
+                    try{
+                        m_gridSize = std::stof(parameterit->second);
+                    } catch(...) {
+                        err("Parameter \'gs\' not float");
+                    }
+                    }
+                    unsigned m_planner = 0;
+                    float m_distanceWeight = 0;
+                    float m_azimuthWeight = 0;
+                    parameterit = custommap.find(std::string("p"));
+                    if (parameterit != custommap.end()) {
+                    spew("Found p=%s", parameterit->second.c_str());
+                    try{
+                        m_planner = std::stoi(parameterit->second);
+                    } catch(...) {
+                        err("Parameter \'p\' not unsigned");
+                    }
+                    }
+
+                    parameterit = custommap.find(std::string("paw"));
+                    if (parameterit != custommap.end()) {
+                    spew("Found paw=%s", parameterit->second.c_str());
+                    try{
+                        m_azimuthWeight = std::stof(parameterit->second);
+                    } catch(...) {
+                        err("Parameter \'paw\' not unsigned");
+                    }
+                    }
+
+                    parameterit = custommap.find(std::string("pdw"));
+                    if (parameterit != custommap.end()) {
+                    spew("Found pdw=%s", parameterit->second.c_str());
+                    try{
+                        m_distanceWeight = std::stof(parameterit->second);
+                    } catch(...) {
+                        err("Parameter \'pdw\' not unsigned");
+                    }
+                    }
                     // Convert from WGS-84 to EPSG32632
                     double start_northing, start_easting;
                     m_con->transformSRID(Math::Angles::degrees(msg->start_lon), Math::Angles::degrees(msg->start_lat), 4326, start_easting, start_northing, 32632);
@@ -183,11 +266,11 @@ namespace Control
                         //m_con->transformSRID(Math::Angles::degrees(msg->end_lon), Math::Angles::degrees(msg->end_lat), 4326, end_easting, end_northing, 32632);
                         spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
                         m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
-                        m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType));
+                        m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
                         m_searchGrid->setGridWeightsFromLandDistance();
                     } else if(msg->area.size() > 2) {
                         m_searchGrid->deleteGrid();
-                        m_searchGrid->createGrid(polygonToEWKT(msg->area), m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType));
+                        m_searchGrid->createGrid(polygonToEWKT(msg->area), m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
                         debug("Grid Created from EKWT");
                         m_searchGrid->setGridWeightsFromLandDistance();
                         spew("Weights of grid set");
@@ -197,70 +280,6 @@ namespace Control
                     }
                     m_searchGrid->normalizeWeights(true);
 
-                    // Parse Custom Parameters
-                    /*
-                    Supported custom parameters:
-                        a = [0,x], activate resulting plan
-                        p = [], Planning algorithm/configuration to use, follows enum OMPLintegrationENCGIS::configurations_t
-                        t = [0.0,inf), Max planning time
-                    */
-                    DUNE::Utils::TupleList custom = DUNE::Utils::TupleList(msg->custom);
-                    std::map<std::string, std::string> custommap = custom.getMapReversed();
-                    
-                    /*unsigned planner = 0;
-                    auto parameterit = custommap.find("t");
-                    if (parameterit != custommap.end()) {
-                    try{
-                        maxPlaningTime = std::stof(parameterit->second);
-                        spew("Found t=%f", maxPlaningTime);
-                    } catch(...) {
-                        err("Parameter \'t\' not float");
-                    }
-                    }
-                    parameterit = custommap.find(std::string("p"));
-                    if (parameterit != custommap.end()) {
-                    spew("Found p=%s", parameterit->second.c_str());
-                    try{
-                        planner = std::stoul(parameterit->second);
-                    } catch(...) {
-                        err("Parameter \'p\' not unsigned");
-                    }
-                    }
-                    */
-                    auto parameterit = custommap.find(std::string("a"));
-                    bool activateResultingPlan= false;
-                    if (parameterit != custommap.end()) {
-                    try{
-                        spew("Found a=%i", std::stoi(parameterit->second));
-                        activateResultingPlan = (std::stoi(parameterit->second)) ? true : false;
-                    } catch(...) {
-                        err("Parameter \a\' not bool(int)");
-                    }
-                    }
-
-                    parameterit = custommap.find(std::string("gg"));
-                    if (parameterit != custommap.end()) {
-                    spew("Found gg=%s", parameterit->second.c_str());
-                    try{
-                        m_args.gridType = std::stoul(parameterit->second);
-                    } catch(...) {
-                        err("Parameter \'gg\' not unsigned");
-                    }
-                    }
-
-                    parameterit = custommap.find(std::string("gs"));
-                    if (parameterit != custommap.end()) {
-                    spew("Found gs=%s", parameterit->second.c_str());
-                    try{
-                        m_args.gridSize = std::stof(parameterit->second);
-                    } catch(...) {
-                        err("Parameter \'gs\' not unsigned");
-                    }
-                    }
-                    // Store plan specific parameters
-                    //vehicle = msg->vehicle;
-                    //speed = msg->speed;
-                    //speed_units = msg->speed_units;
 
 
 
@@ -269,7 +288,47 @@ namespace Control
 
                     // Find coverage path
                     int cell = m_searchGrid->getClosestCell(start_easting, start_northing);
-                    std::vector<int> cells = m_searchGrid->calculateSearchPathAzimuth(cell, 0.0, 0.05);
+                    std::vector<int> cells;
+                    float initialAzimuth = 0.0;
+                    switch (m_planner)
+                    {
+                    case 0:
+                        cells = m_searchGrid->calculateSearchPathDistance(cell);
+                        break;
+                    case 1:
+                        /* code */
+                        return;
+                        break;
+                    case 2:
+                        /* code */
+                        return;
+                        break;
+                    case 3:
+                        cells = m_searchGrid->calculateSearchPathAzimuth(cell, initialAzimuth, m_azimuthWeight);
+                        break;
+                    case 4:
+                        /* code */
+                        return;
+                        break;
+                    case 5:
+                        /* code */
+                        return;
+                        break;
+                    case 6:
+                        /* code */
+                        return;
+                        break; 
+                    case 7:
+                        cells = m_searchGrid->calculateSearchPathGlobal(cell, initialAzimuth, m_azimuthWeight,m_distanceWeight);
+                        break;                  
+                    default:
+                        break;
+                    }
+                    //std::vector<int> cells = m_searchGrid->calculateSearchPathAzimuth(cell, 0.0, 0.25);
+                    //std::vector<int> cells = m_searchGrid->calculateSearchPathGlobal(cell, 0.0, 0.1,0.0003);
+
+                    //std::vector<int> cells = m_searchGrid->calculateSearchPathDistance(cell);
+
 
                     // End time for computation time measurement
                     auto stop1 = std::chrono::high_resolution_clock::now();
@@ -277,8 +336,11 @@ namespace Control
                     std::cout << "Path found in: "
                     << duration1.count() << " microseconds" << std::endl;
                     
+
+                    // Remove redundant cells from path in order to reduce plan size
+                     std::vector<int> rcells = m_searchGrid->removeRedundantCells(cells);
                     // Create vector of path waypoints
-                    auto planVec = m_searchGrid->locationsFromCells(cells);
+                    auto planVec = m_searchGrid->locationsFromCells(rcells);
                     debug("Got locations from cells");
 
                     // Write plan to spatialite DBTree, not needed for functionality
@@ -287,8 +349,12 @@ namespace Control
                     m_writable->runNoOutputQuery("select InitSpatialMetadata(1);");
                     tree->resetTree("tree");
                     tree->createTree("tree");
+                    tree->resetTree("rtree");
+                    tree->createTree("rtree");
                     auto planVec32632 = m_searchGrid->locationsFromCells(cells, 32632);
+                    auto rplanVec32632 = m_searchGrid->locationsFromCells(rcells, 32632);
                     tree->pathToDBTree("tree", planVec32632);
+                    tree->pathToDBTree("rtree", rplanVec32632);
                     inf("Wrote to tree");
                     Memory::clear(tree);
                     Memory::clear(m_writable);

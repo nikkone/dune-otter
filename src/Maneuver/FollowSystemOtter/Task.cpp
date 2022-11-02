@@ -333,24 +333,12 @@ namespace Maneuver
         m_path.end_z = depth + m_maneuver.z;
         m_path.end_z_units = m_maneuver.z_units;
 
-        if(m_args.use_orientation) {
-
         // compute the offsets in the BODY frame
         offx = std::cos(psi) * m_maneuver.x
         + std::cos(Angles::normalizeRadian(psi - DUNE::Math::c_half_pi)) * m_maneuver.y;
 
         offy = std::sin(psi) * m_maneuver.x
         + std::sin(Angles::normalizeRadian(psi - DUNE::Math::c_half_pi)) * m_maneuver.y;
-
-        } else {
-        // compute the offsets in the NED frame
-        offx = std::cos(psi) * m_maneuver.x
-        + std::cos(Angles::normalizeRadian(psi - DUNE::Math::c_half_pi)) * m_maneuver.y;
-
-        offy = std::sin(psi) * m_maneuver.x
-        + std::sin(Angles::normalizeRadian(psi - DUNE::Math::c_half_pi)) * m_maneuver.y;
-
-        }
 
         WGS84::displace(offx, offy, &m_path.end_lat, &m_path.end_lon);
         debug("ComputeNEDOffsets offx: %f offy %f, psi: %f", offx, offy, psi);

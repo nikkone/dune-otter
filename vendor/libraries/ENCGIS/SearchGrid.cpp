@@ -106,7 +106,23 @@ namespace ENCGIS {
         }
         return cells;
     }
-    
+
+    std::vector<int> SearchGrid::calculateSearchPathDistance(int startCell) {
+        std::vector<int> cells;
+        int cell = startCell;
+        // Greedy algorithm
+        while(cell != 0) {
+            cells.push_back(cell);
+            setCellWeight(cell,-1);
+            cell = getDistanceOptimalNextCell(cell);
+            if(cell == 0) {
+                cell = getClosestUnsearchedCell(cells.back());
+            }
+            //inf("Cell: %d", cell);
+        }
+        return cells;
+    }
+
     std::vector<std::pair<double, double>> SearchGrid::locationsFromCells(const std::vector<int> &cells, unsigned outputSRID) {
         std::vector<std::pair<double, double>> out;
         for(auto i = cells.begin(); i < cells.end();i++) {
@@ -235,7 +251,7 @@ namespace ENCGIS {
 
         return value;
     }
-    
+
     int SearchGrid::getLocalOptimalNeighbourAzimuth(int cell, double &azimuth, double azimuthWeight) {
         std::string query = "select gid, azimuth from ("
         "select gid, azimuth, max(weight - " + std::to_string(azimuthWeight) + "*(abs(" + std::to_string(azimuth) + " - azimuth)/(2*PI()))  ) from ("
@@ -265,6 +281,30 @@ namespace ENCGIS {
         return value;
     }
     
+    int SearchGrid::getDistanceOptimalNextCell(int cell) {
+        double distanceWeight = 2.0;
+        double maxDistance = 1850;
+        std::string query = "select *, max(weight - " + std::to_string(distanceWeight) + "*distance(geometry, (select geometry from " + dbGridTable + " where gid = " + std::to_string(cell) + "))/" + std::to_string(maxDistance) + ") from " + dbGridTable + " where weight > 0";
+        int errors = 0;
+        sqlite3_stmt* m_handle;
+
+        if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
+        {
+            errors++;
+        }
+        int m_idx = 0;
+        // Execute
+        /*int rc = */sqlite3_step(m_handle);
+        int value = sqlite3_column_int(m_handle, m_idx++);
+
+        // Teardown
+        if (m_handle)
+            sqlite3_finalize(m_handle);
+
+        return value;
+
+    }
+
     double SearchGrid::getAzimuth(int cell1, int cell2) {
         std::string query = " select azimuth((select centroid(geometry) from " + dbGridTable + " where gid = " + std::to_string(cell1) + "), (select centroid(geometry) from " + dbGridTable + " where gid = " + std::to_string(cell2) + "))";
         int errors = 0;
@@ -288,4 +328,70 @@ namespace ENCGIS {
         std::string query = "update " + dbGridTable + " set weight = " + std::to_string(weight) + " where gid = " + std::to_string(cell) + "";
         return m_con->runNoOutputQuery(query);
     }
+
+    std::vector<int> SearchGrid::removeRedundantCells(const std::vector<int> &cells, double acceptedAzimuthDeviation) {
+        std::vector<int> resultingCells;
+        resultingCells.push_back(*(cells.begin()));
+
+        double previousAzimuth = getAzimuth(cells[0], cells[1]);
+        for(auto i = cells.begin()+1; i < cells.end()-1;i++) {
+            double currentAzimuth = getAzimuth(*i, *(i+1));
+            //std::cout << previousAzimuth << " - "<< currentAzimuth << " - " << std::abs(previousAzimuth - currentAzimuth) << " - " << *i << " - "  << *(i+1) <<std::endl;
+            if(std::abs(previousAzimuth - currentAzimuth) > acceptedAzimuthDeviation) {
+                resultingCells.push_back(*i);
+                previousAzimuth = currentAzimuth;
+            }
+        }
+
+        resultingCells.push_back(cells.back());
+        return resultingCells;
+    }
+
+    int SearchGrid::getGlobalOptimalCell(int cell, double azimuth, double azimuthWeight, double distanceWeight) {
+        std::string query = "select gid from (select gid,"
+        "max(weight"
+        "- " + std::to_string(azimuthWeight) + "*ABS( " + std::to_string(azimuth) + "-azimuth((select centroid(geometry) from " + dbGridTable + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + dbGridTable + " where gid = sg.gid)))"
+        "- " + std::to_string(distanceWeight) + "*distance((select centroid(geometry) from " + dbGridTable + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + dbGridTable + " where gid = sg.gid))) as wgt "
+        "from " + dbGridTable + " as sg where weight between -0.1 and 1.1)";
+        //std::cout << query << std::endl;
+        int errors = 0;
+        sqlite3_stmt* m_handle;
+
+        if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
+        {
+            errors++;
+        }
+        int m_idx = 0;
+        // Execute
+        /*int rc = */sqlite3_step(m_handle);
+        int value = sqlite3_column_int(m_handle, m_idx++);
+        // Teardown
+        if (m_handle)
+            sqlite3_finalize(m_handle);
+
+        return value;
+    }
+    std::vector<int> SearchGrid::calculateSearchPathGlobal(int startCell, double initialAzimuth, double azimuthWeight, double distanceWeight)
+    {
+        /*
+        setCellWeight(startCell, 2);
+        int cellNum = 5;
+        for(int i = 0; i < cellNum; i++) {
+
+            setCellWeight(startCell, i+2);
+        }*/
+        std::vector<int> cells;
+        int cell = startCell;
+        // Greedy algorithm with azimuth weights
+        double azimuth = initialAzimuth;
+        while(cell != 0) {
+            cells.push_back(cell);
+            setCellWeight(cell,-1);
+            cell = getGlobalOptimalCell(cell, azimuth, azimuthWeight, distanceWeight);
+            std::cout << cell << std::endl;
+        }
+        return cells;
+
+    }
+
 }
