@@ -1,5 +1,5 @@
 #include "DBconnection.hpp"
-
+#include <iostream>
 namespace ENCGIS
 {
   DBconnection::DBconnection(std::string filename, int flag, int SRIDin): SRID(SRIDin) {
@@ -149,13 +149,24 @@ namespace ENCGIS
       sqlite3_bind_int(m_handle,4,out_srid);
         // Execute
       if(sqlite3_step(m_handle) == SQLITE_ROW) {
-        out_x = sqlite3_column_int(m_handle, 0);
-        out_y = sqlite3_column_int(m_handle, 1);
+        out_x = sqlite3_column_double(m_handle, 0);
+        out_y = sqlite3_column_double(m_handle, 1);
         sqlite3_reset(m_handle);
       } else {
         sqlite3_reset(m_handle);
       }
       sqlite3_finalize(m_handle);
+  }
+
+  std::vector<std::pair<double,double>> DBconnection::transformSRIDVector(const std::vector<std::pair<double,double>> &inVec,  unsigned in_srid, unsigned out_srid) {
+    std::vector<std::pair<double,double>> outVec;
+    double tempX,tempY;
+    for(auto itr = inVec.cbegin(); itr  != inVec.cend();itr++){
+      transformSRID(itr->first, itr->second, in_srid,tempX,tempY,out_srid);
+      std::cout << tempX << " - "<< tempY << std::endl;
+      outVec.push_back(std::pair<double,double>(tempX,tempY));
+    }
+    return outVec;
   }
 
 }
