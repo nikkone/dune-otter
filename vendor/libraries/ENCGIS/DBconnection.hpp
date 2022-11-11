@@ -14,6 +14,7 @@
 #include <sqlite3/sqlite3.h>
 
 #include <stdexcept>
+#include <vector>
 namespace ENCGIS
 {
   //! Database connection with functions for using Spatialite stored ENCs
@@ -48,6 +49,8 @@ namespace ENCGIS
     /// @param out_y 
     /// @param out_srid 
     void transformSRID(double in_x, double in_y, unsigned in_srid, double &out_x, double &out_y, unsigned out_srid);
+
+    std::vector<std::pair<double,double>> transformSRIDVector(const std::vector<std::pair<double,double>> &inVec,  unsigned in_srid, unsigned out_srid);
 
     /// @brief 
     /// @param sql_stmt 
