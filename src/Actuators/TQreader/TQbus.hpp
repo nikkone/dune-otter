@@ -104,13 +104,17 @@ public:
     DUNE::IO::Handle* uart_handle;
     DUNE::Tasks::Task* task;
 
+    unsigned motor_eid;
+    unsigned battery_eid;
+
+
     //static AP_Torqeedo* get_singleton();
 
     // initialise driver
-    TQbus(DUNE::IO::Handle* inn_uart_handle, ConnectionType inn_type, DUNE::Tasks::Task* inn_task);
+    TQbus(DUNE::IO::Handle* inn_uart_handle, ConnectionType inn_type, DUNE::Tasks::Task* inn_task, unsigned m_eid, unsigned b_eid);
 
     // consume incoming messages from motor, reply with latest motor speed
-    void main_loop(const std::string& input);
+    void main_loop(const std::string& input, int16_t actuation);
 
     // returns true if communicating with the motor
     bool healthy();

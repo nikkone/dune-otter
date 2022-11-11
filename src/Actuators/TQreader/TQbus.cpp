@@ -55,12 +55,15 @@ bool TQbus::enabled() const
 
     return false;
 }
-    TQbus::TQbus(DUNE::IO::Handle* inn_uart_handle, ConnectionType inn_type, DUNE::Tasks::Task* inn_task) {
+    TQbus::TQbus(DUNE::IO::Handle* inn_uart_handle, ConnectionType inn_type, DUNE::Tasks::Task* inn_task, unsigned m_eid, unsigned b_eid) {
         uart_handle = inn_uart_handle;
         _type = inn_type;
         _initialised = true;
         task = inn_task;
         _motor_power = 5; // TODO!!!!!!
+
+        motor_eid = m_eid;
+        battery_eid = b_eid;
     }
 
 
@@ -68,7 +71,7 @@ bool TQbus::enabled() const
 // consume incoming messages from motor, reply with latest motor speed
 // runs in background thread
 // 1ms loop delay
-void TQbus::main_loop(const std::string& input)
+void TQbus::main_loop(const std::string& input, int16_t actuation)
 {
 
         // check if transmit pin should be unset
@@ -90,7 +93,7 @@ void TQbus::main_loop(const std::string& input)
         }
 
         // send motor speed
-        bool log_update = false;
+        //bool log_update = false;
         if (safe_to_send()) {
             uint32_t now_ms = DUNE::Time::Clock::getMsec();
 
@@ -113,9 +116,9 @@ void TQbus::main_loop(const std::string& input)
             // send motor speed
             if (_send_motor_speed) {
                 //task->spew("Sending motor speed");
-                send_motor_speed_cmd(1000); // TODO!!!!!!!!!!
+                send_motor_speed_cmd(actuation);
                 _send_motor_speed = false;
-                log_update = true;
+                //log_update = true;
             }
         }
 
@@ -244,6 +247,7 @@ void TQbus::parse_message()
                 // update esc telem sent to ground station
                 const uint8_t esc_temp = std::max(_display_system_state.temp_sw, _display_system_state.temp_rp);
                 const uint8_t motor_temp = std::max(_display_system_state.motor_pcb_temp, _display_system_state.motor_stator_temp);
+                task->inf("MPCBTEMP: %u, MSTATORTEMP: %u", _display_system_state.motor_pcb_temp, _display_system_state.motor_stator_temp);
 
                 // log data
                     // @LoggerMessage: TRST
@@ -259,7 +263,7 @@ void TQbus::parse_message()
                     // @Field: BPct: Battery charge percentage
                     // @Field: BVolt: Battery voltage
                     // @Field: BCur: Battery current
-                task->inf("Flags %x,Err %x,MVolt %f ,MCur %f ,MPow %x ,MRPM %x ,MTemp %x ,ETemp %x ,BPct %x ,BVolt %f ,BCur %f ",
+                task->inf("Flags %x,Err %x,MVolt %f ,MCur %f ,MPow %u ,MRPM %x ,MTemp %u ,ETemp %u ,BPct %u ,BVolt %f ,BCur %f ",
                                                     _display_system_state.flags.value,
                                                     _display_system_state.master_error_code,
                                                     _display_system_state.motor_voltage,
@@ -271,7 +275,41 @@ void TQbus::parse_message()
                                                     _display_system_state.batt_charge_pct,
                                                     _display_system_state.batt_voltage,
                                                     _display_system_state.batt_current);
+                
+                DUNE::IMC::Voltage voltage_msg;
+                voltage_msg.setSourceEntity(battery_eid);
+                voltage_msg.value = _display_system_state.batt_voltage;
+                task->dispatch(voltage_msg);
+                
+                DUNE::IMC::Current current_msg;
+                current_msg.setSourceEntity(battery_eid);
+                current_msg.value = _display_system_state.batt_current;
+                task->dispatch(current_msg);
+                
+                DUNE::IMC::FuelLevel level_msg;
+                level_msg.setSourceEntity(battery_eid);
+                level_msg.value = fp32_t(_display_system_state.batt_charge_pct);
+                task->dispatch(level_msg);
+// Motor
+                
+                voltage_msg.setSourceEntity(motor_eid);
+                voltage_msg.value = _display_system_state.motor_voltage;
+                task->dispatch(voltage_msg);
+                
+                
+                current_msg.setSourceEntity(motor_eid);
+                current_msg.value = _display_system_state.motor_current;
+                task->dispatch(current_msg);
 
+                DUNE::IMC::Rpm rpm_msg;
+                rpm_msg.setSourceEntity(motor_eid);
+                rpm_msg.value = _display_system_state.motor_rpm;
+                task->dispatch(rpm_msg);
+
+                DUNE::IMC::Temperature temp_msg;
+                temp_msg.setSourceEntity(motor_eid);
+                temp_msg.value = fp32_t(motor_temp);
+                task->dispatch(temp_msg);
                 // report any errors
                 report_error_codes();
             } else {
@@ -301,7 +339,7 @@ void TQbus::parse_message()
                     // @Field: BattPct: Battery charge percentage
                     // @Field: BattType: Battery type
                     // @Field: SwVer: Master software version
-                    task->inf("Flag, %x MotType, %x MotVer, %x BattCap, %x BattPct, %x BattType, %x SwVer %u",
+                    task->inf("Flag, %x MotType, %u MotVer, %u BattCap, %u BattPct, %u BattType, %x SwVer %u",
                                        _display_system_setup.flags,
                                        _display_system_setup.motor_type,
                                        _display_system_setup.motor_sw_version,
@@ -417,29 +455,39 @@ void TQbus::report_error_codes()
     if (!flags_changed && ((now_ms - _last_error_report_ms) < TORQEEDO_ERROR_REPORT_INTERVAL_MAX_MS)) {
         return;
     }
-/*
+
     // report display system errors
     const char* msg_prefix = "Torqeedo:";
     if (_display_system_state.flags.set_throttle_stop) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s zero throttle required", msg_prefix);
+        task->err("%s zero throttle required", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s zero throttle required", msg_prefix);
     }
     if (_display_system_state.flags.temp_warning) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s high temp", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s high temp", msg_prefix);
+        task->err("%s high temp", msg_prefix);
     }
     if (_display_system_state.flags.temp_warning) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s batt nearly empty", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s batt nearly empty", msg_prefix);
+        task->war("%s batt nearly empty", msg_prefix);
     }
     if (_display_system_state.master_error_code > 0) {
         const char *error_string = map_master_error_code_to_string(_display_system_state.master_error_code);
         if (error_string != nullptr) {
-            gcs().send_text(
+            /*gcs().send_text(
                 MAV_SEVERITY_CRITICAL, "%s err:%u %s",
+                msg_prefix,
+                _display_system_state.master_error_code,
+                error_string);*/
+                task->err( "%s err:%u %s",
                 msg_prefix,
                 _display_system_state.master_error_code,
                 error_string);
         } else {
-            gcs().send_text(
+            /*gcs().send_text(
                 MAV_SEVERITY_CRITICAL, "%s err:%u",
+                msg_prefix,
+                _display_system_state.master_error_code);*/
+                task->err("%s err:%u",
                 msg_prefix,
                 _display_system_state.master_error_code);
         }
@@ -447,30 +495,38 @@ void TQbus::report_error_codes()
 
     // report motor status errors
     if (_motor_status.error_flags.overcurrent) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s overcurrent", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s overcurrent", msg_prefix);
+        task->err("%s overcurrent", msg_prefix);
     }
     if (_motor_status.error_flags.blocked) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s prop blocked", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s prop blocked", msg_prefix);
+        task->err("%s prop blocked", msg_prefix);
     }
     if (_motor_status.error_flags.overvoltage_static || _motor_status.error_flags.overvoltage_current) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s high voltage", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s high voltage", msg_prefix);
+        task->err("%s high voltage", msg_prefix);
     }
     if (_motor_status.error_flags.undervoltage_static || _motor_status.error_flags.undervoltage_current) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s low voltage", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s low voltage", msg_prefix);
+        task->err("%s low voltage", msg_prefix);
     }
     if (_motor_status.error_flags.overtemp_motor || _motor_status.error_flags.overtemp_pcb) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s high temp", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s high temp", msg_prefix);
+        task->err("%s high temp", msg_prefix);
     }
     if (_motor_status.error_flags.timeout_rs485) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s comm timeout", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s comm timeout", msg_prefix);
+        task->err("%s comm timeout", msg_prefix);
     }
     if (_motor_status.error_flags.temp_sensor_error) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s temp sensor err", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s temp sensor err", msg_prefix);
+        task->err("%s temp sensor err", msg_prefix);
     }
     if (_motor_status.error_flags.tilt) {
-        gcs().send_text(MAV_SEVERITY_CRITICAL, "%s tilted", msg_prefix);
+        //gcs().send_text(MAV_SEVERITY_CRITICAL, "%s tilted", msg_prefix);
+        task->war("%s tilted", msg_prefix);
     }
-
+    /*
     // display OK if all errors cleared
     const bool prev_errored = (_display_system_state_flags_prev.value != 0) ||
                               (_display_system_state_master_error_code_prev != 0) ||
@@ -481,9 +537,10 @@ void TQbus::report_error_codes()
                              (_motor_status.error_flags_value != 0);
 
     if (!now_errored && prev_errored) {
-        gcs().send_text(MAV_SEVERITY_INFO, "%s OK", msg_prefix);
-    }
-*/
+        ////gcs().send_text(MAV_SEVERITY_INFO, "%s OK", msg_prefix);
+
+    }*/
+
     // record change in state and reporting time
     _display_system_state_flags_prev.value = _display_system_state.flags.value;
     _display_system_state_master_error_code_prev = _display_system_state.master_error_code;
@@ -597,18 +654,19 @@ void TQbus::send_motor_speed_cmd(int16_t desiredSpeed)
 {
     // calculate desired motor speed
     // TODO: Limit. convert throttle output to motor output in range -1000 to +1000
-    _motor_speed_desired = desiredSpeed;
+    _motor_speed_desired = DUNE::Math::trimValue(desiredSpeed,-1000, 1000);
 
     // updated limited motor speed
     int16_t mot_speed_limited = calc_motor_speed_limited(_motor_speed_desired);
+    
+
 
     // by default use tiller connection command
     uint8_t mot_speed_cmd_buff[] = {(uint8_t)MsgAddress::BUS_MASTER, 0x0, 0x5, 0x0, HIGHBYTE(mot_speed_limited), LOWBYTE(mot_speed_limited)};
 
     // update message if using motor connection
     if (_type == ConnectionType::TYPE_MOTOR) {
-        //const uint8_t motor_power = (uint8_t)constrain_int16(_motor_power, 0, 100);
-        const uint8_t motor_power = _motor_power; // TODO: !!!!!
+        const uint8_t motor_power = (uint8_t)DUNE::Math::trimValue(_motor_power, 0, 100);
         mot_speed_cmd_buff[0] = (uint8_t)MsgAddress::MOTOR;
         mot_speed_cmd_buff[1] = (uint8_t)MotorMsgId::DRIVE;
         mot_speed_cmd_buff[2] = (mot_speed_limited == 0 ? 0 : 0x01) | (_motor_clear_error ? 0x04 : 0);  // 1:enable motor, 2:fast off, 4:clear error
@@ -627,6 +685,10 @@ void TQbus::send_motor_speed_cmd(int16_t desiredSpeed)
         //WITH_SEMAPHORE(_last_healthy_sem);
         _last_send_motor_ms = DUNE::Time::Clock::getMsec();
     }
+    DUNE::IMC::Throttle throttle_msg;
+    throttle_msg.setSourceEntity(motor_eid);
+    throttle_msg.value = mot_speed_limited;
+    task->dispatch(throttle_msg);
 }
 
 // calculate the limited motor speed that is sent to the motors
@@ -678,16 +740,14 @@ int16_t TQbus::calc_motor_speed_limited(int16_t desired_motor_speed)
     // apply slew limit
     if (_slew_time > 0) {
        const float chg_max = 1000.0 * dt / _slew_time;
-       //_motor_speed_limited = constrain_float(desired_motor_speed, _motor_speed_limited - chg_max, _motor_speed_limited + chg_max);
-       _motor_speed_limited = desired_motor_speed; // TODO!!!!!
+       _motor_speed_limited = DUNE::Math::trimValue(desired_motor_speed, _motor_speed_limited - chg_max, _motor_speed_limited + chg_max);
     } else {
         // no slew limit
         _motor_speed_limited = desired_motor_speed;
     }
 
     // apply upper and lower limits
-    //_motor_speed_limited = constrain_float(_motor_speed_limited, lower_limit, upper_limit);
-   // _motor_speed_limited = constrain_float(_motor_speed_limited, lower_limit, upper_limit); // TODO!!!
+    _motor_speed_limited = DUNE::Math::trimValue(_motor_speed_limited, lower_limit, upper_limit);
 
 
     // record time motor speed becomes zero
@@ -729,41 +789,6 @@ void TQbus::check_for_send_end()
 void TQbus::set_reply_received()
 {
     _reply_wait_start_ms = 0;
-}
-
-/*
-// returns true if communicating with the motor
-bool TQbus::healthy()
-{
-    if (!_initialised) {
-        return false;
-    }
-    {
-        // healthy if both receive and send have occurred in the last 3 seconds
-        WITH_SEMAPHORE(_last_healthy_sem);
-        const uint32_t now_ms = DUNE::Time::Clock::getMsec();
-        return ((now_ms - _last_received_ms < 3000) && (now_ms - _last_send_motor_ms < 3000));
-    }
-}
-
-// run pre-arm check.  returns false on failure and fills in failure_msg
-// any failure_msg returned will not include a prefix
-bool TQbus::pre_arm_checks(char *failure_msg, uint8_t failure_msg_len)
-{
-    // exit immediately if not enabled
-    if (!enabled()) {
-        return true;
-    }
-
-    if (!_initialised) {
-        strncpy(failure_msg, "not initialised", failure_msg_len);
-        return false;
-    }
-    if (!healthy()) {
-        strncpy(failure_msg, "not healthy", failure_msg_len);
-        return false;
-    }
-    return true;
 }
 
 // returns a human-readable string corresponding the passed-in
@@ -808,6 +833,41 @@ const char * TQbus::map_master_error_code_to_string(uint8_t code) const
     }
 
     return nullptr;
+}
+
+/*
+// returns true if communicating with the motor
+bool TQbus::healthy()
+{
+    if (!_initialised) {
+        return false;
+    }
+    {
+        // healthy if both receive and send have occurred in the last 3 seconds
+        WITH_SEMAPHORE(_last_healthy_sem);
+        const uint32_t now_ms = DUNE::Time::Clock::getMsec();
+        return ((now_ms - _last_received_ms < 3000) && (now_ms - _last_send_motor_ms < 3000));
+    }
+}
+
+// run pre-arm check.  returns false on failure and fills in failure_msg
+// any failure_msg returned will not include a prefix
+bool TQbus::pre_arm_checks(char *failure_msg, uint8_t failure_msg_len)
+{
+    // exit immediately if not enabled
+    if (!enabled()) {
+        return true;
+    }
+
+    if (!_initialised) {
+        strncpy(failure_msg, "not initialised", failure_msg_len);
+        return false;
+    }
+    if (!healthy()) {
+        strncpy(failure_msg, "not healthy", failure_msg_len);
+        return false;
+    }
+    return true;
 }
 
 // get latest battery status info.  returns true on success and populates arguments
