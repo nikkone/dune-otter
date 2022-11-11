@@ -24,7 +24,8 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Nikolai Lauvås (based on GPS by Ricardo Martins)                 *
+// Author: Task: Nikolai Lauvås                                             *
+// TQbus implementation based on ArduPilot driver developed by Randy Mackay *
 //***************************************************************************
  
 
@@ -76,11 +77,13 @@ namespace Actuators
 
       Torqeedo::TQbus* tqbus;
 
+      int16_t m_desired_actuation;
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
         m_handle(NULL),
         m_TQSerialReader(NULL),
-        tqbus(NULL)
+        tqbus(NULL),
+        m_desired_actuation(0)
       {
         // Define configuration parameters.
         param("Serial Port - Device", m_args.uart_dev)
@@ -93,6 +96,7 @@ namespace Actuators
 
         bind<IMC::DevDataText>(this);
         bind<IMC::IoEvent>(this);
+        bind<IMC::SetThrusterActuation>(this);
       }
       //! Update internal state with new parameter values.
       void
@@ -112,10 +116,19 @@ namespace Actuators
         }
         catch (...)
         {
-          throw RestartNeeded(DTR("1"), 5);
+          throw RestartNeeded(DTR("Problem opening serial"), 5);
         }
 
-       tqbus = new Torqeedo::TQbus(m_handle, Torqeedo::TQbus::ConnectionType::TYPE_TILLER, this);
+        unsigned motor_eid = getEntityId();
+        unsigned battery_eid = getEntityId();
+        try{
+        std::string label = getEntityLabel();
+        motor_eid = reserveEntity(label + "Motor");
+        battery_eid = reserveEntity(label + "Battery");
+        } catch (...) {
+          war("Could Get new entity labels, using parent");
+        }
+        tqbus = new Torqeedo::TQbus(m_handle, Torqeedo::TQbus::ConnectionType::TYPE_TILLER, this, motor_eid, battery_eid);
       }
 
       bool
@@ -153,6 +166,13 @@ namespace Actuators
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
       }
 
+      //! Consume SetThrusterActuation messages
+      void
+      consume(const IMC::SetThrusterActuation* msg)
+      {
+        m_desired_actuation = int16_t(1000 * msg->value);
+      }
+
       void
       consume(const IMC::DevDataText* msg)
       {
@@ -186,7 +206,7 @@ namespace Actuators
       processSentence(const std::string& line)
       {
         //spew("Process: %s", line.c_str());
-        tqbus->main_loop(line);
+        tqbus->main_loop(line, m_desired_actuation);
       }
 
       void
