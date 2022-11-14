@@ -33,6 +33,14 @@
 // Additional headers
 #include <ENCGIS/DBconnection.hpp>
 #include <ENCGIS/SearchGrid.hpp>
+#include <ENCGIS/isPointInLayerStatement.hpp>
+#include <ENCGIS/lineIntersectLayerStatement.hpp>
+
+// OMPL integration for DUNE
+#include <OMPL/setup.hpp>
+#include <OMPL/OMPLfunctions.hpp>
+
+// ISO CPP headers
 #include <algorithm>
 #include <chrono>
 
@@ -53,6 +61,8 @@ namespace Control
                 std::string dbNavigableLayerName;
                 //! Innavigable Layer Name
                 std::string dbInnavigableLayerName;
+                //! If a valid path is available, allow optimizing until the given time. If non-optimizing planner used, this is ignored.
+                double minPlaningTime;
                 //! Size of the grid cells
                 unsigned gridSize;
                 //! Geometry type of grid, see ENCGIS::SearchGrid::gridtypes_t
@@ -66,11 +76,18 @@ namespace Control
                 //! Database connection
                 ENCGIS::DBconnection* m_con;
                 ENCGIS::SearchGrid* m_searchGrid;
+                ENCGIS::isPointInLayerStatement *pointCheck;
+                ENCGIS::lineIntersectLayerStatement *lineCheck;
                 //! Size of the grid cells
                 unsigned m_gridSize;
                 //! Geometry type of grid, see ENCGIS::SearchGrid::gridtypes_t
                 unsigned m_gridType;
-
+                //!
+                unsigned m_planner = 0;
+                //!
+                float m_distanceWeight = 0;
+                //!
+                float m_azimuthWeight = 0;
                 Task(const std::string& name, Tasks::Context& ctx):
                     DUNE::Tasks::Task(name, ctx),
                     m_con(NULL),
@@ -100,6 +117,11 @@ namespace Control
                 .defaultValue("0")
                 .description("Geometry type of grid, 0=HEX, 1=Square, 2=Triangular.");
 
+                param("Min Planning Time", m_args.minPlaningTime)
+                .units(DUNE::Units::Second)
+                .defaultValue("10.0")
+                .description("If a valid path is available, allow optimizing until the given time. If non-optimizing planner used, this is ignored.");
+
                 bind<IMC::PlanProbSpec>(this);
                 }
                 //! Update internal state with new parameter values.
@@ -123,6 +145,20 @@ namespace Control
                     // Set task state to failure
                     }
                     m_searchGrid = new ENCGIS::SearchGrid(m_con);
+                    try{
+                    pointCheck = new ENCGIS::isPointInLayerStatement(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632);
+                    } catch(std::runtime_error& e) {
+                    err(DTR("Problem creating query for navigable layer: %s"), e.what());
+                    // Set task state to failure
+                    }
+
+                    try{
+                    lineCheck = new ENCGIS::lineIntersectLayerStatement(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632);
+                    } catch(std::runtime_error& e) {
+                    err(DTR("Problem creating query for innavigable layer: %s"), e.what());
+                    // Set task state to failure
+                    }  
+
                 }
 
 
@@ -140,6 +176,10 @@ namespace Control
                 void
                 onResourceInitialization(void)
                 {
+                    // Set OMPL to use the console output of this task
+                    ompl::msg::OutputHandler *oh = new OMPLforDUNE::OutputHandlerDUNEConsole(this);
+                    ompl::msg::useOutputHandler(oh);
+                    ompl::msg::setLogLevel(ompl::msg::LogLevel::LOG_DEV2);
                 }
 
                 std::string polygonToEWKT(const IMC::MessageList<IMC::PolygonVertex> &polygon) {
@@ -213,14 +253,11 @@ namespace Control
                         err("Parameter \'gs\' not float");
                     }
                     }
-                    unsigned m_planner = 0;
-                    float m_distanceWeight = 0;
-                    float m_azimuthWeight = 0;
                     parameterit = custommap.find(std::string("p"));
                     if (parameterit != custommap.end()) {
-                    spew("Found p=%s", parameterit->second.c_str());
                     try{
                         m_planner = std::stoi(parameterit->second);
+                        spew("Found p=%d", m_planner);
                     } catch(...) {
                         err("Parameter \'p\' not unsigned");
                     }
@@ -280,7 +317,14 @@ namespace Control
                     }
                     m_searchGrid->normalizeWeights(true);
 
-
+#if SEARCHGRID_USEOPP_OMPL
+                    // Find square covering bounds of search area
+                    double planningBounds[4];// = {0,1,0,1};
+                    m_con->getExtent("searchgridraw", planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);
+                    //spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);
+                    og::SimpleSetup setup = OMPLintegrationENCGIS::createSetup(planningBounds[1], planningBounds[0], planningBounds[3], planningBounds[2], pointCheck, lineCheck);
+                    //OMPLintegrationENCGIS::setStartAndGoalStates(setup, start_easting, start_northing, end_easting, end_northing);
+#endif
 
 
                     // Start time for computation measurments.
@@ -288,23 +332,23 @@ namespace Control
 
                     // Find coverage path
                     int cell = m_searchGrid->getClosestCell(start_easting, start_northing);
-                    std::vector<int> cells;
+
                     float initialAzimuth = 0.0;
+
+#if SEARCHGRID_USEOPP_OMPL
+                        std::vector<std::pair<double, double>> planVec32632;
                     switch (m_planner)
                     {
                     case 0:
-                        cells = m_searchGrid->calculateSearchPathDistance(cell);
+                        spew("Using calculateSearchPath with OMPL");
+                        planVec32632 = m_searchGrid->calculateSearchPath(cell, setup);
                         break;
                     case 1:
-                        /* code */
-                        return;
                         break;
                     case 2:
-                        /* code */
-                        return;
                         break;
                     case 3:
-                        cells = m_searchGrid->calculateSearchPathAzimuth(cell, initialAzimuth, m_azimuthWeight);
+                        return;
                         break;
                     case 4:
                         /* code */
@@ -319,42 +363,84 @@ namespace Control
                         return;
                         break; 
                     case 7:
+                        spew("Using calculateSearchPathGlobal with OMPL");
+                        planVec32632 = m_searchGrid->calculateSearchPathGlobal(cell, setup, initialAzimuth, m_azimuthWeight,m_distanceWeight);
+                        break;                  
+                    default:
+                        break;
+                        return;
+                    }
+#else
+                    std::vector<int> cells;                     
+                    switch (m_planner)
+                    {
+                    case 0:
+
+                        spew("Using calculateSearchPath");
+                        cells = m_searchGrid->calculateSearchPath(cell);
+                    
+                        break;
+                    case 1:
+                        spew("Using calculateSearchPathAzimuth");
+                        cells = m_searchGrid->calculateSearchPathAzimuth(cell, initialAzimuth, m_azimuthWeight);
+                        break;
+                    case 2:
+                        spew("Using calculateSearchPathDistance");
+                        cells = m_searchGrid->calculateSearchPathDistance(cell);
+                        break;
+                    case 3:
+                        return;
+                        break;
+                    case 4:
+                        /* code */
+                        return;
+                        break;
+                    case 5:
+                        /* code */
+                        return;
+                        break;
+                    case 6:
+                        /* code */
+                        return;
+                        break; 
+                    case 7:
+                        spew("Using calculateSearchPathGlobal");
                         cells = m_searchGrid->calculateSearchPathGlobal(cell, initialAzimuth, m_azimuthWeight,m_distanceWeight);
                         break;                  
                     default:
                         break;
+                        return;
                     }
-                    //std::vector<int> cells = m_searchGrid->calculateSearchPathAzimuth(cell, 0.0, 0.25);
-                    //std::vector<int> cells = m_searchGrid->calculateSearchPathGlobal(cell, 0.0, 0.1,0.0003);
-
-                    //std::vector<int> cells = m_searchGrid->calculateSearchPathDistance(cell);
-
-
+#endif
                     // End time for computation time measurement
                     auto stop1 = std::chrono::high_resolution_clock::now();
                     auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start);
                     std::cout << "Path found in: "
                     << duration1.count() << " microseconds" << std::endl;
                     
-
+#if SEARCHGRID_USEOPP_OMPL
+                    auto planVec4326 = m_con->transformSRIDVector(planVec32632, 32632,4326);
+#else
                     // Remove redundant cells from path in order to reduce plan size
                      std::vector<int> rcells = m_searchGrid->removeRedundantCells(cells);
                     // Create vector of path waypoints
-                    auto planVec = m_searchGrid->locationsFromCells(rcells);
+                    auto planVec4326 = m_searchGrid->locationsFromCells(rcells);
                     debug("Got locations from cells");
 
+#endif
                     // Write plan to spatialite DBTree, not needed for functionality
                     ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 32632);
                     ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_writable);
                     m_writable->runNoOutputQuery("select InitSpatialMetadata(1);");
                     tree->resetTree("tree");
                     tree->createTree("tree");
-                    tree->resetTree("rtree");
-                    tree->createTree("rtree");
-                    auto planVec32632 = m_searchGrid->locationsFromCells(cells, 32632);
-                    auto rplanVec32632 = m_searchGrid->locationsFromCells(rcells, 32632);
+                    //tree->resetTree("rtree");
+                    //tree->createTree("rtree");
+                    //auto planVec32632 = m_searchGrid->locationsFromCells(cells, 32632);
+                    //auto planVec32632 = m_con->transformSRIDVector(planVec,4326, 32632);
+                    //auto rplanVec32632 = m_searchGrid->locationsFromCells(rcells, 32632);
                     tree->pathToDBTree("tree", planVec32632);
-                    tree->pathToDBTree("rtree", rplanVec32632);
+                    //tree->pathToDBTree("rtree", rplanVec32632);
                     inf("Wrote to tree");
                     Memory::clear(tree);
                     Memory::clear(m_writable);
@@ -363,8 +449,9 @@ namespace Control
                     m_searchGrid->setGridWeightsFromLandDistance();
                     m_searchGrid->normalizeWeights(true);
 
+
                     // Turn vector of waypoints into a IMC::PlanDB and dispatch/submit it to the plan database
-                    IMC::PlanDB pdb = createPlanDBEntry(planVec, "autoPlan", 1.0);
+                    IMC::PlanDB pdb = createPlanDBEntry(planVec4326, "autoPlan", 1.0);
                     debug("IMC plan created");
                     
                     // Check if path is too long to use

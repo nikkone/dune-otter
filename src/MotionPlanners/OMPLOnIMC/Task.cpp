@@ -34,7 +34,7 @@
 #include <ENCGIS/DBTree.hpp>
 #include <ENCGIS/isPointInLayerStatement.hpp>
 #include <ENCGIS/lineIntersectLayerStatement.hpp>
-#include <ENCGIS/getClosestIntersectWithOffset.hpp>
+//#include <ENCGIS/getClosestIntersectWithOffset.hpp>
 
 // OMPL integration for DUNE
 #include <OMPL/setup.hpp>
@@ -63,8 +63,6 @@ namespace MotionPlanners
       std::vector<double> planningBounds;
       //! Defines the start and end point to use while developing
       std::vector<double> startAndEnd;
-      //! Search depth
-      unsigned searchDepth;
 #if OMPL_BENCHMARK
       std::string benchmark_name;
       double benchmark_maxTime;
@@ -131,10 +129,6 @@ namespace MotionPlanners
         .size(4)
         .defaultValue("569142.113652, 7035964.208531, 569354.798021, 7032506.975707")
         .description("A starting point and end point to use while developing");
-
-        param("Search Depth", m_args.searchDepth)
-        .defaultValue("4")
-        .description("Search Depth");
 
         
 #if OMPL_BENCHMARK
@@ -299,12 +293,12 @@ namespace MotionPlanners
         m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[1], planningBounds[0], 32632);
         ++itr;
         m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[3], planningBounds[2], 32632);
-        ob::RealVectorBounds bounds(2);
+        /*ob::RealVectorBounds bounds(2);
 
         bounds.setLow(0,planningBounds[0]);
         bounds.setHigh(0,planningBounds[2]);
         bounds.setLow(1,planningBounds[1]);
-        bounds.setHigh(1,planningBounds[3]);
+        bounds.setHigh(1,planningBounds[3]);*/
 
         // Convert from WGS-84 to EPSG32632
         double start_northing, start_easting, end_northing, end_easting;
@@ -313,12 +307,21 @@ namespace MotionPlanners
 
         spew("Planning start/goal: %f, %f, %f, %f", start_easting, start_northing, end_easting, end_northing);
         spew("Args bounds:  %f, %f, %f, %f", m_args.planningBounds[1], m_args.planningBounds[3], m_args.planningBounds[0], m_args.planningBounds[2]);
-        spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
+        spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);
 
-        og::SimpleSetup setup = OMPLintegrationENCGIS::createSetup(start_easting, start_northing, end_easting, end_northing, bounds, pointCheck, lineCheck);
+        //og::SimpleSetup setup = OMPLintegrationENCGIS::createSetup(start_easting, start_northing, end_easting, end_northing, bounds, pointCheck, lineCheck);
+        og::SimpleSetup setup = OMPLintegrationENCGIS::createSetup(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], pointCheck, lineCheck);
+        OMPLintegrationENCGIS::setStartAndGoalStates(setup, start_easting, start_northing, end_easting, end_northing);
+
         og::PathGeometric states = OMPLintegrationENCGIS::findPath(setup, maxPlaningTime, OMPLintegrationENCGIS::configurations_t(planner));
 
         if (states.getStateCount()) {
+          auto planVec = OMPLforDUNE::pathToVector(states);
+          auto planVec4326 = m_con->transformSRIDVector(planVec, 32632,4326);
+            // Make maneuvers
+            for(auto i = planVec4326.begin(); i < planVec4326.end();i++) {
+                inf("%f, %f", i->first, i->second);
+            }
           //// Dispatch and activate returned path
           IMC::PlanDB pdb = OMPLforDUNE::createPlanDBEntryUTM(states, "autoPlan", speed, 32);
           dispatch(pdb);

@@ -38,6 +38,11 @@ namespace ob = ompl::base;
         //! @param[in] tree Pointer to tree database object.
         void pathToTree(og::PathGeometric states, std::string treeName, ENCGIS::DBTree* tree);
 
+        //! Writes the (X,Y) pairs to a std::vector container in the order they are traversed
+        //! @param[in] states The geometric path 
+        //! @return A vector with the (X,Y) pairs from the path
+        std::vector<std::pair<double,double>> pathToVector(og::PathGeometric states);
+
         //! This (utility) method generates a PlanSpecification
         //! consisting in the given maneuver sequence.
         //! This function is sourced from the plan.generator task.

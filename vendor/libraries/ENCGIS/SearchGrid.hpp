@@ -8,6 +8,8 @@
 
 #ifndef ENCGIS_SEARCHGRID_HPP_INCLUDED
 #define ENCGIS_SEARCHGRID_HPP_INCLUDED
+#define SEARCHGRID_USEOPP_OMPL 1
+
 /* TODO: 
 
 
@@ -17,6 +19,10 @@
 #include <sqlite3/sqlite3.h>
 #include <ENCGIS/DBconnection.hpp>
 #include <ENCGIS/DBTree.hpp>
+#if SEARCHGRID_USEOPP_OMPL
+#include <OMPL/setup.hpp>
+#endif
+
 
 #include <vector>
 #include <utility>
@@ -74,7 +80,12 @@ namespace ENCGIS
 
         /// @brief Delete the grid from the database (The tables this.dbGridTable and dbGridTable + raw in the db opened by m_db)
         void deleteGrid();
-
+#if SEARCHGRID_USEOPP_OMPL
+        /// @brief Uses a greedy algorithm to create a path covering all grid cells.
+        /// @param startCell The first cell to be visited
+        /// @return A vector of describing the cell visitation order
+        std::vector<std::pair<double, double>> calculateSearchPath(int startCell, og::SimpleSetup &setup);
+#endif
         /// @brief Uses a greedy algorithm to create a path covering all grid cells.
         /// @param startCell The first cell to be visited
         /// @return A vector of describing the cell visitation order
@@ -155,8 +166,32 @@ namespace ENCGIS
         /// @return A cell representation of the path with redundant cell specifications removed
         std::vector<int> removeRedundantCells(const std::vector<int> &cells, double acceptedAzimuthDeviation = 0.00000001);
 
+        /// @brief 
+        /// @param cell 
+        /// @param azimuth 
+        /// @param azimuthWeight 
+        /// @param distanceWeight 
+        /// @return 
         int getGlobalOptimalCell(int cell, double azimuth, double azimuthWeight = 0.001, double distanceWeight = 0.0003);
+
+#if SEARCHGRID_USEOPP_OMPL
+        /// @brief 
+        /// @param startCell 
+        /// @param setup 
+        /// @param initialAzimuth 
+        /// @param azimuthWeight 
+        /// @param distanceWeight 
+        /// @return 
+        std::vector<std::pair<double, double>> calculateSearchPathGlobal(int startCell, og::SimpleSetup &setup, double initialAzimuth = 0.0, double azimuthWeight = 0.1, double distanceWeight = 0.1);
+#endif
+        /// @brief 
+        /// @param startCell 
+        /// @param initialAzimuth 
+        /// @param azimuthWeight 
+        /// @param distanceWeight 
+        /// @return 
         std::vector<int> calculateSearchPathGlobal(int startCell, double initialAzimuth, double azimuthWeight = 0.1, double distanceWeight = 0.1);
+
       private:
         ENCGIS::DBconnection* m_con;
         /// @brief Table of POLYGON geometry considered as obstacle

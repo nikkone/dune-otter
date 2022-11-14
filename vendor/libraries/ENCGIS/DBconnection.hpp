@@ -92,6 +92,9 @@ namespace ENCGIS
     //! @return Number of land crossings, -1 if the query returns NULL .
     int checkTransectLanding(double startLat, double startLon, double endLat, double endLon, std::string table="lndaretable", bool useSpatialIndex=true);
 
+    bool getExtent(std::string layer, double &minX, double &minY, double &maxX, double &maxY);
+    //select MbrMinX(geometry), MbrMinY(geometry), MbrMaxX(geometry), MbrMaxX(geometry) from searchgridraw
+
     sqlite3 *db;
     int SRID;
   };

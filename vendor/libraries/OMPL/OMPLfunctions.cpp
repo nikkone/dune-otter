@@ -39,8 +39,16 @@
         }
     }
 
-      ompl::base::PlannerTerminationCondition exactSolnPlannerTerminationCondition(const bool *stop, DUNE::Tasks::Task *inTask, double maxPlaningTime)
-  {
+    std::vector<std::pair<double,double>> pathToVector(og::PathGeometric states) {
+        std::vector<std::pair<double, double>> out;
+        for(unsigned i=0;i<states.getStateCount();i++) {
+          const auto state= static_cast<const ompl::base::RealVectorStateSpace::StateType *>(states.getState(i));
+            out.push_back(std::pair<double,double>(state->values[1], state->values[0]));
+        }
+        return out;
+    }
+
+      ompl::base::PlannerTerminationCondition exactSolnPlannerTerminationCondition(const bool *stop, DUNE::Tasks::Task *inTask, double maxPlaningTime) {
     double duration = maxPlaningTime; // Maxtime
     const ompl::time::point endTime(ompl::time::now() + ompl::time::seconds(duration));
     return ompl::base::PlannerTerminationCondition([stop, inTask, endTime]
@@ -58,8 +66,6 @@
       }
     );
   }
-
-
   
   ompl::base::ReportIntermediateSolutionFn intermediate(DUNE::Tasks::Task *inTask, double minPlaningTime) {
     double duration = minPlaningTime; // Mintime

@@ -4,6 +4,7 @@
   #include <ompl/geometric/planners/informedtrees/BITstar.h>
   #include <ompl/geometric/planners/informedtrees/ABITstar.h>
 #endif
+#include <ompl/base/objectives/PathLengthOptimizationObjective.h>
 #include <ompl/geometric/planners/fmt/FMT.h>
 #include <ompl/geometric/planners/kpiece/LBKPIECE1.h>
 #if OMPL_BENCHMARK
@@ -76,6 +77,51 @@ namespace OMPLintegrationENCGIS
   }
 
 
+  ompl::geometric::SimpleSetup createSetup(double minY, double minX, double maxY, double maxX, ENCGIS::isPointInLayerStatement* pointCheck, ENCGIS::lineIntersectLayerStatement* lineCheck, unsigned searchDepth) {
+    // Construct the state space
+    auto space(std::make_shared<ob::RealVectorStateSpace>(2));
+
+
+    // Define bounds of searching space
+    ob::RealVectorBounds bounds(2);
+
+    bounds.setLow(0,minY);
+    bounds.setHigh(0,maxY);
+    bounds.setLow(1,minX);
+    bounds.setHigh(1,maxX);
+
+    space->setBounds(bounds);
+
+    // Define a simple setup class
+    ompl::geometric::SimpleSetup ss(space);
+
+    // Define Motion validator for this space
+    ss.getSpaceInformation()->setMotionValidator(std::make_shared<OMPLintegrationENCGIS::ChartsDBMotionValidator2>(ss.getSpaceInformation(), lineCheck, searchDepth));
+
+    // Set state validity checking for this space
+    ss.setStateValidityChecker([pointCheck](const ompl::base::State *state) { return isStateValid(state, pointCheck); });
+
+    ss.setOptimizationObjective(std::make_shared<ompl::base::PathLengthOptimizationObjective>(ss.getSpaceInformation()));
+    return ss;
+  }
+
+  void setStartAndGoalStates(ompl::geometric::SimpleSetup &ss,double startY, double startX, double goalY, double goalX) {
+    //std::cout << startY << "," << startX << "," << goalY << "," << goalX << std::endl;
+    // Create the start state
+    ompl::base::ScopedState<> start(ss.getSpaceInformation());
+    start[0]=startX;
+    start[1]=startY;
+
+    // Create the goal state
+    ompl::base::ScopedState<> goal(ss.getSpaceInformation());
+    goal[0]=goalX;
+    goal[1]=goalY;
+
+    // Set the start and goal states
+    ss.setStartAndGoalStates(start, goal);
+
+  }
+
   ompl::geometric::SimpleSetup createSetup(double startY, double startX, double goalY, double goalX, ob::RealVectorBounds &bounds, ENCGIS::isPointInLayerStatement* pointCheck, ENCGIS::lineIntersectLayerStatement* lineCheck, unsigned searchDepth) 
   {
     // Construct the state space
@@ -106,6 +152,8 @@ namespace OMPLintegrationENCGIS
     // Set the start and goal states
     ss.setStartAndGoalStates(start, goal);
 
+    // Set to find shortest path
+    ss.setOptimizationObjective(std::make_shared<ompl::base::PathLengthOptimizationObjective>(ss.getSpaceInformation()));
     return ss;
   }
   bool isStateValid(const ompl::base::State *state,  ENCGIS::isPointInLayerStatement *qry)

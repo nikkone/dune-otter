@@ -55,6 +55,11 @@ namespace OMPLintegrationENCGIS
   //! @return An OMPL SimpleSetup object with start, goal, bounds and collision checks configured.
   ompl::geometric::SimpleSetup createSetup(double startY, double startX, double goalY, double goalX, ob::RealVectorBounds &bounds, ENCGIS::isPointInLayerStatement* pointCheck, ENCGIS::lineIntersectLayerStatement* lineCheck, unsigned searchDepth = 1);  
   
+
+  ompl::geometric::SimpleSetup createSetup(double minY, double minX, double maxY, double maxX, ENCGIS::isPointInLayerStatement* pointCheck, ENCGIS::lineIntersectLayerStatement* lineCheck, unsigned searchDepth = 1);
+
+  void setStartAndGoalStates(ompl::geometric::SimpleSetup &ss, double startY, double startX, double goalY, double goalX);
+
 #if NEWOMPL
   //! Preconfigured kbitstar planner
   //! @param[in] si Space information pointer

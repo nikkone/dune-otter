@@ -163,10 +163,36 @@ namespace ENCGIS
     double tempX,tempY;
     for(auto itr = inVec.cbegin(); itr  != inVec.cend();itr++){
       transformSRID(itr->first, itr->second, in_srid,tempX,tempY,out_srid);
-      std::cout << tempX << " - "<< tempY << std::endl;
+      //std::cout << tempX << " - "<< tempY << std::endl;
       outVec.push_back(std::pair<double,double>(tempX,tempY));
     }
     return outVec;
   }
 
+  bool DBconnection::getExtent(std::string layer, double &minX, double &minY, double &maxX, double &maxY) {
+    std::string query = "select MbrMinX(geometry), MbrMinY(geometry), MbrMaxX(geometry), MbrMaxY(geometry) from " + layer;
+        int errors = 0;
+        sqlite3_stmt* m_handle;
+
+        if (sqlite3_prepare_v2(db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
+        {
+            errors++;
+        }
+        int m_idx = 0;
+        // Execute
+        /*int rc = */sqlite3_step(m_handle);
+        //int value = sqlite3_column_int(m_handle, m_idx++);
+        minX = sqlite3_column_double(m_handle, m_idx++);
+        minY = sqlite3_column_double(m_handle, m_idx++);
+        maxX = sqlite3_column_double(m_handle, m_idx++);
+        maxY = sqlite3_column_double(m_handle, m_idx++);
+        // Teardown
+        if (m_handle) {
+          sqlite3_finalize(m_handle);
+          return true;
+        } else {
+          return false;
+        }
+
+  }
 }

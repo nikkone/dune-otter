@@ -1,4 +1,8 @@
 #include "SearchGrid.hpp"
+#if SEARCHGRID_USEOPP_OMPL
+#include <OMPL/OMPLfunctions.hpp>
+#endif
+
 #include <iostream>
 namespace ENCGIS {
     SearchGrid::SearchGrid(ENCGIS::DBconnection *db) {
@@ -74,7 +78,44 @@ namespace ENCGIS {
         m_con->runNoOutputQuery(deleteQuery);
         m_con->runNoOutputQuery(deleteQueryraw);
     }
-    
+
+#if SEARCHGRID_USEOPP_OMPL
+    std::vector<std::pair<double, double>>SearchGrid::calculateSearchPath(int startCell, og::SimpleSetup &setup) {
+        std::vector<int> cells;
+        std::vector<std::pair<double, double>> cells_pos;
+        unsigned outputSRID = SRID;
+        int cell = startCell;
+        // Greedy algorithm
+        while(cell != 0) {
+            cells.push_back(cell);
+            cells_pos.push_back(getCellLocation(cell, outputSRID));
+            setCellWeight(cell,-1);
+            cell = getLocalOptimalNeighbour(cell);
+            if(cell == 0) {
+                cell = getClosestUnsearchedCell(cells.back());
+                if(cell != 0) {
+                    auto start = getCellLocation(cells.back(),SRID);
+                    auto end = getCellLocation(cell,SRID);
+                    double maxPlaningTime = 2.0;
+                    //std::cout << start.second << "," << start.first << "," << end.second << "," << end.first << std::endl;
+                    //std::cout << start.first << "," << start.second << "," << end.first << "," << end.second << std::endl;
+
+                    //OMPLintegrationENCGIS::setStartAndGoalStates(setup, start.second,start.first, end.second,end.first);
+                    OMPLintegrationENCGIS::setStartAndGoalStates(setup, start.first, start.second, end.first, end.second);
+                    og::PathGeometric states = OMPLintegrationENCGIS::findPath(setup, maxPlaningTime, OMPLintegrationENCGIS::configurations_t::C_KBIT);
+                        if (states.getStateCount()) {
+                            auto planVec = OMPLforDUNE::pathToVector(states);
+                            cells_pos.insert( cells_pos.end(), planVec.begin(), planVec.end() );
+                        }
+                }
+            }
+        }
+        /*for(auto i = cells_pos.begin(); i < cells_pos.end();i++) {
+            printf("%f, %f\n", i->first, i->second);
+        }*/
+        return cells_pos;
+    }
+#endif
     std::vector<int> SearchGrid::calculateSearchPath(int startCell) {
         std::vector<int> cells;
         int cell = startCell;
@@ -90,7 +131,7 @@ namespace ENCGIS {
         }
         return cells;
     }
-    
+
     std::vector<int> SearchGrid::calculateSearchPathAzimuth(int startCell, double initialAzimuth, double azimuthWeight) {
         std::vector<int> cells;
         int cell = startCell;
@@ -234,6 +275,7 @@ namespace ENCGIS {
     
     int SearchGrid::getLocalOptimalNeighbour(int cell) {
         std::string query = "select gid from (select max(weight) as mw,gid from " + dbGridTable + " where weight > 0 and st_touches(geometry, (select geometry from " + dbGridTable + " where gid = " + std::to_string(cell) + ")))";
+        //std::cout << query << std::endl;
         int errors = 0;
         sqlite3_stmt* m_handle;
 
@@ -371,6 +413,7 @@ namespace ENCGIS {
 
         return value;
     }
+    
     std::vector<int> SearchGrid::calculateSearchPathGlobal(int startCell, double initialAzimuth, double azimuthWeight, double distanceWeight)
     {
         /*
@@ -394,4 +437,29 @@ namespace ENCGIS {
 
     }
 
+    #if SEARCHGRID_USEOPP_OMPL
+    std::vector<std::pair<double, double>> SearchGrid::calculateSearchPathGlobal(int startCell, og::SimpleSetup &setup, double initialAzimuth, double azimuthWeight, double distanceWeight)
+    {
+        std::vector<std::pair<double, double>> cells_pos;
+        std::vector<int> cells;
+        int cell = startCell;
+        // Greedy algorithm with azimuth weights
+        double azimuth = initialAzimuth;
+        while(cell != 0) {
+            cells.push_back(cell);
+            setCellWeight(cell,-1);
+            cell = getGlobalOptimalCell(cell, azimuth, azimuthWeight, distanceWeight);
+            auto start = getCellLocation(cells.back(),SRID);
+            auto end = getCellLocation(cell,SRID);
+            double maxPlaningTime = 2.0;
+            OMPLintegrationENCGIS::setStartAndGoalStates(setup, start.first, start.second, end.first, end.second);
+            og::PathGeometric states = OMPLintegrationENCGIS::findPath(setup, maxPlaningTime, OMPLintegrationENCGIS::configurations_t::C_KBIT);
+            if (states.getStateCount()) {
+                auto planVec = OMPLforDUNE::pathToVector(states);
+                cells_pos.insert( cells_pos.end(), planVec.begin(), planVec.end()-1 );
+            }
+        }
+        return cells_pos;
+    }
+    #endif
 }
