@@ -1,7 +1,7 @@
 #include "isPointInLayerStatement.hpp"
 namespace ENCGIS
 {
-  isPointInLayerStatement::isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg) {
+  isPointInLayerStatement::isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg, std::string attached_db) {
     /*std::string query = "select sum(intersects(MakePoint(?1,?2, " + epsg + " ), geom)) as c from (SELECT geom FROM " + layer + " "
     "WHERE ROWID IN ("
       "SELECT ROWID FROM SpatialIndex "
@@ -16,9 +16,9 @@ namespace ENCGIS
         "search_frame = BuildMbr(?1,?2,?1,?2));";*/
         
     // New: Stops at first intersection
-    std::string query = "select 1 from " + layer + " WHERE ROWID IN ("
+    std::string query = "select 1 from " + attached_db + "." + layer + " WHERE ROWID IN ("
     "SELECT ROWID FROM SpatialIndex "
-    "WHERE f_table_name = '" + layer + "' AND "
+    "WHERE f_table_name = 'DB=" + attached_db + "." + layer + "' AND "
       "search_frame = BuildMbr(?1,?2,?1,?2)) and "
     "intersects(MakePoint(?1,?2, " + std::to_string(geometry_epsg) + " ), " + geometry_column + ") limit 1";
 

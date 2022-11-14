@@ -11,7 +11,7 @@ namespace ENCGIS
 {
   class isPointInLayerStatement {
     public:
-    isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg);
+    isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg, std::string attached_db = "main");
     ~isPointInLayerStatement();
       int run(double lat, double lon);
     private:

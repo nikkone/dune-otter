@@ -2,7 +2,7 @@
 namespace ENCGIS
 {
 
-  lineIntersectLayerStatement::lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg) {
+  lineIntersectLayerStatement::lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg, std::string attached_db) {
     //OLD: Does not stop after one polygon is returned
     /*std::string query = "select sum(intersects(makeline(makepoint(?1,?2, " + std::to_string(geometry_epsg) + " ), makepoint(?3,?4, " + std::to_string(geometry_epsg) + ")), " + geometry_column + ")) FROM " + layer + " "
     "WHERE ROWID IN ("
@@ -10,10 +10,10 @@ namespace ENCGIS
     "WHERE f_table_name = '" + layer + "' AND "
     "search_frame = BuildMbr(?1,?2,?3,?4))";*/
     // New: Stops at first intersection
-    std::string query = "select 1 FROM '" + layer + "' "
+    std::string query = "select 1 FROM " + attached_db + "." + layer + " "
     "WHERE ROWID IN ("
     "SELECT ROWID FROM SpatialIndex "
-    "WHERE f_table_name = '" + layer + "' AND "
+    "WHERE f_table_name = 'DB=" + attached_db + "." + layer + "' AND "
     "search_frame = BuildMbr(?1,?2,?3,?4)) AND "
     "intersects(makeline(makepoint(?1,?2, " + std::to_string(geometry_epsg) + " ), makepoint(?3,?4, " + std::to_string(geometry_epsg) + ")), " + geometry_column + ") limit 1";
 

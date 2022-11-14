@@ -11,7 +11,7 @@ namespace ENCGIS
 {
   class lineIntersectLayerStatement {
     public:
-    lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg);
+    lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg, std::string attached_db = "main");
     ~lineIntersectLayerStatement();
       int run(double startLat, double startLon, double endLat, double endLon);
     private:
