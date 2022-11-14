@@ -51,7 +51,7 @@ namespace ENCGIS
         P_GLOBAL_GREEDY_COST_AZIMUTH_DISTANCE = 7,
       } planner_t;
 
-        SearchGrid(ENCGIS::DBconnection *db);
+        SearchGrid(ENCGIS::DBconnection *db, std::string in_landTable = "innavigable", std::string in_dbGridTable = "searchgrid", unsigned in_SRID = 32632);
         ~SearchGrid();
 
         /// @brief Turns gridtypes_t ENUM into string
@@ -200,6 +200,8 @@ namespace ENCGIS
         std::string dbGridTable;
         /// @brief The SRID to use for the created table
         unsigned SRID;
+        std::string landTabledb;
+        std::string dbGridTabledb;
 
     };
 }

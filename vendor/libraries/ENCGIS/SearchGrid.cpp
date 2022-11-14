@@ -5,11 +5,13 @@
 
 #include <iostream>
 namespace ENCGIS {
-    SearchGrid::SearchGrid(ENCGIS::DBconnection *db) {
+    SearchGrid::SearchGrid(ENCGIS::DBconnection *db, std::string in_landTable, std::string in_dbGridTable, unsigned in_SRID) {
         m_con = db;
-        landTable = "innavigable";
-        dbGridTable = "searchgrid";
-        SRID = 32632;
+        landTable = in_landTable;
+        dbGridTable = in_dbGridTable;
+        SRID = in_SRID;
+        landTabledb = "db1";
+        dbGridTabledb = "main";
     }
     
     SearchGrid::~SearchGrid() {
@@ -49,11 +51,11 @@ namespace ENCGIS {
         std::string recoverMultiTable = "SELECT RecoverGeometryColumn('" + dbGridTable + "raw', 'geometry', " + std::to_string(SRID) + ", 'MULTIPOLYGON', 'XY')";
         std::string polygonFromMultipolygon = "SELECT ElementaryGeometries('" + dbGridTable + "raw', 'geometry', '" + dbGridTable + "','gid','weight') as geom FROM " + dbGridTable + "raw";
 
-        std::string deleteLandCells = "delete from " + dbGridTable + " where gid in (select " + dbGridTable + ".gid from " + dbGridTable + ", (select geometry from " + landTable + " where " + landTable + ".ROWID IN ("
+        std::string deleteLandCells = "delete from " + dbGridTable + " where gid in (select " + dbGridTable + ".gid from " + dbGridTable + ", (select geometry from " + landTabledb + "." + landTable + " where " + landTabledb + "." + landTable + ".ROWID IN ("
     "SELECT ROWID FROM SpatialIndex "
-    "WHERE f_table_name = '" + landTable + "' AND "
+    "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) as land where intersects(" + dbGridTable + ".geometry, land.geometry))";
-        //std::cout << create << std::endl;
+        std::cout << deleteLandCells << std::endl;
         
         m_con->runNoOutputQuery(create);
         m_con->runNoOutputQuery(recoverMultiTable);
@@ -63,11 +65,11 @@ namespace ENCGIS {
 
     bool SearchGrid::setGridWeightsFromLandDistance() {
         std::string weights = "update " + dbGridTable + " set weight = distweight from ("
-        "select gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select geometry as i from " + landTable + " WHERE ROWID IN ("
+        "select gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select geometry as i from " + landTabledb + "." + landTable + " WHERE ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
-        "WHERE f_table_name = '" + landTable + "' AND "
+        "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid) where gid = gidsel";
-
+        std::cout << weights << std::endl;
         return m_con->runNoOutputQuery(weights);
     }
 

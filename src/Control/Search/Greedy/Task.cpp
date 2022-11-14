@@ -138,22 +138,25 @@ namespace Control
                 void
                 onResourceAcquisition(void)
                 {
+                    std::string attachedDb = "db1";
                     try{
-                    m_con = new ENCGIS::DBconnection(m_args.dbPath, SQLITE_OPEN_READWRITE, 32632);
+                    m_con = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE, 32632);
+                    m_con->runNoOutputQuery("attach '/home/nikolai/lststools/dune/misc/re4utmfinal.sqlite' as db1");
+                    //m_con->runQuery("select * from db1.coalne limit 10");
                     } catch(std::runtime_error& e) {
                     err(DTR("Problem opening charts database: %s"), e.what());
                     // Set task state to failure
                     }
-                    m_searchGrid = new ENCGIS::SearchGrid(m_con);
+                    m_searchGrid = new ENCGIS::SearchGrid(m_con, m_args.dbInnavigableLayerName);
                     try{
-                    pointCheck = new ENCGIS::isPointInLayerStatement(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632);
+                    pointCheck = new ENCGIS::isPointInLayerStatement(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632, attachedDb);
                     } catch(std::runtime_error& e) {
                     err(DTR("Problem creating query for navigable layer: %s"), e.what());
                     // Set task state to failure
                     }
 
                     try{
-                    lineCheck = new ENCGIS::lineIntersectLayerStatement(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632);
+                    lineCheck = new ENCGIS::lineIntersectLayerStatement(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632, attachedDb);
                     } catch(std::runtime_error& e) {
                     err(DTR("Problem creating query for innavigable layer: %s"), e.what());
                     // Set task state to failure
@@ -300,7 +303,6 @@ namespace Control
                         double planningBounds[4];
                         m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[0], planningBounds[1], 32632);
                         ++itr;
-                        //m_con->transformSRID(Math::Angles::degrees(msg->end_lon), Math::Angles::degrees(msg->end_lat), 4326, end_easting, end_northing, 32632);
                         spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
                         m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
                         m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
@@ -351,15 +353,15 @@ namespace Control
                         return;
                         break;
                     case 4:
-                        /* code */
+                        // code
                         return;
                         break;
                     case 5:
-                        /* code */
+                        // code
                         return;
                         break;
                     case 6:
-                        /* code */
+                        // code
                         return;
                         break; 
                     case 7:
@@ -392,15 +394,15 @@ namespace Control
                         return;
                         break;
                     case 4:
-                        /* code */
+                        // code
                         return;
                         break;
                     case 5:
-                        /* code */
+                        // code
                         return;
                         break;
                     case 6:
-                        /* code */
+                        // code
                         return;
                         break; 
                     case 7:
@@ -424,6 +426,7 @@ namespace Control
                     // Remove redundant cells from path in order to reduce plan size
                      std::vector<int> rcells = m_searchGrid->removeRedundantCells(cells);
                     // Create vector of path waypoints
+                    auto planVec32632 = m_searchGrid->locationsFromCells(rcells, 32632);
                     auto planVec4326 = m_searchGrid->locationsFromCells(rcells);
                     debug("Got locations from cells");
 
