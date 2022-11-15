@@ -64,11 +64,17 @@ namespace ENCGIS {
     }
 
     bool SearchGrid::setGridWeightsFromLandDistance() {
-        std::string weights = "update " + dbGridTable + " set weight = distweight from ("
+        /*std::string weights = "update " + dbGridTable + " set weight = distweight from ("
         "select gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select geometry as i from " + landTabledb + "." + landTable + " WHERE ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
-        "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid) where gid = gidsel";
+        "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid) where gid = gidsel";*/
+        std::string weights = "update " + dbGridTable + " set weight = distweight from ("
+        "select g,gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select t.'group' as g, geometry as i from " + landTabledb + "." + landTable + " as t WHERE"
+        " ROWID IN ("
+        "SELECT ROWID FROM SpatialIndex "
+        "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
+        "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid,g ) where gid = gidsel and g = 13";
         std::cout << weights << std::endl;
         return m_con->runNoOutputQuery(weights);
     }
@@ -107,7 +113,7 @@ namespace ENCGIS {
                     og::PathGeometric states = OMPLintegrationENCGIS::findPath(setup, maxPlaningTime, OMPLintegrationENCGIS::configurations_t::C_KBIT);
                         if (states.getStateCount()) {
                             auto planVec = OMPLforDUNE::pathToVector(states);
-                            cells_pos.insert( cells_pos.end(), planVec.begin(), planVec.end() );
+                            cells_pos.insert( cells_pos.end(), planVec.begin()+1, planVec.end()-1 );
                         }
                 }
             }
@@ -451,6 +457,10 @@ namespace ENCGIS {
             cells.push_back(cell);
             setCellWeight(cell,-1);
             cell = getGlobalOptimalCell(cell, azimuth, azimuthWeight, distanceWeight);
+            if(cell == 0) {
+                cells_pos.push_back(getCellLocation(cells.back(),SRID));
+                break;
+            }
             auto start = getCellLocation(cells.back(),SRID);
             auto end = getCellLocation(cell,SRID);
             double maxPlaningTime = 2.0;
@@ -459,6 +469,8 @@ namespace ENCGIS {
             if (states.getStateCount()) {
                 auto planVec = OMPLforDUNE::pathToVector(states);
                 cells_pos.insert( cells_pos.end(), planVec.begin(), planVec.end()-1 );
+            } else {
+                std::cout << "Error finding path from: " << start.first << "," << start.second << " to " << end.first << "," << end.second << std::endl;
             }
         }
         return cells_pos;
