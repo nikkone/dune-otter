@@ -1,6 +1,7 @@
 
 #include "TagBuffer.hpp"
 #include <iostream>
+#include <iomanip>
 #include <cmath>  
 namespace FishTagEstimators
 {    
@@ -56,16 +57,24 @@ namespace FishTagEstimators
   size_t TagBuffer::size() {
     return tagBuffer.size();
   }
+  int TagBuffer::checkPeriod(unsigned period, unsigned tagPeriodMin, unsigned tagPeriodMax) {
+    if(period >= tagPeriodMin && period <= tagPeriodMax) {
+      return period;
+    }
+    return -1;
+  }
 
-  double TagBuffer::calculateIrregularPeriod(unsigned receiver, unsigned tagPeriodMin, unsigned tagPeriodMax) { // Currently not functional
+  double TagBuffer::calculateIrregularPeriod(unsigned receiver) {
     tagBufferMap_t::iterator receiverBuffer = tagBuffer.find(receiver);
     if(receiverBuffer != tagBuffer.end()) {
       if(receiverBuffer->second->size() >1) {
         double measurement_millis = receiverBuffer->second->rbegin()->unix_timestamp + (double)receiverBuffer->second->rbegin()->millis/1000;
-        double period = std::round(measurement_millis - (receiverBuffer->second->rbegin()+1)->unix_timestamp - (double)(receiverBuffer->second->rbegin()+1)->millis/1000);
-        if(period >= tagPeriodMin && period <= tagPeriodMax) {
-          return period;
-        }
+        //std::cout << "1 - " << receiverBuffer->second->rbegin()->unix_timestamp << " - " << (double)receiverBuffer->second->rbegin()->millis/1000 << std::endl;
+        //std::cout << "0 - " << (receiverBuffer->second->rbegin()+1)->unix_timestamp << " - " << (double)(receiverBuffer->second->rbegin()+1)->millis/1000 << std::endl;
+        // Current timestamp - previous timestamp
+        double period = std::round(measurement_millis - ((receiverBuffer->second->rbegin()+1)->unix_timestamp + (double)(receiverBuffer->second->rbegin()+1)->millis/1000));
+        //std::cout << std::setprecision(15) << measurement_millis << ", " << ((receiverBuffer->second->rbegin()+1)->unix_timestamp + (double)(receiverBuffer->second->rbegin()+1)->millis/1000) << ", "; 
+        return period;
       }
     }
     return -1;

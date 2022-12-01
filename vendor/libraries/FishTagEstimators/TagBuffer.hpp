@@ -61,9 +61,15 @@ namespace FishTagEstimators
 
       //! TBD
       //! @param [in] receiver serial number
-      //! @param [in] numUsedDetections How far back in the buffer to look
       //! @return calculated current irregular period given in seconds [s].
-      double calculateIrregularPeriod(unsigned receiver, unsigned tagPeriodMin, unsigned tagPeriodMax);
+      double calculateIrregularPeriod(unsigned receiver);
+
+      /// @brief 
+      /// @param period 
+      /// @param tagPeriodMin 
+      /// @param tagPeriodMax 
+      /// @return 
+      int checkPeriod(unsigned period, unsigned tagPeriodMin, unsigned tagPeriodMax);
 
       //!
       size_t size();
