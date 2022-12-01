@@ -37,7 +37,7 @@ namespace OFP
       //! Time varying innovation vector.
       Eigen::Matrix<T, measurements, 1> innov;
       //! Measurement vector.
-      //Eigen::Matrix<T, measurements, 1> yk;
+      Eigen::Matrix<T, measurements, 1> yk;
       //! Estimate of the measurements.
       Eigen::Matrix<T, measurements, 1> ykest;
       //! State estimate vector.
@@ -113,6 +113,8 @@ namespace OFP
 // UPDATE TO INCLUDE B
       //! Time update for the filter.
       //! @return True if active and end reached, false if filter not active.
+      //template <int F = inputs>
+      //typename std::enable_if<F == 0, bool>::type
       bool predict() {
         if(active) {
           //Predict Step / Project ahead
@@ -122,6 +124,18 @@ namespace OFP
         }
         return false;
       }
+/* Must update tasks to support this.
+      template <int F = inputs>
+      typename std::enable_if<F != 0, bool>::type
+      predict(const Eigen::Matrix<T, inputs, 1> &u) {
+        if(active) {
+          //Predict Step / Project ahead
+          xHat = A*xHat + B*u;
+          PHat = A*PHat*A.transpose() + Q;
+          return true;
+        }
+        return false;
+      }*/
   };
 }
 #endif //OFP_KALMANFILTER
