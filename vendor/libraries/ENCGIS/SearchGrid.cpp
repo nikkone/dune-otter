@@ -448,6 +448,7 @@ namespace ENCGIS {
     #if SEARCHGRID_USEOPP_OMPL
     std::vector<std::pair<double, double>> SearchGrid::calculateSearchPathGlobal(int startCell, og::SimpleSetup &setup, double initialAzimuth, double azimuthWeight, double distanceWeight)
     {
+        bool intersectingVisited = false; // TODO: Make parameter
         std::vector<std::pair<double, double>> cells_pos;
         std::vector<int> cells;
         int cell = startCell;
@@ -469,6 +470,11 @@ namespace ENCGIS {
             if (states.getStateCount()) {
                 auto planVec = OMPLforDUNE::pathToVector(states);
                 cells_pos.insert( cells_pos.end(), planVec.begin(), planVec.end()-1 );
+                if(intersectingVisited) {
+                    for(auto itr = planVec.begin();itr<planVec.end()-1;itr++) {
+                        setIntersectingCellsAsVisited(itr->first,itr->second, (itr+1)->first, (itr+1)->second);
+                    }
+                }
             } else {
                 std::cout << "Error finding path from: " << start.first << "," << start.second << " to " << end.first << "," << end.second << std::endl;
             }
@@ -476,4 +482,13 @@ namespace ENCGIS {
         return cells_pos;
     }
     #endif
+    void SearchGrid::setIntersectingCellsAsVisited(double startX, double startY, double endX, double endY) {
+        // Alternative: Threashold distance to centroid
+        std::string query = "update " + dbGridTable + " set weight = -1 from ("
+        "select gid as gidsel from " + dbGridTable + " where intersects(geometry, makeline(makepoint(" + std::to_string(startX) + ", " + std::to_string(startY) + ", " + std::to_string(SRID) + "), makepoint(" + std::to_string(endX) + ", " + std::to_string(endY) + ", " + std::to_string(SRID) + ")))"
+        ") where gid = gidsel";
+        //std::cout << query << std::endl;
+        m_con->runNoOutputQuery(query);
+    }
+
 }

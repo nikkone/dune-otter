@@ -51,7 +51,13 @@ namespace ENCGIS
         P_GLOBAL_GREEDY_COST_AZIMUTH_DISTANCE = 7,
       } planner_t;
 
+        /// @brief 
+        /// @param db 
+        /// @param in_landTable 
+        /// @param in_dbGridTable 
+        /// @param in_SRID 
         SearchGrid(ENCGIS::DBconnection *db, std::string in_landTable = "innavigable", std::string in_dbGridTable = "searchgrid", unsigned in_SRID = 32632);
+        /// @brief 
         ~SearchGrid();
 
         /// @brief Turns gridtypes_t ENUM into string
@@ -80,12 +86,14 @@ namespace ENCGIS
 
         /// @brief Delete the grid from the database (The tables this.dbGridTable and dbGridTable + raw in the db opened by m_db)
         void deleteGrid();
+
 #if SEARCHGRID_USEOPP_OMPL
         /// @brief Uses a greedy algorithm to create a path covering all grid cells.
         /// @param startCell The first cell to be visited
         /// @return A vector of describing the cell visitation order
         std::vector<std::pair<double, double>> calculateSearchPath(int startCell, og::SimpleSetup &setup);
 #endif
+
         /// @brief Uses a greedy algorithm to create a path covering all grid cells.
         /// @param startCell The first cell to be visited
         /// @return A vector of describing the cell visitation order
@@ -192,7 +200,15 @@ namespace ENCGIS
         /// @return 
         std::vector<int> calculateSearchPathGlobal(int startCell, double initialAzimuth, double azimuthWeight = 0.1, double distanceWeight = 0.1);
 
+        /// @brief 
+        /// @param startX 
+        /// @param startY 
+        /// @param endX 
+        /// @param endY 
+        void setIntersectingCellsAsVisited(double startX, double startY, double endX, double endY);
+        
       private:
+        /// @brief 
         ENCGIS::DBconnection* m_con;
         /// @brief Table of POLYGON geometry considered as obstacle
         std::string landTable;
@@ -200,7 +216,9 @@ namespace ENCGIS
         std::string dbGridTable;
         /// @brief The SRID to use for the created table
         unsigned SRID;
+        /// @brief 
         std::string landTabledb;
+        /// @brief 
         std::string dbGridTabledb;
 
     };
