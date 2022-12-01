@@ -58,7 +58,7 @@ namespace FishTagEstimators
           tag_period = tagBuffer->calculateRegularPeriod(receiver, 5);
           break;
         case interval_mode_irregular_unknown:
-          tag_period = tagBuffer->calculateIrregularPeriod(receiver, 120,180);
+          tag_period = tagBuffer->calculateIrregularPeriod(receiver);
           break;
         default:
           std::cout << "Error: Unknown interval mode!" << std::endl;
