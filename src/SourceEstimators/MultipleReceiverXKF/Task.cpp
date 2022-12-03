@@ -28,6 +28,7 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <Eigen/Core>
+#include <ctime> /* time_t, struct tm, time, mktime */
 
 // CPP STD headers
 #include <algorithm>  // std::count
@@ -99,6 +100,8 @@
           //OFP::ExtendedKalmanFilter<double, 3, 3, 0> m_ekf;
           // Class with eXogenous Kalman Filter
           XKF m_xkf;
+          //! Most recent timestamp
+          uint32_t newTimestamp;
           //! Constructor.
           //! @param[in] name task name.
           //! @param[in] ctx context.
@@ -236,6 +239,11 @@
             for(unsigned i=0;i<c_receivers;i++) {
               if (m_args.receiver_serial[i] == msg->serial_no)
               {
+                if(msg->unix_timestamp - newTimestamp > 2.0) {
+                  // TODO: Check if more than one unused, then run update of filter
+                  newTimestamp = msg->getTimeStamp();
+                  inf("New Timestamp: %d", newTimestamp);
+                }
                 debug(DTR("Message from R%d arrived"), i);
                 m_tagDetection[i] = *msg;
                 m_newDetection[i] = true;
@@ -315,20 +323,28 @@
           }
 
           void findFishPosition(const IMC::TBRFishTag tagData[c_receivers]) {
-            // Step 1: Predict
-            m_xkf.predict();
+            spew("Running filter update");
+/* TODO:
+Fiks NED ved combo 1-2 etc.
+Fiks send hvilke rader av NED som korresponderer til hvilke RDOA
+DONE: Fiks kjør update etter tidligst x sec etter første mottatte av sist timestamp slik at den ikke kjører eks. 0-2 fordi 1 ikke har rukket å komme.
+Done Fiks separer predict og update kjøring. 
+*/
 
             // Step 2: Compile NED positions and RDOA measurments.
             static Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 0, c_receivers,1> RDOA2;
+            static Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 0, c_receivers,3> RDOA3;
             static Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, 0, c_receivers,3> NED2;
             RDOA2.resize(0,1);
+            RDOA3.resize(0,3);
             NED2.resize(0,3);
             std::tuple<double, double, double> tempNED;
 
             std::vector<double> RDOA; // In meters
             unsigned used_counter = 0;
+            std::vector<std::pair<uint8_t, uint8_t>> RDOAcombinations;
             //For loop to create unique order invariant permutations (Each receiver is combined with another only once.)
-            std::vector<bool> used(c_receivers, false); // Initializes all to false
+            std::vector<bool> used(c_receivers, false); // Initializes all to false TODO: Use std::transform to initialize to !(m_newDetection)
             for(uint8_t outerreceiver = 0;outerreceiver<c_receivers;++outerreceiver) {
               for(uint8_t receiver = outerreceiver+1;receiver<c_receivers;++receiver) {
                 if( !(used[outerreceiver] && used[receiver]) && (m_newDetection[outerreceiver] || m_newDetection[receiver]) ) {
@@ -336,8 +352,11 @@
                   if(timeShiftCorrect(tempRDOA)) {
                     inf("%d, %d", outerreceiver, receiver);
                     RDOA.push_back(tempRDOA);
+                    RDOAcombinations .push_back(std::pair<uint8_t, uint8_t>(outerreceiver, receiver));
                     RDOA2.resize(used_counter+1,1); // +1 because used_counter starts from 0.
                     RDOA2.row(used_counter) << tempRDOA;
+                    RDOA3.resize(used_counter+1,3); // +1 because used_counter starts from 0.
+                    RDOA3.row(used_counter) << tempRDOA, outerreceiver, receiver;
                     used[outerreceiver] = true;
                     used[receiver] = true;
                     used_counter++;
@@ -354,88 +373,60 @@
               inf("No valid combinations");
               return;
             }*/
-            spew("RDOA made");
-NED2.resize(used_counter+1,3);
-            spew("NED2 resize");
+            //spew("RDOA made");
+            NED2.resize(used_counter+1,3);
+            //spew("NED2 resize");
             // Create NED representation of used detections, and remove them from the new detections
             std::vector<std::tuple<double, double, double>> NED(c_receivers);
             std::vector<double> depth; 
 
+            // TODO: Problem: When only receiver 1 and 2 used, tries to write to row 1 and 2 of a matrix with index 0-1
             for(std::vector<bool>::iterator it = used.begin(); it != used.end(); it++) {
               if(*it) { // Enter if receiver is used
                 inf("%lu", it - used.begin());
                 toNEDframe(tagData[it - used.begin()], m_refCoord, NED[it - used.begin()]);
 
-toNEDframe(tagData[it - used.begin()], m_refCoord, tempNED);
-NED2.row(it - used.begin()) << std::get<0>(tempNED), std::get<1>(tempNED),std::get<2>(tempNED);
+                toNEDframe(tagData[it - used.begin()], m_refCoord, tempNED);
+                NED2.row(it - used.begin()) << std::get<0>(tempNED), std::get<1>(tempNED),std::get<2>(tempNED);
 
                 m_newDetection[it - used.begin()] = false;
                 depth.push_back(tagData[it - used.begin()].trans_data*0.392); //0.392 from S256 data spec?
               }
             }
-            spew("NED2 made");
+            //spew("NED2 made");
 
             // FOR DEBUGGING
-            for(std::vector<bool>::iterator it = used.begin(); it != used.end(); it++) {
-              if(*it) { // Enter if receiver is used
-                debug("%f, %f, %f", std::get<0>(NED[it - used.begin()]), std::get<1>(NED[it - used.begin()]),std::get<2>(NED[it - used.begin()]));
-              }
-            } 
-            for(std::vector<double>::iterator it = RDOA.begin(); it != RDOA.end(); it++) {
-              inf("RDOA %f", *it);
+            //for(std::vector<bool>::iterator it = used.begin(); it != used.end(); it++) {
+            //  if(*it) { // Enter if receiver is used
+            //    debug("%f, %f, %f", std::get<0>(NED[it - used.begin()]), std::get<1>(NED[it - used.begin()]),std::get<2>(NED[it - used.begin()]));
+            //  }
+            //} 
+            for(std::vector<std::pair<uint8_t, uint8_t>>::iterator it = RDOAcombinations.begin(); it != RDOAcombinations.end(); it++) {
+              inf("RDOAcombinations %d - %d", it->first, it->second);
             }
-          inf("NED2 POST");
-          std::cout << NED2 << std::endl;
-          inf("RDOA2");
-          std::cout << RDOA2 << std::endl;
+          //inf("NED2 POST");
+          std::cout << "NED2" << std::endl << NED2 << std::endl;
+          //inf("RDOA2");
+          //std::cout << "RDOA3" << std::endl  << RDOA3 << std::endl;
 
           // Step 3: Perform position estimate update
           m_xkf.update(NED2.transpose(), RDOA2, depth[0]);
-          spew("Position filter updated");
+          //spew("Position filter updated");
 
-
-            //RDOA2.resize(0,0);
-            //NED2.resize(0,0);
             logFishPosition();
             inf("End findFishPos");
           }
-/*
-          void findFishPosition(const IMC::TBRFishTag tagData[c_receivers]) {
-              uint8_t new_detections=0;
-              uint8_t last_valid_detection = 0;
-              //Find last valid receiver and count valid receivers
-              for(uint8_t receiver = 0;receiver<c_receivers;receiver++) {
-                  if(m_newDetection[receiver]) {
-                      new_detections++;
-                      last_valid_detection = receiver;
-                  }
-              }
-              if(new_detections > 1) {
-                spew("New detections: %u, Last valid detection: %u", new_detections, last_valid_detection);
-                // Build RDOA vector
-                double *RDOA = new double(new_detections-1);
-                uint8_t combinations = 0;
-                for(uint8_t receiver = 0;receiver<last_valid_receiver;receiver++) {
-                  if(m_newDetection[receiver]) {
-                      double tempRDOA = m_args.speed_of_sound_in_water*((static_cast<double>(tagData[receiver].unix_timestamp) - tagData[last_valid_receiver].unix_timestamp) * 1000.0 + (static_cast<double>(tagData[receiver].millis) - tagData[last_valid_receiver].millis))/1000.0;
-                      if(timeShiftCorrect(tempRDOA)) {
-                        RDOA[combinations] = tempRDOA;
-                        combinations++;
-                        m_newDetection[receiver] = false;
-                      }
-                  }
-                }
-
-                delete [] RDOA;
-              }
-          }*/
-
 
           //! Main loop.
           void
           task(void)
-          {
-              findFishPosition(m_tagDetection);
+          {   
+              inf("%ld, %d, %ld", std::time(nullptr), newTimestamp, std::time(nullptr) - newTimestamp);
+              if(std::time(nullptr) - newTimestamp > 2.0) {
+                findFishPosition(m_tagDetection);
+              }
+              // Step 1: Predict
+              m_xkf.predict();
               inf("other side");
           } // End of task function
         };

@@ -31,7 +31,7 @@ bool EKF::constructCandR(Eigen::Matrix<double, 3, Eigen::Dynamic> receiverPositi
       if(RDOA.rows() < 1) {
         return false;
       }
-//std::cout << "Entered EKF::constructCandR" <<  std::endl;
+std::cout << "Entered EKF::constructCandR" <<  std::endl;
       C.resize(RDOA.rows()+1,nx);
       R.resize(RDOA.rows()+1,RDOA.rows()+1);
       yk.resize(receiverPositions.cols(),1);
@@ -73,11 +73,11 @@ bool EKF::constructCandR(Eigen::Matrix<double, 3, Eigen::Dynamic> receiverPositi
       //ykest.row(RDOA.rows()) << xHatInn(2,0) - error_stage3(RDOA.rows(),0);
       ykest += error_stage3; // (18) in paper
 
-std::cout << "error_stage3" << std::endl << error_stage3 << std::endl;
-std::cout << "C" << std::endl << C << std::endl;
-std::cout << "R" << std::endl << R << std::endl;
-std::cout << "yk" << std::endl << yk << std::endl;
-std::cout << "ykest" << std::endl << ykest << std::endl;
+//std::cout << "error_stage3" << std::endl << error_stage3 << std::endl;
+//std::cout << "C" << std::endl << C << std::endl;
+//std::cout << "R" << std::endl << R << std::endl;
+//std::cout << "yk" << std::endl << yk << std::endl;
+//std::cout << "ykest" << std::endl << ykest << std::endl;
       return true;
     }
   }

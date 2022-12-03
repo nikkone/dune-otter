@@ -28,39 +28,26 @@ namespace SourceEstimators
     }
 
 
-    void XKF::update(Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> receiverPositions, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> RDOA, double tagDepth) {
-
-        if(RDOA.size()>0)
-        {
-          //std::cout << "Entering LeastSquares::update" <<  std::endl;
-          bool isSuccess = stage1.update(receiverPositions, RDOA, tagDepth);
-          //std::cout << "Leaving LeastSquares::update" <<  std::endl;
-          if(isSuccess && !stage2.active)
-          {
-              stage3.active = 1;
-              stage2.active = 1;
+    void XKF::update(Eigen::Matrix<double, 3, Eigen::Dynamic> receiverPositions, Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA, double tagDepth) {
+      if(RDOA.size()>0)
+      {
+        if(stage1.update(receiverPositions, RDOA, tagDepth)) {
+          if(!stage2.active) {
+            stage2.active = 1;
           }
-        }
-//std::cout << "RDOA.rows()" << std::endl << RDOA.rows() << std::endl;
-        //>> Step 2.2: Measurement Update - stage - 2
-        if(stage2.active && RDOA.rows()>1) // conditions for stage 2 update
-        {
-          //std::cout << "Entering LTVKF::constructCandR" <<  std::endl;
           if(stage2.constructCandR(receiverPositions, RDOA, tagDepth, stage1.m_dr)) {
-          //std::cout << "Entering LTVKF::update" <<  std::endl;
-          stage2.update(stage2.yk);
-          //std::cout << "Leaving LTVKF::update" <<  std::endl;
+            stage2.update(stage2.yk);
+            if(!stage3.active) {
+              stage3.active = 1;
+            }
           }
         }
-        if(stage3.active)
-        {
-          //std::cout << "Entering EKF::constructCandR" <<  std::endl;
+        if(stage2.active && stage3.active) {
           if(stage3.constructCandR(receiverPositions, RDOA, tagDepth, stage2.xHat)) {
-            //std::cout << "Entering EKF::update" <<  std::endl;
             stage3.update(stage3.yk);
-            //std::cout << "Leaving EKF::update" <<  std::endl;
           }
         }
+      }
     }
 
 

@@ -20,7 +20,7 @@ namespace SourceEstimators
 
         void initialize(Eigen::Matrix<double, 3,1> xInit);
         void predict();
-        void update(Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> receiverPositions, Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> RDOA, double tagDepth);
+        void update(Eigen::Matrix<double, 3, Eigen::Dynamic> receiverPositions, Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA, double tagDepth);
 
 
         bool isInitialized(void);
