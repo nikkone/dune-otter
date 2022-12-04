@@ -209,10 +209,12 @@ namespace SourceEstimators
       void
       onResourceAcquisition(void)
       {
-        SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverEKF);
+        //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverEKF);
         //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverUKF);
         //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverSRUKF);
-        MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
+        //MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
+        MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverXKF);
+
       }
       //! Resolve entity names.
       void
@@ -313,7 +315,7 @@ namespace SourceEstimators
             }
           }
 
-          spew("%lu", tagBuffers[msg->trans_id]->size());
+          spew("Receivers in buffer: %lu", tagBuffers[msg->trans_id]->size());
           m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
           spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
         }
