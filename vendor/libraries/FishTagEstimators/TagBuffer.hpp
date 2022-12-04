@@ -23,6 +23,7 @@ namespace FishTagEstimators
       unsigned buffer_size;
     public:
       //! A datastructure to keep track of which tag detections have been used. (Needs furter investigation and failproofing)
+      //! TODO: Move to each estimator
       tagBool_t unprocessedData;
 
       //! The data structure where tags are buffered

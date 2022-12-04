@@ -32,10 +32,10 @@ namespace FishTagEstimators
       void setAllowedTimeShift(double AllowedTimeShift);
       //! Covariance used for TDOA measurements/calculations
       //! @param [in] TDOACovariance Covariance to use
-      void setTDOACovariance(double TDOACovariance);
+      virtual void setTDOACovariance(double TDOACovariance);
       //! Covariance used for depth measurements
       //! @param [in] depthCovariance Covariance to use
-      void setDepthCovariance(double depthCovariance);
+      virtual void setDepthCovariance(double depthCovariance);
       //! Prepares the NED data of a tag detection for use in Eigen
       //! @param [in] tagIn Tag with NED of interest
       Eigen::Matrix<double, c_states, 1> getNED(const TBRFishTag &tagIn);
