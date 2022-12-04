@@ -54,6 +54,9 @@ namespace FishTagEstimators
       double E;
       //! Down relative to fixed LL point
       double D;
+      double getS256Depth() {
+        return 0.392 * trans_data;
+      }
     };
 }
 #endif // FishTag_TBRFishTag
