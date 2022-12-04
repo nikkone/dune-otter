@@ -31,7 +31,7 @@ bool EKF::constructCandR(Eigen::Matrix<double, 3, Eigen::Dynamic> receiverPositi
       if(RDOA.rows() < 1) {
         return false;
       }
-std::cout << "Entered EKF::constructCandR" <<  std::endl;
+//std::cout << "Entered EKF::constructCandR" <<  std::endl;
       C.resize(RDOA.rows()+1,nx);
       R.resize(RDOA.rows()+1,RDOA.rows()+1);
       yk.resize(receiverPositions.cols(),1);

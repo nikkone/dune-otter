@@ -33,7 +33,7 @@ bool LTVKF::constructCandR(Eigen::Matrix<double, 3,Eigen::Dynamic> receiverPosit
       if(RDOA.rows() < 2) {
         return false;
       }
-      std::cout << "Enter LTVKF::constructCandR" << std::endl;
+      //std::cout << "Enter LTVKF::constructCandR" << std::endl;
       C.resize(RDOA.rows()+1,nx);
       R.resize(RDOA.rows()+1,RDOA.rows()+1);
       yk.resize(RDOA.rows()+1,1);

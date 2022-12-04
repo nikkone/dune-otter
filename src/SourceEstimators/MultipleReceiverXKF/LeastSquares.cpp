@@ -50,7 +50,7 @@ namespace SourceEstimators
         return false;
       }
         bool isSuccess = 0;
-std::cout << "Entered LeastSquares::update" <<  std::endl;
+//std::cout << "Entered LeastSquares::update" <<  std::endl;
 //std::cout << "receiverPositionsnew" <<  std::endl << receiverPositions << std::endl; 
 //std::cout << "RDOAnew" <<  std::endl << RDOA << std::endl; 
         // >> Construct Least squares and measurement matrices
