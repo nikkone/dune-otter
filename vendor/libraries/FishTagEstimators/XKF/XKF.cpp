@@ -3,17 +3,19 @@ namespace FishTagEstimators
 {
   namespace XKF
   {
-
-    /// @brief Initialize eXogenous Kalman filter
-    /// @param xInit Initial NED coordinate in reference frame in meters
-    void
-    XKF::initialize(Eigen::Matrix<double, 3,1> xInit)
-    {
-      stage2.initialize(xInit);
-      stage3.initialize(xInit);
+      //! Initializer for the filter
+      //! @param [in] A_inn State transition matrix
+      //! @param [in] Q_inn Measurement covariance matrix
+      //! @param [in] P0_inn Initial covarinace matrix
+      //! @param [in] x0_inn Initial state
+      void XKF::initialize(const Eigen::Matrix<double, 3, 3> &A_inn,
+                           const Eigen::Matrix<double, 3, 3> &Q_inn,
+                           const Eigen::Matrix<double, 3, 3> &P0_inn,
+                           const Eigen::Matrix<double, 3, 1> &x0_inn) {
+      stage2.initialize(A_inn, Q_inn, P0_inn, x0_inn);
+      stage3.initialize(A_inn, Q_inn, P0_inn, x0_inn);
       initialized = true;
-    } // End of initializeXKF function
-
+      }
 
     void
     XKF::predict()

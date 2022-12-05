@@ -15,7 +15,6 @@ namespace FishTagEstimators
           double rz_cov;  // Measurement noise Covariance - depth
         EKF();
         bool constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, Eigen::Matrix<double, 3, 1> xHatInn);
-        void initialize(Eigen::Matrix<double, 3,1> xInit);
     };
   }
 }

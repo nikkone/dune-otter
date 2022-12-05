@@ -7,26 +7,6 @@ namespace FishTagEstimators
     LTVKF::LTVKF() {
     }
 
-void LTVKF::initialize(Eigen::Matrix<double, 3,1> xInit) {
-    A << 1, 0, 0,
-         0, 1, 0,
-         0, 0, 1;
-    Q << qq_cov, 0, 0,
-         0, qq_cov, 0,
-         0, 0, qq_cov/10;
-    xHat << xInit;
-    PHat << 100, 0, 0,
-            0, 100, 0,
-            0, 0, 10;
-    inputs = 3;
-    D.resize(inputs,inputs);
-    D << dt*1, 0, 0,
-         0, dt*1, 0,
-         0, 0, dt*1;
-    
-}
-
-
 bool LTVKF::constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, double m_dr)
     {
      

@@ -17,11 +17,16 @@ namespace FishTagEstimators
         LTVKF stage2;
         EKF stage3;
 
-        //XKF();
-
-        void initialize(Eigen::Matrix<double, 3,1> xInit);
+      //! Initializer for the filter
+      //! @param [in] A_inn State transition matrix
+      //! @param [in] Q_inn Measurement covariance matrix
+      //! @param [in] P0_inn Initial covarinace matrix
+      //! @param [in] x0_inn Initial state
+      void initialize(const Eigen::Matrix<double, 3, 3> &A_inn,
+                              const Eigen::Matrix<double, 3, 3> &Q_inn,
+                              const Eigen::Matrix<double, 3, 3> &P0_inn,
+                              const Eigen::Matrix<double, 3, 1> &x0_inn);        
         void predict();
-        //void update(Eigen::Matrix<double, 3, Eigen::Dynamic> receiverPositions, Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA, double tagDepth);
         void update(TagBuffer *tagBuffer, Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations);
 
         bool isInitialized(void) const;
