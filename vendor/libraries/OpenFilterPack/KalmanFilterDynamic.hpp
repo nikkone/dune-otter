@@ -50,6 +50,21 @@ namespace OFP
         //C.resize(1,states);
       }
 
+      //! Initializer for the filter
+      //! @param [in] A_inn State transition matrix
+      //! @param [in] Q_inn Measurement covariance matrix
+      //! @param [in] P0_inn Initial covarinace matrix
+      //! @param [in] x0_inn Initial state
+      void initialize(const Eigen::Matrix<T, states, states> &A_inn,
+                      const Eigen::Matrix<T, states, states> &Q_inn,
+                      const Eigen::Matrix<T, states, states> &P0_inn,
+                      const Eigen::Matrix<T, states, 1> &x0_inn) {
+        A = A_inn;
+        Q = Q_inn;
+        PHat = P0_inn;
+        xHat = x0_inn;
+      }
+
 
 /*      Eigen::Matrix<T, Eigen::Dynamic, 1>
       calculateInnovation(Eigen::Matrix<T, Eigen::Dynamic, 1> yk_in, Eigen::Matrix<T, Eigen::Dynamic, 1> u) {
