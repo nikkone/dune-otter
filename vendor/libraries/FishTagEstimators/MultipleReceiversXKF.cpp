@@ -17,7 +17,7 @@ namespace FishTagEstimators
     //! TODO: Add taking initial parameters for stage 2 and stage 3
     Estimator::initialize(A_inn, Q_inn, P0_inn, x0_inn);
     xkf.setDiagonalCovarianceQ(Q_inn(0));
-    xkf.initialize(x0_inn);
+    xkf.initialize(A_inn, Q_inn, P0_inn, x0_inn);
   }
   void MultipleReceiverXKF::predict() {
     xkf.predict();
@@ -66,8 +66,7 @@ namespace FishTagEstimators
     std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations;
     for (tagBufferMap_t::const_iterator outerreceiver = tagBuffer->tagBuffer.begin(); outerreceiver != tagBuffer->tagBuffer.end(); outerreceiver++) {
       for (tagBufferMap_t::const_iterator receiver = std::next(outerreceiver); receiver != tagBuffer->tagBuffer.end(); receiver++) {
-        //inf("%u - %u", outerreceiver->first, receiver->first);
-        if( tagBuffer->unprocessedData[outerreceiver->first] || tagBuffer->unprocessedData[receiver->first] ) {
+        if( unprocessedData[outerreceiver->first] || unprocessedData[receiver->first] ) {
           if( used.find(outerreceiver->first) == used.end() || used.find(receiver->first) == used.end()) {
             long int tempTDOA_ms = ((long int)receiver->second->rbegin()->unix_timestamp - outerreceiver->second->rbegin()->unix_timestamp)*1000 + ((int)receiver->second->rbegin()->millis - outerreceiver->second->rbegin()->millis);
             if(timeShiftCorrect(tempTDOA_ms)) {
@@ -89,7 +88,7 @@ namespace FishTagEstimators
     }
     // Set unprocessedData to false for used data receivers
     for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
-      tagBuffer->unprocessedData[it->first] = false;
+      unprocessedData[it->first] = false;
     }
     xkf.update(tagBuffer, RDOA, RDOAcombinations);
   }

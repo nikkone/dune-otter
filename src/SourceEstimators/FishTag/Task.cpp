@@ -212,8 +212,9 @@ namespace SourceEstimators
         //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverEKF);
         //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverUKF);
         //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverSRUKF);
-        //MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
+        
         MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverXKF);
+        MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
 
       }
       //! Resolve entity names.
@@ -288,6 +289,7 @@ namespace SourceEstimators
         // Action taken for all receptions: Add to buffer and run measurment update on estimators.
         size_t prev = tagBuffers[msg->trans_id]->size();
         if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
+          m_emap.updateUnprocessedDataAll(msg->serial_no);
           // Add MultiReceiver Estimators when going from 2 to 3 receiving receivers
           if((prev == 2) && tagBuffers[msg->trans_id]->size() == 3) {
             for(auto it = MultiReceiverEstimatorTypeToUse.begin();it !=MultiReceiverEstimatorTypeToUse.end();it++) {

@@ -5,17 +5,6 @@
 #include <cmath>  
 namespace FishTagEstimators
 {    
-  void TagBuffer::printNewBool(void) {
-    for (tagBool_t::iterator it = unprocessedData.begin(); it != unprocessedData.end(); it++)
-    {
-      if(it->second) {
-        std::cout << "Receiver " << it->first << " True" << std::endl;
-      } else {
-        std::cout << "Receiver " << it->first << " False" << std::endl;
-      }
-    }
-  }
-
   double TagBuffer::calculateRegularPeriod(unsigned receiver, unsigned numUsedDetections, unsigned minCount) {
     tagBufferMap_t::iterator receiverBuffer = tagBuffer.find(receiver);
     if(receiverBuffer != tagBuffer.end()) {
@@ -69,11 +58,8 @@ namespace FishTagEstimators
     if(receiverBuffer != tagBuffer.end()) {
       if(receiverBuffer->second->size() >1) {
         double measurement_millis = receiverBuffer->second->rbegin()->unix_timestamp + (double)receiverBuffer->second->rbegin()->millis/1000;
-        //std::cout << "1 - " << receiverBuffer->second->rbegin()->unix_timestamp << " - " << (double)receiverBuffer->second->rbegin()->millis/1000 << std::endl;
-        //std::cout << "0 - " << (receiverBuffer->second->rbegin()+1)->unix_timestamp << " - " << (double)(receiverBuffer->second->rbegin()+1)->millis/1000 << std::endl;
         // Current timestamp - previous timestamp
         double period = std::round(measurement_millis - ((receiverBuffer->second->rbegin()+1)->unix_timestamp + (double)(receiverBuffer->second->rbegin()+1)->millis/1000));
-        //std::cout << std::setprecision(15) << measurement_millis << ", " << ((receiverBuffer->second->rbegin()+1)->unix_timestamp + (double)(receiverBuffer->second->rbegin()+1)->millis/1000) << ", "; 
         return period;
       }
     }

@@ -86,6 +86,17 @@ namespace FishTagEstimators
     }
   }
 
+void EstimatorMap::updateUnprocessedDataAll(uint32_t serial_no) {
+    for (EstimatorMap_t::iterator it = estimatorMap.begin(); it != estimatorMap.end(); it++)
+    {
+      if (it->second != NULL)
+      {
+        for(EstimatorVector_t::iterator est = it->second->begin();est != it->second->end();est++) {
+          (*est)->updateUnprocessedData(serial_no);
+        }
+      }
+    }
+  }
   void EstimatorMap::clear() {
     for (EstimatorMap_t::iterator it = estimatorMap.begin(); it != estimatorMap.end(); it++)
     {

@@ -39,7 +39,7 @@ namespace FishTagEstimators
     for (tagBufferMap_t::const_iterator outerreceiver = tagBuffer->tagBuffer.begin(); outerreceiver != tagBuffer->tagBuffer.end(); outerreceiver++) {
       for (tagBufferMap_t::const_iterator receiver = std::next(outerreceiver); receiver != tagBuffer->tagBuffer.end(); receiver++) {
         //inf("%u - %u", outerreceiver->first, receiver->first);
-        if( tagBuffer->unprocessedData[outerreceiver->first] || tagBuffer->unprocessedData[receiver->first] ) {
+        if( unprocessedData[outerreceiver->first] || unprocessedData[receiver->first] ) {
           if( used.find(outerreceiver->first) == used.end() || used.find(receiver->first) == used.end()) {
             long int tempTDOA_ms = ((long int)outerreceiver->second->rbegin()->unix_timestamp - receiver->second->rbegin()->unix_timestamp)*1000 + ((int)outerreceiver->second->rbegin()->millis - receiver->second->rbegin()->millis);
             if(timeShiftCorrect(tempTDOA_ms)) {
@@ -89,7 +89,7 @@ namespace FishTagEstimators
     }
     // Set unprocessedData to false for used data receivers
     for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
-      tagBuffer->unprocessedData[it->first] = false;
+      unprocessedData[it->first] = false;
     }
 
     // Add depth measurement

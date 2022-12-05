@@ -60,6 +60,8 @@ namespace FishTagEstimators
       void setSoundSpeed(float c_speed_in);
       //!
       void setParameterAll(std::string parameterName, double value);
+      //! 
+      void updateUnprocessedDataAll(uint32_t serial_no);
     };
 }
 #endif // FishTag_EstimatorMap

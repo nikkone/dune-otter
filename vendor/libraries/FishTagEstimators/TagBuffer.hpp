@@ -22,10 +22,6 @@ namespace FishTagEstimators
       //! How many detections should the circular buffers hold for each receiver
       unsigned buffer_size;
     public:
-      //! A datastructure to keep track of which tag detections have been used. (Needs furter investigation and failproofing)
-      //! TODO: Move to each estimator
-      tagBool_t unprocessedData;
-
       //! The data structure where tags are buffered
       tagBufferMap_t tagBuffer;
       
@@ -49,9 +45,6 @@ namespace FishTagEstimators
         }
         tagBuffer.clear();
       }
-
-      //! Debugging function to show which receiver has unprocessed data
-      void printNewBool(void);
 
       //! Finds the most frequent period in the last numUsedDetections detections, which is assumed to be the regular intervall.
       //! @param [in] receiver serial number

@@ -45,8 +45,6 @@ namespace FishTagEstimators
       TBRFishTag tag = toEstimatorTag(msg);
       toNEDframe(tag);
       tagBuffer[msg->serial_no]->push_back(tag);
-      
-      unprocessedData[msg->serial_no] = true;
       return true;
     }
     // Ignore other tags

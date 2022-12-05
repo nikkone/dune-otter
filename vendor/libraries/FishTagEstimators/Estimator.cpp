@@ -5,7 +5,7 @@
 namespace FishTagEstimators
 {
    void Estimator::update(TagBuffer *tagBuffer) {
-    std::cout << "Base. Buffersize:" << tagBuffer->tagBuffer.size() << "Unprocessed size" << tagBuffer->unprocessedData.size() <<  std::endl;
+    std::cout << "Base. Buffersize:" << tagBuffer->tagBuffer.size() << "Unprocessed size" << unprocessedData.size() <<  std::endl;
   }
    void Estimator::predict() {return;}
 
@@ -101,5 +101,18 @@ namespace FishTagEstimators
   }
    void Estimator::parseParameter(unsigned parameterID, double value) {
     std::cout << "Error: Parameter " << parameterID << "caught at base with value" << value << std::endl;
+  }
+  void Estimator::updateUnprocessedData(uint32_t serial_no) {
+    unprocessedData[serial_no] = true;
+  }
+  void Estimator::printNewBool(void) {
+    for (tagBool_t::iterator it = unprocessedData.begin(); it != unprocessedData.end(); it++)
+    {
+      if(it->second) {
+        std::cout << "Receiver " << it->first << " True" << std::endl;
+      } else {
+        std::cout << "Receiver " << it->first << " False" << std::endl;
+      }
+    }
   }
 }
