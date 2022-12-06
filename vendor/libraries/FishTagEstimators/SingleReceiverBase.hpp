@@ -8,7 +8,7 @@
 //! @author Nikolai Lauvås
 namespace FishTagEstimators
 {
-  class SingleReceiverBase : public Estimator
+  class SingleReceiverBase : public Estimator<double>
   {
     public:
       typedef enum { 

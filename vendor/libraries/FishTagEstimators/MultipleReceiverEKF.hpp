@@ -9,7 +9,7 @@
 //! @author Nikolai Lauvås
 namespace FishTagEstimators
 {
-  class MultipleReceiverEKF : public Estimator
+  class MultipleReceiverEKF : public Estimator<double>
   {
     public:
       MultipleReceiverEKF() {};

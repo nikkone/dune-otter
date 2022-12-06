@@ -6,12 +6,12 @@
 #include "MultipleReceiversXKF.hpp"
 namespace FishTagEstimators
 {
-  Estimator* EstimatorMap::addEstimator(uint32_t trans_id, estimatorTypeEnum_t type) {
+  Estimator<double>* EstimatorMap::addEstimator(uint32_t trans_id, estimatorTypeEnum_t type) {
     if(estimatorMap.find(trans_id) == estimatorMap.end()) {
       // New transmitterid found, create vector for estimators
       estimatorMap[trans_id] = new EstimatorVector_t();
     }
-    Estimator* est;
+    Estimator<double>* est;
     switch(type) {
         case estimatorType_SingleReceiverEKF:
           est = new SingleReceiverEKF();
@@ -26,7 +26,7 @@ namespace FishTagEstimators
           est = new MultipleReceiverEKF();
           break;
         case estimatorType_MultipleReceiverXKF:
-          est = new MultipleReceiverXKF();
+          est = new MultipleReceiverXKF<double>();
           break;
         default:
           return nullptr;

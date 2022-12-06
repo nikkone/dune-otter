@@ -248,7 +248,7 @@ namespace SourceEstimators
           spew("Created buffer for receiver %u", msg->serial_no);
           // Configure Single Receiver Estimators
           for(auto it = SingleReceiverEstimatorTypeToUse.begin();it !=SingleReceiverEstimatorTypeToUse.end();it++) {
-            FishTagEstimators::Estimator* est = m_emap.addEstimator(msg->trans_id,*it);
+            FishTagEstimators::Estimator<double>* est = m_emap.addEstimator(msg->trans_id,*it);
             est->trans_id = msg->trans_id;
             est->setSoundSpeed(m_c_sound);
             est->setAllowedTimeShift(m_args.max_time_shift_ms);
@@ -292,7 +292,7 @@ namespace SourceEstimators
           // Add MultiReceiver Estimators when going from 2 to 3 receiving receivers
           if((prev == 2) && tagBuffers[msg->trans_id]->size() == 3) {
             for(auto it = MultiReceiverEstimatorTypeToUse.begin();it !=MultiReceiverEstimatorTypeToUse.end();it++) {
-              FishTagEstimators::Estimator* est = m_emap.addEstimator(msg->trans_id,*it);
+              FishTagEstimators::Estimator<double>* est = m_emap.addEstimator(msg->trans_id,*it);
               spew("Added MultiReceiver Estimator");
               // Configure a multiReceiverEstimator
               est->trans_id = msg->trans_id;
@@ -353,7 +353,7 @@ namespace SourceEstimators
       //! @param [in] result The result to be logged. This is a NED value
       //! @param [in] in_logfilename Filename of file written to
       //! @param [in] logname Name used for the ID in the dispatched IMC::RemoteSensorInfo
-      void logResult(FishTagEstimators::Estimator* est, const std::string &in_logfilename, const std::string &logname) {
+      void logResult(FishTagEstimators::Estimator<double>* est, const std::string &in_logfilename, const std::string &logname) {
         double lati,longi;
         std::tuple<double, double, double>  estimate = est->getEstimate();
         double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};

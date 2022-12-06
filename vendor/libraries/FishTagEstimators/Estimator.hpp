@@ -7,6 +7,7 @@
   //! @author Nikolai Lauvås
 namespace FishTagEstimators
 {
+  template <class T>
   class Estimator
   {
     public:
@@ -30,40 +31,40 @@ namespace FishTagEstimators
 
       //! Common interface to get interface.
       //! @return Tuple with estimated position in a NED frame (relative to origin used in tagBuffer).
-      virtual std::tuple<double, double, double> getEstimate();
+      virtual std::tuple<T, T, T> getEstimate();
 
       //! The current sound speed used for TDOA calculations
-      void setSoundSpeed(double soundSpeed);
+      void setSoundSpeed(T soundSpeed);
 
       //! set maximum allowed time [ms] shift between receivers' messages
       //! @param [in] AllowedTimeShift
-      void setAllowedTimeShift(double AllowedTimeShift);
+      void setAllowedTimeShift(T AllowedTimeShift);
 
       //! Covariance used for TDOA measurements/calculations
       //! @param [in] TDOACovariance Covariance to use
-      virtual void setTDOACovariance(double TDOACovariance);
+      virtual void setTDOACovariance(T TDOACovariance);
 
       //! Covariance used for depth measurements
       //! @param [in] depthCovariance Covariance to use
-      virtual void setDepthCovariance(double depthCovariance);
+      virtual void setDepthCovariance(T depthCovariance);
 
       //! Prepares the NED data of a tag detection for use in Eigen
       //! @param [in] tagIn Tag with NED of interest
-      Eigen::Matrix<double, c_states, 1> getNED(const TBRFishTag &tagIn);
+      Eigen::Matrix<T, c_states, 1> getNED(const TBRFishTag &tagIn);
 
       //! Initializer for the estimator
       //! @param [in] A_inn State transition matrix
       //! @param [in] Q_inn Measurement covariance matrix
       //! @param [in] P0_inn Initial covarinace matrix
       //! @param [in] x0_inn Initial estimator position [NED]
-      virtual void initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
-                                        const Eigen::Matrix<double, c_states, c_states> &Q_inn,
-                                        const Eigen::Matrix<double, c_states, c_states> &P0_inn,
-                                        const Eigen::Matrix<double, c_states, 1> &x0_inn);
+      virtual void initialize(const Eigen::Matrix<T, c_states, c_states> &A_inn,
+                                        const Eigen::Matrix<T, c_states, c_states> &Q_inn,
+                                        const Eigen::Matrix<T, c_states, c_states> &P0_inn,
+                                        const Eigen::Matrix<T, c_states, 1> &x0_inn);
 
       //! Set initial estimator position
       //! @param [in] x0_inn Initial estimator position [NED]
-      virtual void setPositionEstimate(const Eigen::Matrix<double, c_states, 1> &x0_inn);
+      virtual void setPositionEstimate(const Eigen::Matrix<T, c_states, 1> &x0_inn);
 
       //! Common interface to check if a estimator is considered active
       virtual bool isActive() const;
@@ -90,7 +91,7 @@ namespace FishTagEstimators
 
       //! General and common interface for setting parameters in subclasses
       //! @return True if parameter found
-      bool setParameter(std::string parameterName, double value);
+      bool setParameter(std::string parameterName, T value);
 
     protected:
       //! Internal command to activate estimator
@@ -114,25 +115,26 @@ namespace FishTagEstimators
       //! General and common interface for parsing parameters, overloadable in subclasses
       //! @param [in] parameterID Parameter identifier
       //! @param [in] value Value to set in parameter
-      virtual void parseParameter(unsigned parameterID, double value);
+      virtual void parseParameter(unsigned parameterID, T value);
 
       //! Map storing the registered parameters, and their associated identifiers.
       std::map<std::string, unsigned> parameters;
 
       //! Sound speed in water used for TDOA calculations
-      double c_speed;
+      T c_speed;
 
       //! Maximum allowed time [ms] shift between receivers' messages
-      double max_time_shift_ms;
+      T max_time_shift_ms;
 
       //! Time of Arrival Covariance
-      double rr_cov;
+      T rr_cov;
 
       //! Depth measurement Covariance
-      double rz_cov;
+      T rz_cov;
       
       //! A datastructure to keep track of which tag detections have been used.
       tagBool_t unprocessedData;
   };
+  template class Estimator<double>;
 }
 #endif // FishTag_Estimator

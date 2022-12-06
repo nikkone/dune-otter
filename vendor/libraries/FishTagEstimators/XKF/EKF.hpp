@@ -9,13 +9,17 @@ namespace FishTagEstimators
 {
   namespace XKF
   {
-    class EKF: public OFP::KalmanFilterDynamic<double, 3>{
+    template <class T>
+    class EKF: public OFP::KalmanFilterDynamic<T, 3>{
         public:
-          double rr_cov;  // Measurement noise Covariance - range
-          double rz_cov;  // Measurement noise Covariance - depth
         EKF();
-        bool constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, Eigen::Matrix<double, 3, 1> xHatInn);
+          T rr_cov;  // Measurement noise Covariance - range
+          T rz_cov;  // Measurement noise Covariance - depth
+        bool constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, Eigen::Matrix<T, 3, 1> xHatInn);
     };
+    template class EKF<float>;
+    template class EKF<double>;
+    template class EKF<long double>;
   }
 }
 #endif // END FishTagEstimator_XKF_EKF

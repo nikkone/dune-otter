@@ -9,7 +9,7 @@
 //! @author Nikolai Lauvås
 namespace FishTagEstimators
 {
-  class PeriodEstimator : public Estimator
+  class PeriodEstimator : public Estimator<double>
   {
     public:
       void update(TagBuffer *tagBuffer);

@@ -3,10 +3,11 @@
 #include <vector>
 namespace FishTagEstimators
 {
-  void MultipleReceiverXKF::initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
-                                        const Eigen::Matrix<double, c_states, c_states> &Q_inn,
-                                        const Eigen::Matrix<double, c_states, c_states> &P0_inn,
-                                        const Eigen::Matrix<double, c_states, 1> &x0_inn)
+  template <class T>
+  void MultipleReceiverXKF<T>::initialize(const Eigen::Matrix<T, c_states, c_states> &A_inn,
+                                        const Eigen::Matrix<T, c_states, c_states> &Q_inn,
+                                        const Eigen::Matrix<T, c_states, c_states> &P0_inn,
+                                        const Eigen::Matrix<T, c_states, 1> &x0_inn)
   {
     name = "MultiReceiverXKF";
 
@@ -15,11 +16,14 @@ namespace FishTagEstimators
     Estimator::initialize(A_inn, Q_inn, P0_inn, x0_inn);
     xkf.initialize(A_inn, Q_inn, P0_inn, x0_inn);
   }
-  void MultipleReceiverXKF::predict() {
+  
+  template <class T>
+  void MultipleReceiverXKF<T>::predict() {
     xkf.predict();
   }
 
-  std::tuple<double, double, double> MultipleReceiverXKF::getEstimate() {
+  template <class T>
+  std::tuple<T, T, T> MultipleReceiverXKF<T>::getEstimate() {
     return {xkf.stage3.xHat(0),xkf.stage3.xHat(1),xkf.stage3.xHat(2)};
     //return {xkf.stage2.xHat(0),xkf.stage2.xHat(1),xkf.stage2.xHat(2)};
     //return {xkf.stage1.xHat(0),xkf.stage1.xHat(1),xkf.stage1.xHat(2)};
@@ -27,7 +31,8 @@ namespace FishTagEstimators
     //return {0.0,0.0,0.0};
   }
 
-  void MultipleReceiverXKF::print(std::ostream& os) const {
+  template <class T>
+  void MultipleReceiverXKF<T>::print(std::ostream& os) const {
     os << "XKF Stage 3 A" << std::endl << xkf.stage3.A << std::endl;
     os << "XKF Stage 3 C" << std::endl << xkf.stage3.C << std::endl;
     os << "XKF Stage 3 PHat" << std::endl << xkf.stage3.PHat << std::endl;
@@ -40,22 +45,26 @@ namespace FishTagEstimators
     os << "XKF Stage 3 innov" << std::endl << xkf.stage3.innov << std::endl;
   }
 
-  void MultipleReceiverXKF::setTDOACovariance(double TDOACovariance) {
+  template <class T>
+  void MultipleReceiverXKF<T>::setTDOACovariance(T TDOACovariance) {
     rr_cov = TDOACovariance;
     xkf.setDiagonalCovarianceR(TDOACovariance);
   }
-  void MultipleReceiverXKF::setDepthCovariance(double depthCovariance) {
+
+  template <class T>
+  void MultipleReceiverXKF<T>::setDepthCovariance(T depthCovariance) {
     rz_cov = depthCovariance;
     xkf.setVarianceRZ(depthCovariance);
   }
 
-  void MultipleReceiverXKF::update(TagBuffer *tagBuffer) {
-    //std::cout << "Entering MultipleReceiverXKF::update" << std::endl;
+  template <class T>
+  void MultipleReceiverXKF<T>::update(TagBuffer *tagBuffer) {
+    //std::cout << "Entering MultipleReceiverXKF<T>::update" << std::endl;
     if(tagBuffer->tagBuffer.size() <2)
       return;
 
-    Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA(0 ,1);
-    Eigen::Matrix<double, Eigen::Dynamic, 1> depth(tagBuffer->tagBuffer.size(),1);
+    Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA(0 ,1);
+    Eigen::Matrix<T, Eigen::Dynamic, 1> depth(tagBuffer->tagBuffer.size(),1);
     tagBool_t used; // Could have been made standard vector, only need receiver address. But if we move toestimator?
 
     unsigned baselines = 0;
@@ -79,7 +88,7 @@ namespace FishTagEstimators
       }
     }
 
-    if(baselines <1) {
+    if(baselines <2) {
       return; // Do not process data/update filter if no baselines available
     }
 
@@ -89,5 +98,7 @@ namespace FishTagEstimators
         unprocessedData[it->first] = false;
       }
     }
+    
   }
+    
 }

@@ -4,12 +4,15 @@
   //! @author Nikolai Lauvås
 namespace FishTagEstimators
 {
-   void Estimator::update(TagBuffer *tagBuffer) {
+  template <class T>
+   void Estimator<T>::update(TagBuffer *tagBuffer) {
     std::cout << "Base. Buffersize:" << tagBuffer->tagBuffer.size() << "Unprocessed size" << unprocessedData.size() <<  std::endl;
   }
-   void Estimator::predict() {return;}
+    template <class T>
+   void Estimator<T>::predict() {return;}
 
-   std::tuple<double, double, double> Estimator::getEstimate() {
+  template <class T>
+   std::tuple<T, T, T> Estimator<T>::getEstimate() {
     return {0.0,0.0,0.0};
   }
     typedef enum 
@@ -21,32 +24,37 @@ namespace FishTagEstimators
     param_max_updates_per_new_measurement,
     param_max_correction_attempts
   } t_param;
-
-  void Estimator::setSoundSpeed(double soundSpeed) {
+    template <class T>
+  void Estimator<T>::setSoundSpeed(T soundSpeed) {
     c_speed = soundSpeed;
   }
-  
-  void Estimator::setAllowedTimeShift(double AllowedTimeShift) {
+    template <class T>
+  void Estimator<T>::setAllowedTimeShift(T AllowedTimeShift) {
     max_time_shift_ms = AllowedTimeShift;
   }
-  void Estimator::setTDOACovariance(double TDOACovariance) {
+
+  template <class T>
+  void Estimator<T>::setTDOACovariance(T TDOACovariance) {
     rr_cov = TDOACovariance;
   }
-  void Estimator::setDepthCovariance(double depthCovariance) {
+
+    template <class T>
+  void Estimator<T>::setDepthCovariance(T depthCovariance) {
     rz_cov = depthCovariance;
   }
 
-
-  Eigen::Matrix<double, Estimator::c_states, 1> Estimator::getNED(const TBRFishTag &tagIn) {
-    Eigen::Matrix<double, c_states, 1> ret;
+  template <class T>
+  Eigen::Matrix<T, Estimator<T>::c_states, 1> Estimator<T>::getNED(const TBRFishTag &tagIn) {
+    Eigen::Matrix<T, c_states, 1> ret;
     ret << tagIn.N, tagIn.E, tagIn.D;
     return ret;
   }
 
-   void Estimator::initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
-                                    const Eigen::Matrix<double, c_states, c_states> &Q_inn,
-                                    const Eigen::Matrix<double, c_states, c_states> &P0_inn,
-                                    const Eigen::Matrix<double, c_states, 1> &x0_inn)
+  template <class T>
+   void Estimator<T>::initialize(const Eigen::Matrix<T, c_states, c_states> &A_inn,
+                                    const Eigen::Matrix<T, c_states, c_states> &Q_inn,
+                                    const Eigen::Matrix<T, c_states, c_states> &P0_inn,
+                                    const Eigen::Matrix<T, c_states, 1> &x0_inn)
   {
     std::cout << "A_inn" << std::endl << A_inn << std::endl;
     std::cout << "Q_inn" << std::endl << Q_inn << std::endl;
@@ -55,27 +63,34 @@ namespace FishTagEstimators
     //registerParameter("trans_id");
   }
 
-  void Estimator::setPositionEstimate(const Eigen::Matrix<double, c_states, 1> &x0_inn) {
+  template <class T>
+  void Estimator<T>::setPositionEstimate(const Eigen::Matrix<T, c_states, 1> &x0_inn) {
     std::cout << "x0_inn" << std::endl << x0_inn << std::endl;
   }
-  bool Estimator::activateEstimator() {
+
+  template <class T>
+  bool Estimator<T>::activateEstimator() {
     std::cout << "Base" << std::endl;
     return false;
   }
 
-   bool Estimator::isActive() const {
+  template <class T>
+   bool Estimator<T>::isActive() const {
     return false;
   }
-   void Estimator::print(std::ostream& os) const {
+
+  template <class T>
+   void Estimator<T>::print(std::ostream& os) const {
     os << "Base";
   }
 
-  /*std::ostream& Estimator::operator<<(std::ostream& os, const Estimator& es) {
+  /*std::ostream& Estimator<T>::operator<<(std::ostream& os, const Estimator& es) {
     es.print(os);
     return os;
   }*/
 
-  bool Estimator::setParameter(std::string parameterName, double value) {
+  template <class T>
+  bool Estimator<T>::setParameter(std::string parameterName, T value) {
     if(parameters.find(parameterName) != parameters.end()) {
       parseParameter(parameters[parameterName], value);
       return true;
@@ -85,27 +100,36 @@ namespace FishTagEstimators
   //! Check if the TDOA indicates a time shift larger than accepted
   //! @param [in] TDOA Time Difference of Arrival 
   //! @return Boolean representing accepted/not accepted
-  bool Estimator::timeShiftCorrect(const long int TDOA)
+  template <class T>
+  bool Estimator<T>::timeShiftCorrect(const long int TDOA)
   {
     if((std::abs(TDOA) <= max_time_shift_ms))
       return true;
     else
       return false;
   }
-
-  void Estimator::registerParameter(std::string parameterName) {
+  template <class T>
+  void Estimator<T>::registerParameter(std::string parameterName) {
     parameters[parameterName] = parameters.size();
   }
-  void Estimator::registerParameter(std::string parameterName, unsigned id) {
+
+  template <class T>
+  void Estimator<T>::registerParameter(std::string parameterName, unsigned id) {
     parameters[parameterName] = id;
   }
-   void Estimator::parseParameter(unsigned parameterID, double value) {
+
+  template <class T>
+   void Estimator<T>::parseParameter(unsigned parameterID, T value) {
     std::cout << "Error: Parameter " << parameterID << "caught at base with value" << value << std::endl;
   }
-  void Estimator::updateUnprocessedData(uint32_t serial_no) {
+
+  template <class T>
+  void Estimator<T>::updateUnprocessedData(uint32_t serial_no) {
     unprocessedData[serial_no] = true;
   }
-  void Estimator::printNewBool(void) {
+
+  template <class T>
+  void Estimator<T>::printNewBool(void) {
     for (tagBool_t::iterator it = unprocessedData.begin(); it != unprocessedData.end(); it++)
     {
       if(it->second) {

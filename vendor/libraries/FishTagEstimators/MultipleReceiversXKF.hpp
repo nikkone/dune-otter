@@ -12,7 +12,8 @@
 
 namespace FishTagEstimators
 {
-  class MultipleReceiverXKF : public Estimator
+  template <class T>
+  class MultipleReceiverXKF : public Estimator<double>
   {
     public:
       MultipleReceiverXKF() {};
@@ -21,21 +22,24 @@ namespace FishTagEstimators
 
       void predict();
 
-      XKF::XKF xkf;
-      void initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
-                                        const Eigen::Matrix<double, c_states, c_states> &Q_inn,
-                                        const Eigen::Matrix<double, c_states, c_states> &P0_inn,
-                                        const Eigen::Matrix<double, c_states, 1> &x0_inn);
-      std::tuple<double, double, double> getEstimate();
+      XKF::XKF<T> xkf;
+      void initialize(const Eigen::Matrix<T, c_states, c_states> &A_inn,
+                                        const Eigen::Matrix<T, c_states, c_states> &Q_inn,
+                                        const Eigen::Matrix<T, c_states, c_states> &P0_inn,
+                                        const Eigen::Matrix<T, c_states, 1> &x0_inn);
+      std::tuple<T, T, T> getEstimate();
       void print(std::ostream& os) const;
       bool isActive() const {
         return xkf.isInitialized();
         return true;
       }
-  void setTDOACovariance(double TDOACovariance);
-  void setDepthCovariance(double depthCovariance);
+  void setTDOACovariance(T TDOACovariance);
+  void setDepthCovariance(T depthCovariance);
     private:
       
   };
+    //template class MultipleReceiverXKF<float>;
+    template class MultipleReceiverXKF<double>;
+    //template class MultipleReceiverXKF<long double>;
 }
 #endif // FishTagEstimator_MultipleReceiverEKF

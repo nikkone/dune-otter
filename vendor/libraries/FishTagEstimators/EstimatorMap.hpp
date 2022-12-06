@@ -15,7 +15,7 @@ namespace FishTagEstimators
       unsigned buffer_size;
     public:
       //! 
-      typedef std::vector<FishTagEstimators::Estimator*> EstimatorVector_t;
+      typedef std::vector<FishTagEstimators::Estimator<double>*> EstimatorVector_t;
       //! Used to store pairs of transmitter ID and active estimators on the tag.
       typedef std::map<uint32_t, EstimatorVector_t*> EstimatorMap_t;
       //! 
@@ -49,7 +49,7 @@ namespace FishTagEstimators
       //! 
       void clear();
       //! 
-      Estimator* addEstimator(uint32_t trans_id, estimatorTypeEnum_t type);
+      Estimator<double>* addEstimator(uint32_t trans_id, estimatorTypeEnum_t type);
       //! 
       void updateAll(uint32_t trans_id, TagBuffer *tagBuffer);
       //! 
