@@ -289,7 +289,6 @@ namespace SourceEstimators
         // Action taken for all receptions: Add to buffer and run measurment update on estimators.
         size_t prev = tagBuffers[msg->trans_id]->size();
         if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
-          m_emap.updateUnprocessedDataAll(msg->serial_no);
           // Add MultiReceiver Estimators when going from 2 to 3 receiving receivers
           if((prev == 2) && tagBuffers[msg->trans_id]->size() == 3) {
             for(auto it = MultiReceiverEstimatorTypeToUse.begin();it !=MultiReceiverEstimatorTypeToUse.end();it++) {
@@ -314,9 +313,15 @@ namespace SourceEstimators
                   logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
                   logOutStream.close();
               }
+              // Add all receivers to UnprocessedData in current Estimator
+              for (FishTagEstimators::tagBufferMap_t::const_iterator receiver = (tagBuffers[msg->trans_id])->tagBuffer.begin(); receiver != (tagBuffers[msg->trans_id])->tagBuffer.end(); receiver++) {
+                inf("%d",receiver->first);
+                est->updateUnprocessedData(receiver->first);
+
+              }
             }
           }
-
+          m_emap.updateUnprocessedDataAll(msg->serial_no);
           spew("Receivers in buffer: %lu", tagBuffers[msg->trans_id]->size());
           m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
           spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
