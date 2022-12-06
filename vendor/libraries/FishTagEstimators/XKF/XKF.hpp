@@ -11,6 +11,7 @@ namespace FishTagEstimators
 {
   namespace XKF
   {
+    /// @brief 
     class XKF {
       public:
         LeastSquares stage1;
@@ -25,23 +26,39 @@ namespace FishTagEstimators
       void initialize(const Eigen::Matrix<double, 3, 3> &A_inn,
                               const Eigen::Matrix<double, 3, 3> &Q_inn,
                               const Eigen::Matrix<double, 3, 3> &P0_inn,
-                              const Eigen::Matrix<double, 3, 1> &x0_inn);        
-        void predict();
-        void update(TagBuffer *tagBuffer, Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations);
+                              const Eigen::Matrix<double, 3, 1> &x0_inn);  
 
+        /// @brief Time update of the filter
+        void predict();
+
+        /// @brief Filter update
+        /// @param tagBuffer Buffer structure of all receivers and tags considered.
+        /// @param RDOA Pre-calculated range difference of arrival vector
+        /// @param RDOAcombinations Vector containing the pairs of receivers that were used in calculating RDOA
+        /// @return returns True when stage3 filter updated
+        bool update(TagBuffer *tagBuffer, Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations);
+
+        /// @brief Check if filter matrices has been initialized
+        /// @return returns initialized boolean
         bool isInitialized(void) const;
-        void setReferenceCoordinate(double lat, double lon, double hae);
-        void setInitialPosition(double north, double east, double down);
+
+        /// @brief Filter timestep used in calculations
+        /// @param timestep in seconds
         void setTimestep(double timestep);
+
+        /// @brief Time/Range Difference of Arrival covariance
+        /// @param rr_cov Covariance used when generating the R matrix
         void setDiagonalCovarianceR(double rr_cov);
-        void setDiagonalCovarianceQ(double qq_cov);
+
+        /// @brief Covariance of the Depth measurements
+        /// @param rz_var Covariance used when generating the R matrix
         void setVarianceRZ(double rz_var);
-        //void setActive(bool activate);
-        //bool isActive(void);
+
       private:
+
+        /// @brief Keeps track on if the estimator matrices are initialized
         bool initialized;
-        //bool active;
     };
   }
 }
-#endif //DUNE_SOURCEESTIMATORS_XKF
+#endif //FishTagEstimator_XKF

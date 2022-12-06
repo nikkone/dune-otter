@@ -9,14 +9,10 @@ namespace FishTagEstimators
                                         const Eigen::Matrix<double, c_states, 1> &x0_inn)
   {
     name = "MultiReceiverXKF";
-    //xkf.A =     A_inn;
-    //xkf.Q =     Q_inn;
-    //xkf.PHat = P0_inn;
-    //xkf.xHat = x0_inn;
-    //xkf.active = true;
-    //! TODO: Add taking initial parameters for stage 2 and stage 3
+
+    //! TODO: Set D matrix, and use it for predict?
+    //! 
     Estimator::initialize(A_inn, Q_inn, P0_inn, x0_inn);
-    xkf.setDiagonalCovarianceQ(Q_inn(0));
     xkf.initialize(A_inn, Q_inn, P0_inn, x0_inn);
   }
   void MultipleReceiverXKF::predict() {
@@ -83,13 +79,15 @@ namespace FishTagEstimators
       }
     }
 
-    if(baselines <2) {
-      return; // Do not process data/update filter if fewer than two baselines available
+    if(baselines <1) {
+      return; // Do not process data/update filter if no baselines available
     }
-    // Set unprocessedData to false for used data receivers
-    for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
-      unprocessedData[it->first] = false;
+
+    // Run filter update, and if sucessfull, set unprocessedData to false for used data receivers
+    if(xkf.update(tagBuffer, RDOA, RDOAcombinations)) {
+      for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
+        unprocessedData[it->first] = false;
+      }
     }
-    xkf.update(tagBuffer, RDOA, RDOAcombinations);
   }
 }

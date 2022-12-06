@@ -315,9 +315,7 @@ namespace SourceEstimators
               }
               // Add all receivers to UnprocessedData in current Estimator
               for (FishTagEstimators::tagBufferMap_t::const_iterator receiver = (tagBuffers[msg->trans_id])->tagBuffer.begin(); receiver != (tagBuffers[msg->trans_id])->tagBuffer.end(); receiver++) {
-                inf("%d",receiver->first);
                 est->updateUnprocessedData(receiver->first);
-
               }
             }
           }

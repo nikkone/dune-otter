@@ -1,5 +1,6 @@
 #ifndef FishTagEstimator_XKF_LTVKF
 #define FishTagEstimator_XKF_LTVKF
+
 #include <OpenFilterPack/KalmanFilterDynamic.hpp>
 #include <Eigen/Core>
 #include "../TagBuffer.hpp"
@@ -10,7 +11,6 @@ namespace FishTagEstimators
   {
     class LTVKF: public OFP::KalmanFilterDynamic<double, 3>{
         public:
-          double qq_cov;  // Process noise Covariance - position
           double rr_cov;  // Measurement noise Covariance - range
           double rz_cov;  // Measurement noise Covariance - depth
         LTVKF();

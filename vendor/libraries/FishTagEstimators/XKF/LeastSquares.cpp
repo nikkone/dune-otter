@@ -51,11 +51,10 @@ namespace FishTagEstimators
       if(RDOA.rows() < 2) {
         return false;
       }
-        bool isSuccess = 0;
+        bool isSuccess = false;
 //std::cout << "Entered FISHTAG::LeastSquares::update" <<  std::endl;
         uint32_t referenceReceiver = RDOAcombinations.front().first;
         Eigen::Matrix<double, 3, 1> referenceReceiverNED = Eigen::Matrix<double, 3, 1>((tagBuffer->tagBuffer[referenceReceiver]->rbegin())->N, (tagBuffer->tagBuffer[referenceReceiver]->rbegin())->E,(tagBuffer->tagBuffer[referenceReceiver]->rbegin())->D);
-//std::cout << "referenceReceiver: " << referenceReceiver << std::endl;
         // >> Construct Least squares and measurement matrices
         Eigen::Matrix<double, 3,1> l; // nja in paper
         l << RDOA(0), RDOA(1), 0;
@@ -73,7 +72,6 @@ namespace FishTagEstimators
                 z.row(used) << RDOA(combination)*RDOA(combination) -  
                 Eigen::Matrix<double, 3, 1>((tagBuffer->tagBuffer[it->second]->rbegin())->N, (tagBuffer->tagBuffer[it->second]->rbegin())->E,(tagBuffer->tagBuffer[it->second]->rbegin())->D).squaredNorm() + 
                 referenceReceiverNED.squaredNorm();
-                //std::cout << "NED-: " << ret << std::endl;
                 used++;
             }
             if(used == 2) {
@@ -83,6 +81,7 @@ namespace FishTagEstimators
             }
             combination++;
         }
+
         if(used < 2) {
             return false;
         }
@@ -110,7 +109,7 @@ namespace FishTagEstimators
                 // Unique solution
                 fp_ls = (R1*c + w);
                 m_dr = R1;
-                isSuccess = 1;
+                isSuccess = true;
             }
             // Invalid solution
         } else {
@@ -120,11 +119,11 @@ namespace FishTagEstimators
             R1 = resolveRAmbiguity(R1, R2);
             // Compute two candidate solutions - required to resolve ambiguity and select a particular R
             if(R1 == 0) {
-                isSuccess = 0;
+                isSuccess = false;
             } else {
                 fp_ls = (R1*c + w);
                 m_dr = R1;
-                isSuccess = 1;
+                isSuccess = true;
             }
         }
 

@@ -2,6 +2,7 @@
 #define FishTagEstimator_XKF_EKF
 
 #include <OpenFilterPack/KalmanFilterDynamic.hpp>
+#include <Eigen/Core>
 #include "../TagBuffer.hpp"
 #include <vector>
 namespace FishTagEstimators
@@ -10,7 +11,6 @@ namespace FishTagEstimators
   {
     class EKF: public OFP::KalmanFilterDynamic<double, 3>{
         public:
-          double qq_cov;  // Process noise Covariance - position
           double rr_cov;  // Measurement noise Covariance - range
           double rz_cov;  // Measurement noise Covariance - depth
         EKF();
