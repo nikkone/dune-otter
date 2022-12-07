@@ -14,7 +14,7 @@ namespace FishTagEstimators
     public:
       MultipleReceiverEKF() {};
       ~MultipleReceiverEKF() {};
-      void update(TagBuffer *tagBuffer);
+      bool update(TagBuffer *tagBuffer);
 
       void predict();
 
@@ -28,6 +28,7 @@ namespace FishTagEstimators
       bool isActive() const {
         return ekf.active;
       }
+      bool checkTime(double transmissionFirstTime, double currentTime) const;
     private:
       
   };

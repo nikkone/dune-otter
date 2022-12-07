@@ -45,6 +45,11 @@ namespace FishTagEstimators
       TBRFishTag tag = toEstimatorTag(msg);
       toNEDframe(tag);
       tagBuffer[msg->serial_no]->push_back(tag);
+      if(msg->unix_timestamp - latestTimestamp > maxTimestampDifference) {
+        // TODO: Check if more than one unused, then run update of filter
+        latestTimestamp = msg->getTimeStamp();
+        std::cout << std::endl << "set" << std::endl;
+      }
       return true;
     }
     // Ignore other tags

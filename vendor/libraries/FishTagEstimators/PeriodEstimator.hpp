@@ -12,7 +12,7 @@ namespace FishTagEstimators
   class PeriodEstimator : public Estimator<double>
   {
     public:
-      void update(TagBuffer *tagBuffer);
+      bool update(TagBuffer *tagBuffer);
       //void predict();
 
       void initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,

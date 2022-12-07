@@ -45,15 +45,15 @@ namespace FishTagEstimators
     srukf.xHat = x0_inn;
   }
 
-  void SingleReceiverSRUKF::update(TagBuffer *tagBuffer) {
+  bool SingleReceiverSRUKF::update(TagBuffer *tagBuffer) {
     SingleReceiverBase::update(tagBuffer);
     if(tag_period <= 0) {
-      return;
+      return false;
     }
 
     if(tagBuffer->tagBuffer.find(receiver) ==tagBuffer->tagBuffer.end()) {
       std::cout << "Did not find receiver: " << receiver << std::endl;
-      return;
+      return false;
     }
     const tagBuffer_t *receiverBuffer = tagBuffer->tagBuffer.find(receiver)->second;
         unsigned int m_max_correction_attempts;
@@ -134,17 +134,18 @@ namespace FishTagEstimators
           updates++;
           // Stop the loop after using the new measurement a given number of times.
           if(updates >= max_updates_per_new_measurement) {
-            return; 
+             return true; 
           }
           
         }
         // Stop after a number of predetermined attempts
         if(attempt >= m_max_correction_attempts) {
           //war("Stopped because maximum correction attempts reached. Attempts: %u, Updates %d", attempt, updates);
-          return;
+          return false;
         }
       }
     }
+    return false;
   }
   
   void SingleReceiverSRUKF::predict() {

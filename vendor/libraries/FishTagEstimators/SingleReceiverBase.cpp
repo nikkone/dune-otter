@@ -48,7 +48,7 @@ namespace FishTagEstimators
     }
   }
 
-  void SingleReceiverBase::update(TagBuffer *tagBuffer) {
+  bool SingleReceiverBase::update(TagBuffer *tagBuffer) {
     if(tagBuffer->tagBuffer.find(receiver) !=tagBuffer->tagBuffer.end()) {
       //std::cout << "interval_mode: " << interval_mode << std::endl;
       switch(interval_mode) {
@@ -62,10 +62,12 @@ namespace FishTagEstimators
           break;
         default:
           std::cout << "Error: Unknown interval mode!" << std::endl;
-          return; // Exit if not in these modes
+          return false; // Exit if not in these modes
       }
       //std::cout << "interval_mode: " << interval_mode << std::endl;
       std::cout << "tag_period: " << tag_period << std::endl;
+      return true;
     }
+    return false;
   }
 }

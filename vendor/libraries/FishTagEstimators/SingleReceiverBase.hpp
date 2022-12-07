@@ -20,7 +20,7 @@ namespace FishTagEstimators
         param_max_correction_attempts,
         param_interval_mode
       } t_param_base;
-      void update(TagBuffer *tagBuffer);
+      bool update(TagBuffer *tagBuffer);
 
       void initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &Q_inn,

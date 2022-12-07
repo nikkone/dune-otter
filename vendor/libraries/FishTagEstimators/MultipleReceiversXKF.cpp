@@ -58,10 +58,10 @@ namespace FishTagEstimators
   }
 
   template <class T>
-  void MultipleReceiverXKF<T>::update(TagBuffer *tagBuffer) {
+  bool MultipleReceiverXKF<T>::update(TagBuffer *tagBuffer) {
     //std::cout << "Entering MultipleReceiverXKF<T>::update" << std::endl;
     if(tagBuffer->tagBuffer.size() <2)
-      return;
+      return false;
 
     Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA(0 ,1);
     Eigen::Matrix<T, Eigen::Dynamic, 1> depth(tagBuffer->tagBuffer.size(),1);
@@ -88,8 +88,8 @@ namespace FishTagEstimators
       }
     }
 
-    if(baselines <2) {
-      return; // Do not process data/update filter if no baselines available
+    if(baselines <2) { // Todo: Make change to one possible
+      return false; // Do not process data/update filter if no baselines available
     }
 
     // Run filter update, and if sucessfull, set unprocessedData to false for used data receivers
@@ -97,8 +97,17 @@ namespace FishTagEstimators
       for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
         unprocessedData[it->first] = false;
       }
+      return true;
     }
-    
+    return false;
   }
-    
+
+template <class T>
+  bool MultipleReceiverXKF<T>::checkTime(T transmissionFirstTime, T currentTime) const {
+    if(currentTime - transmissionFirstTime > 1.5) {
+      return true;
+    } else {
+      return false;
+    }
+  }
 }

@@ -18,7 +18,7 @@ namespace FishTagEstimators
     public:
       MultipleReceiverXKF() {};
       ~MultipleReceiverXKF() {};
-      void update(TagBuffer *tagBuffer);
+      bool update(TagBuffer *tagBuffer);
 
       void predict();
 
@@ -35,6 +35,7 @@ namespace FishTagEstimators
       }
   void setTDOACovariance(T TDOACovariance);
   void setDepthCovariance(T depthCovariance);
+  bool checkTime(T transmissionFirstTime, T currentTime) const;
     private:
       
   };

@@ -24,7 +24,7 @@ namespace FishTagEstimators
       uint32_t trans_id;
 
       //! Measurement update (a posteriori) of estimator
-      virtual void update(TagBuffer *tagBuffer);
+      virtual bool update(TagBuffer *tagBuffer);
 
       //! Time update (a priori) of estimator
       virtual void predict();
@@ -75,6 +75,12 @@ namespace FishTagEstimators
       /// @brief Tell the estimator new data is available to be processed at next update
       /// @param serial_no 
       void updateUnprocessedData(uint32_t serial_no);
+
+
+      /// @brief Checks we have waited long enough to allow all receivers to report tag detection.
+      /// @param currentTime Time since UNIX Epoch (Midnight UTC of January 1, 1970).
+      /// @return True if we have waited long enough
+      virtual bool checkTime(T transmissionFirstTime, T currentTime) const;
 
       //! Virtual function that allows different behavior of << operator for each subclass
       //! @param [inout] os The outputstream to write to

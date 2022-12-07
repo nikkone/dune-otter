@@ -5,8 +5,9 @@
 namespace FishTagEstimators
 {
   template <class T>
-   void Estimator<T>::update(TagBuffer *tagBuffer) {
+   bool Estimator<T>::update(TagBuffer *tagBuffer) {
     std::cout << "Base. Buffersize:" << tagBuffer->tagBuffer.size() << "Unprocessed size" << unprocessedData.size() <<  std::endl;
+    return false;
   }
     template <class T>
    void Estimator<T>::predict() {return;}
@@ -138,5 +139,9 @@ namespace FishTagEstimators
         std::cout << "Receiver " << it->first << " False" << std::endl;
       }
     }
+  }
+  template <class T>
+  bool Estimator<T>::checkTime(T transmissionFirstTime, T currentTime) const {
+    return true;
   }
 }

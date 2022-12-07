@@ -12,7 +12,7 @@ namespace FishTagEstimators
   class SingleReceiverEKF : public SingleReceiverBase
   {
     public:
-      void update(TagBuffer *tagBuffer);
+      bool update(TagBuffer *tagBuffer);
       void predict();
 
       OFP::KalmanFilterDynamic<double, c_states> ekf;

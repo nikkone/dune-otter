@@ -12,7 +12,7 @@ namespace FishTagEstimators
   class SingleReceiverUKF : public SingleReceiverBase
   {
     public:
-      void update(TagBuffer *tagBuffer);
+      bool update(TagBuffer *tagBuffer);
       void predict();
 
       OFP::UnscentedKalmanFilter<double,c_states,2> ukf;

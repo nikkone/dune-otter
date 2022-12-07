@@ -22,10 +22,10 @@ namespace FishTagEstimators
     Estimator::initialize(A_inn, Q_inn, P0_inn, x0_inn);
   }
 
-  void MultipleReceiverEKF::update(TagBuffer *tagBuffer) {
+  bool MultipleReceiverEKF::update(TagBuffer *tagBuffer) {
     //std::cout << "update"<< std::endl << std::endl;
-    if(tagBuffer->tagBuffer.size() <2)
-      return;
+    if(tagBuffer->tagBuffer.size() <3)
+      return false;
 
 
     
@@ -85,7 +85,7 @@ namespace FishTagEstimators
 
 
     if(baselines <2) {
-      return; // Do not process data/update filter if fewer than two baselines available
+      return false; // Do not process data/update filter if fewer than two baselines available
     }
     // Set unprocessedData to false for used data receivers
     for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
@@ -112,7 +112,7 @@ measurements.tail(1) << avgDepth;
     //std::cout << "measurements" << std::endl << measurements << std::endl;
     //print(std::cout);
 //return;
-    ekf.update(measurements);
+    return ekf.update(measurements);
   }
   
   void MultipleReceiverEKF::predict() {
@@ -130,5 +130,11 @@ measurements.tail(1) << avgDepth;
     os << "yk" << std::endl << ekf.yk << std::endl;
     os << "innov" << std::endl << ekf.innov << std::endl;
   }
-  
+  bool MultipleReceiverEKF::checkTime(double transmissionFirstTime, double currentTime) const {
+    if(currentTime - transmissionFirstTime > 1.5) {
+      return true;
+    } else {
+      return false;
+    }
+  }
 }

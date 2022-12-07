@@ -12,7 +12,7 @@ namespace FishTagEstimators
     {
     protected:
       //! 
-      unsigned buffer_size;
+      //unsigned buffer_size;
     public:
       //! 
       typedef std::vector<FishTagEstimators::Estimator<double>*> EstimatorVector_t;
