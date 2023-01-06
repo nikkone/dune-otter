@@ -33,6 +33,7 @@
 // Additional headers
 #include <ENCGIS/DBconnection.hpp>
 #include <ENCGIS/SearchGrid.hpp>
+#include <ENCGIS/SearchGridPlanner.hpp>
 #include <ENCGIS/isPointInLayerStatement.hpp>
 #include <ENCGIS/lineIntersectLayerStatement.hpp>
 
@@ -76,6 +77,7 @@ namespace Control
                 //! Database connection
                 ENCGIS::DBconnection* m_con;
                 ENCGIS::SearchGrid* m_searchGrid;
+                ENCGIS::SearchGridPlanner* m_GridPlanner;
                 ENCGIS::isPointInLayerStatement *pointCheck;
                 ENCGIS::lineIntersectLayerStatement *lineCheck;
                 //! Size of the grid cells
@@ -285,6 +287,9 @@ namespace Control
                         err("Parameter \'pdw\' not unsigned");
                     }
                     }
+                    // Start time for grid creation.
+                    auto startg = std::chrono::high_resolution_clock::now();
+
                     // Convert from WGS-84 to EPSG32632
                     double start_northing, start_easting;
                     m_con->transformSRID(Math::Angles::degrees(msg->start_lon), Math::Angles::degrees(msg->start_lat), 4326, start_easting, start_northing, 32632);
@@ -319,6 +324,14 @@ namespace Control
                     }
                     m_searchGrid->normalizeWeights(true);
 
+                    auto start = std::chrono::high_resolution_clock::now(); // Start of path computation
+
+                    auto durationg = std::chrono::duration_cast<std::chrono::microseconds>(start - startg);
+                    std::cout << "Grid found in: "
+                    << durationg.count() << " microseconds" << std::endl;
+                    // Start time for computation measurments.
+
+
 #if SEARCHGRID_USEOPP_OMPL
                     // Find square covering bounds of search area
                     double planningBounds[4];// = {0,1,0,1};
@@ -329,9 +342,7 @@ namespace Control
 #endif
 
 
-                    // Start time for computation measurments.
-                    auto start = std::chrono::high_resolution_clock::now();
-
+                    m_GridPlanner = new ENCGIS::SearchGridPlanner(m_searchGrid);
                     // Find coverage path
                     int cell = m_searchGrid->getClosestCell(start_easting, start_northing);
 
@@ -343,7 +354,7 @@ namespace Control
                     {
                     case 0:
                         spew("Using calculateSearchPath with OMPL");
-                        planVec32632 = m_searchGrid->calculateSearchPath(cell, setup);
+                        planVec32632 = m_GridPlanner->calculateSearchPath(cell, setup);
                         break;
                     case 1:
                         break;
@@ -366,7 +377,7 @@ namespace Control
                         break; 
                     case 7:
                         spew("Using calculateSearchPathGlobal with OMPL");
-                        planVec32632 = m_searchGrid->calculateSearchPathGlobal(cell, setup, initialAzimuth, m_azimuthWeight,m_distanceWeight);
+                        planVec32632 = m_GridPlanner->calculateSearchPathGlobal(cell, setup, initialAzimuth, m_azimuthWeight,m_distanceWeight);
                         break;                  
                     default:
                         break;
@@ -379,16 +390,16 @@ namespace Control
                     case 0:
 
                         spew("Using calculateSearchPath");
-                        cells = m_searchGrid->calculateSearchPath(cell);
+                        cells = m_GridPlanner->calculateSearchPath(cell);
                     
                         break;
                     case 1:
                         spew("Using calculateSearchPathAzimuth");
-                        cells = m_searchGrid->calculateSearchPathAzimuth(cell, initialAzimuth, m_azimuthWeight);
+                        cells = m_GridPlanner->calculateSearchPathAzimuth(cell, initialAzimuth, m_azimuthWeight);
                         break;
                     case 2:
                         spew("Using calculateSearchPathDistance");
-                        cells = m_searchGrid->calculateSearchPathDistance(cell);
+                        cells = m_GridPlanner->calculateSearchPathDistance(cell);
                         break;
                     case 3:
                         return;
@@ -407,7 +418,7 @@ namespace Control
                         break; 
                     case 7:
                         spew("Using calculateSearchPathGlobal");
-                        cells = m_searchGrid->calculateSearchPathGlobal(cell, initialAzimuth, m_azimuthWeight,m_distanceWeight);
+                        cells = m_GridPlanner->calculateSearchPathGlobal(cell, initialAzimuth, m_azimuthWeight,m_distanceWeight);
                         break;                  
                     default:
                         break;
@@ -416,6 +427,8 @@ namespace Control
 #endif
                     // End time for computation time measurement
                     auto stop1 = std::chrono::high_resolution_clock::now();
+
+                    Memory::clear(m_GridPlanner);
                     auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start);
                     std::cout << "Path found in: "
                     << duration1.count() << " microseconds" << std::endl;
