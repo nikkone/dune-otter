@@ -6,11 +6,11 @@
 #include <iostream>
 namespace ENCGIS {
 #if SEARCHGRID_USEOPP_OMPL
-    std::vector<std::pair<double, double>>SearchGridPlanner::calculateSearchPath(int startCell, og::SimpleSetup &setup) {
+    std::vector<std::pair<double, double>>SearchGridPlanner::calculateSearchPath(og::SimpleSetup &setup) {
         std::vector<int> cells;
         std::vector<std::pair<double, double>> cells_pos;
         unsigned outputSRID = grid->getSRID();
-        int cell = startCell;
+        int cell = initialCell;
         // Greedy algorithm
         while(cell != 0) {
             cells.push_back(cell);
@@ -22,7 +22,6 @@ namespace ENCGIS {
                 if(cell != 0) {
                     auto start = grid->getCellLocation(cells.back(),grid->getSRID());
                     auto end = grid->getCellLocation(cell,grid->getSRID());
-                    double maxPlaningTime = 2.0;
                     //std::cout << start.second << "," << start.first << "," << end.second << "," << end.first << std::endl;
                     //std::cout << start.first << "," << start.second << "," << end.first << "," << end.second << std::endl;
 
@@ -42,9 +41,9 @@ namespace ENCGIS {
         return cells_pos;
     }
 #endif
-    std::vector<int> SearchGridPlanner::calculateSearchPath(int startCell) {
+    std::vector<int> SearchGridPlanner::calculateSearchPath() {
         std::vector<int> cells;
-        int cell = startCell;
+        int cell = initialCell;
         // Greedy algorithm
         while(cell != 0) {
             cells.push_back(cell);
@@ -58,15 +57,15 @@ namespace ENCGIS {
         return cells;
     }
 
-    std::vector<int> SearchGridPlanner::calculateSearchPathAzimuth(int startCell, double initialAzimuth, double azimuthWeight) {
+    std::vector<int> SearchGridPlanner::calculateSearchPathAzimuth() {
         std::vector<int> cells;
-        int cell = startCell;
+        int cell = initialCell;
         // Greedy algorithm with azimuth weights
         double azimuth = initialAzimuth;
         while(cell != 0) {
             cells.push_back(cell);
             grid->setCellWeight(cell,-1);
-            cell = getLocalOptimalNeighbourAzimuth(cell, azimuth, azimuthWeight);
+            cell = getLocalOptimalNeighbourAzimuth(cell, azimuth);
             if(cell == 0) {
                 cell = grid->getClosestUnsearchedCell(cells.back());
             }
@@ -74,9 +73,9 @@ namespace ENCGIS {
         return cells;
     }
 
-    std::vector<int> SearchGridPlanner::calculateSearchPathDistance(int startCell) {
+    std::vector<int> SearchGridPlanner::calculateSearchPathDistance() {
         std::vector<int> cells;
-        int cell = startCell;
+        int cell = initialCell;
         // Greedy algorithm
         while(cell != 0) {
             cells.push_back(cell);
@@ -111,7 +110,7 @@ namespace ENCGIS {
         return value;
     }
 
-    int SearchGridPlanner::getLocalOptimalNeighbourAzimuth(int cell, double &azimuth, double azimuthWeight) {
+    int SearchGridPlanner::getLocalOptimalNeighbourAzimuth(int cell, double &azimuth) {
         std::string query = "select gid, azimuth from ("
         "select gid, azimuth, max(weight - " + std::to_string(azimuthWeight) + "*(abs(" + std::to_string(azimuth) + " - azimuth)/(2*PI()))  ) from ("
         "select weight,gid,azimuth(centroid(geometry), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")) as azimuth"
@@ -141,7 +140,6 @@ namespace ENCGIS {
     }
     
     int SearchGridPlanner::getDistanceOptimalNextCell(int cell) {
-        double distanceWeight = 2.0;
         double maxDistance = 1850;
         std::string query = "select *, max(weight - " + std::to_string(distanceWeight) + "*distance(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))/" + std::to_string(maxDistance) + ") from " + grid->getdbGridTable() + " where weight > 0";
         int errors = 0;
@@ -181,7 +179,7 @@ namespace ENCGIS {
         return resultingCells;
     }
 
-    int SearchGridPlanner::getGlobalOptimalCell(int cell, double azimuth, double azimuthWeight, double distanceWeight) {
+    int SearchGridPlanner::getGlobalOptimalCell(int cell, double azimuth) {
         std::string query = "select gid from (select gid,"
         "max(weight"
         "- " + std::to_string(azimuthWeight) + "*ABS( " + std::to_string(azimuth) + "-azimuth((select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = sg.gid)))"
@@ -206,23 +204,23 @@ namespace ENCGIS {
         return value;
     }
     
-    std::vector<int> SearchGridPlanner::calculateSearchPathGlobal(int startCell, double initialAzimuth, double azimuthWeight, double distanceWeight)
+    std::vector<int> SearchGridPlanner::calculateSearchPathGlobal()
     {
         /*
-        grid->setCellWeight(startCell, 2);
+        grid->setCellWeight(initialCell, 2);
         int cellNum = 5;
         for(int i = 0; i < cellNum; i++) {
 
-            grid->setCellWeight(startCell, i+2);
+            grid->setCellWeight(initialCell, i+2);
         }*/
         std::vector<int> cells;
-        int cell = startCell;
+        int cell = initialCell;
         // Greedy algorithm with azimuth weights
         double azimuth = initialAzimuth;
         while(cell != 0) {
             cells.push_back(cell);
             grid->setCellWeight(cell,-1);
-            cell = getGlobalOptimalCell(cell, azimuth, azimuthWeight, distanceWeight);
+            cell = getGlobalOptimalCell(cell, azimuth);
             std::cout << cell << std::endl;
         }
         return cells;
@@ -230,25 +228,24 @@ namespace ENCGIS {
     }
 
     #if SEARCHGRID_USEOPP_OMPL
-    std::vector<std::pair<double, double>> SearchGridPlanner::calculateSearchPathGlobal(int startCell, og::SimpleSetup &setup, double initialAzimuth, double azimuthWeight, double distanceWeight)
+    std::vector<std::pair<double, double>> SearchGridPlanner::calculateSearchPathGlobal(og::SimpleSetup &setup)
     {
         bool intersectingVisited = false; // TODO: Make parameter
         std::vector<std::pair<double, double>> cells_pos;
         std::vector<int> cells;
-        int cell = startCell;
+        int cell = initialCell;
         // Greedy algorithm with azimuth weights
         double azimuth = initialAzimuth;
         while(cell != 0) {
             cells.push_back(cell);
             grid->setCellWeight(cell,-1);
-            cell = getGlobalOptimalCell(cell, azimuth, azimuthWeight, distanceWeight);
+            cell = getGlobalOptimalCell(cell, azimuth);
             if(cell == 0) {
                 cells_pos.push_back(grid->getCellLocation(cells.back(),grid->getSRID()));
                 break;
             }
             auto start = grid->getCellLocation(cells.back(),grid->getSRID());
             auto end = grid->getCellLocation(cell,grid->getSRID());
-            double maxPlaningTime = 2.0;
             OMPLintegrationENCGIS::setStartAndGoalStates(setup, start.first, start.second, end.first, end.second);
             og::PathGeometric states = OMPLintegrationENCGIS::findPath(setup, maxPlaningTime, OMPLintegrationENCGIS::configurations_t::C_KBIT);
             if (states.getStateCount()) {

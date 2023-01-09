@@ -25,33 +25,103 @@ namespace ENCGIS
         P_GLOBAL_GREEDY_COST_AZIMUTH_DISTANCE = 7,
       } planner_t;
 
+      typedef enum
+      {
+        H_DISTRIBUTION = 0,
+        H_DISTRIBUTION_AZIMUTH = 1,
+        H_DISTRIBUTION_DISTANCE = 2,
+        H_DISTRIBUTION_AZIMUTH_DISTANCE = 3,
+      } heuristic_t;
+
         SearchGridPlanner(SearchGrid * inGrid) : grid(inGrid) {
         
         }
 
 #if SEARCHGRID_USEOPP_OMPL
+        std::vector<std::pair<double, double>> runPlanner(bool local, heuristic_t heuristic, og::SimpleSetup &setup) {
+            if(local) {
+                switch (heuristic)
+                {
+                case H_DISTRIBUTION:
+                    return calculateSearchPath(setup);
+                    break;
+                case H_DISTRIBUTION_AZIMUTH:
+                    break;
+                case H_DISTRIBUTION_DISTANCE:
+                    break;
+                case H_DISTRIBUTION_AZIMUTH_DISTANCE:
+                    return calculateSearchPathGlobal(setup);
+                    break;                 
+                default:
+                    break;
+                    return std::vector<std::pair<double, double>>();
+                }
+            }
+        }
+#else
+        std::vector<int> runPlanner(bool local, heuristic_t heuristic) {
+            if(local) {
+                switch (heuristic)
+                {
+                case H_DISTRIBUTION:
+                    return calculateSearchPath();
+                    break;
+                case H_DISTRIBUTION_AZIMUTH:
+                    return calculateSearchPathAzimuth();
+                    break;
+                case H_DISTRIBUTION_DISTANCE:
+                    return calculateSearchPathDistance();
+                    break;
+                case H_DISTRIBUTION_AZIMUTH_DISTANCE:
+                    // Not implemented               
+                default:
+                    break;
+                    return std::vector<int>();
+                }
+            } else { // Global
+                switch (heuristic)
+                {
+                case H_DISTRIBUTION:
+                    return std::vector<int>();
+                    break;
+                case H_DISTRIBUTION_AZIMUTH:
+                    return std::vector<int>();
+                    break;
+                case H_DISTRIBUTION_DISTANCE:
+                    return std::vector<int>();
+                    break;
+                case H_DISTRIBUTION_AZIMUTH_DISTANCE:
+                     return calculateSearchPathGlobal();             
+                default:
+                    break;
+                    return std::vector<int>();
+                }
+            } // 
+        }
+#endif
+#if SEARCHGRID_USEOPP_OMPL
         /// @brief Uses a greedy algorithm to create a path covering all grid cells.
         /// @param startCell The first cell to be visited
         /// @return A vector of describing the cell visitation order
-        std::vector<std::pair<double, double>> calculateSearchPath(int startCell, og::SimpleSetup &setup);
+        std::vector<std::pair<double, double>> calculateSearchPath(og::SimpleSetup &setup);
 #endif
 
         /// @brief Uses a greedy algorithm to create a path covering all grid cells.
         /// @param startCell The first cell to be visited
         /// @return A vector of describing the cell visitation order
-        std::vector<int> calculateSearchPath(int startCell);
+        std::vector<int> calculateSearchPath();
 
         /// @brief Uses a greedy algorithm to create a path covering all grid cells. Penalizes azimuth changes.
         /// @param startCell The first cell to be visited
         /// @param initialAzimuth Azimuth at startCell
         /// @param azimuthWeight Absolute azimuth change is multiplied with this weight.
         /// @return A vector of describing the cell visitation order
-        std::vector<int> calculateSearchPathAzimuth(int startCell, double initialAzimuth, double azimuthWeight = 0.1);
+        std::vector<int> calculateSearchPathAzimuth();
 
         /// @brief Uses a greedy algorithm to create a path covering all grid cells. TODO: UNDER DEVELOPMENT
         /// @param startCell The first cell to be visited
         /// @return A vector of describing the cell visitation order
-        std::vector<int> calculateSearchPathDistance(int startCell);
+        std::vector<int> calculateSearchPathDistance();
 
         /// @brief Get the neighbor with the lowest weight
         /// @param cell The cell id for which to check the neighbors
@@ -63,7 +133,7 @@ namespace ENCGIS
         /// @param azimuth [in] previous azimuth [out] next azimuth
         /// @param azimuthWeight Absolute azimuth change is multiplied with this weight.
         /// @return The neighbor with the lowest weight and azimuth change.
-        int getLocalOptimalNeighbourAzimuth(int cell, double &azimuth, double azimuthWeight);
+        int getLocalOptimalNeighbourAzimuth(int cell, double &azimuth);
 
         /// @brief Get the neighbor with the lowest weight also considering 
         /// @param cell The cell id for which to check the neighbors
@@ -84,7 +154,7 @@ namespace ENCGIS
         /// @param azimuthWeight 
         /// @param distanceWeight 
         /// @return 
-        int getGlobalOptimalCell(int cell, double azimuth, double azimuthWeight = 0.001, double distanceWeight = 0.0003);
+        int getGlobalOptimalCell(int cell, double azimuth);
 
 #if SEARCHGRID_USEOPP_OMPL
         /// @brief 
@@ -94,7 +164,7 @@ namespace ENCGIS
         /// @param azimuthWeight 
         /// @param distanceWeight 
         /// @return 
-        std::vector<std::pair<double, double>> calculateSearchPathGlobal(int startCell, og::SimpleSetup &setup, double initialAzimuth = 0.0, double azimuthWeight = 0.1, double distanceWeight = 0.1);
+        std::vector<std::pair<double, double>> calculateSearchPathGlobal(og::SimpleSetup &setup);
 #endif
         /// @brief 
         /// @param startCell 
@@ -102,7 +172,7 @@ namespace ENCGIS
         /// @param azimuthWeight 
         /// @param distanceWeight 
         /// @return 
-        std::vector<int> calculateSearchPathGlobal(int startCell, double initialAzimuth, double azimuthWeight = 0.1, double distanceWeight = 0.1);
+        std::vector<int> calculateSearchPathGlobal();
 
         /// @brief 
         /// @param startX 
@@ -111,8 +181,36 @@ namespace ENCGIS
         /// @param endY 
         void setIntersectingCellsAsVisited(double startX, double startY, double endX, double endY);
         
+        void setinitialCell(int desiredinitialCell) {
+            initialCell = desiredinitialCell;
+        }
+        void setinitialAzimuth(double desiredinitialAzimuth) {
+            initialAzimuth = desiredinitialAzimuth;
+        }
+        void setdistibutionWeight(double desireddistibutionWeight) {
+            distibutionWeight = desireddistibutionWeight;
+        }
+        void setazimuthWeight(double desiredazimuthWeight) {
+            azimuthWeight = desiredazimuthWeight;
+        }
+        void setdistanceWeight(double desireddistanceWeight) {
+            distanceWeight = desireddistanceWeight;
+        }
+        #if SEARCHGRID_USEOPP_OMPL
+        void setmaxPlaningTime(double desiredmaxPlaningTime) {
+            maxPlaningTime = desiredmaxPlaningTime;
+        }
+        #endif
         private:
             SearchGrid *grid;
+            int initialCell = 1;
+            double initialAzimuth = 0.0;
+            double distibutionWeight = 1;
+            double azimuthWeight = 0.001;
+            double distanceWeight = 0.0005;
+            #if SEARCHGRID_USEOPP_OMPL
+            double maxPlaningTime = 2.0;
+            #endif
     };
 }
 #endif

@@ -1,0 +1,84 @@
+#include "SearchGridCoverageState.hpp"
+#include <iostream>
+namespace ENCGIS
+{
+  bool SearchGridCoverageState::update(float X, float Y, float range) {
+    std::string updateQuery= 
+    "update " + getdbGridTable() + " as s set weight = 1 from ("
+    "select gid from("
+    "select * from " + getdbGridTable() + " where ROWID IN ("
+    "SELECT ROWID FROM SpatialIndex "
+    "        WHERE f_table_name = '" + getdbGridTable() + "' AND "
+    "          search_frame = BuildCircleMbr(" + std::to_string(X) + "," + std::to_string(Y) + "," + std::to_string(range) + "," + std::to_string(getSRID()) + ")"
+    ")"
+    ") where within(geometry, buffer(makepoint(" + std::to_string(X) + "," + std::to_string(Y) + "," + std::to_string(getSRID()) + "), " + std::to_string(range) + "))"
+    ") as c where s.gid = c.gid";
+    //std::cout << updateQuery << std::endl;
+    return getDBconnection()->runNoOutputQuery(updateQuery);
+  }
+
+  bool SearchGridCoverageState::updateLogarithmic(float X, float Y, unsigned rpm, double range) {
+    double b0,b1;
+    if(logarithmicModelCoefficients(rpm, b0, b1)) {
+      double pCutoff = 0.05;
+      std::string updateQuery = 
+      "update " + getdbGridTable() + " as s set weight = min(weight+we, 1) from ("
+      "select gid, 1/(1+exp(-(" + std::to_string(b0) + " + dist*" + std::to_string(b1) + " ))) as we from ("
+        "select gid, distance(c.geometry, makepoint(" + std::to_string(X) + "," + std::to_string(Y) + "," + std::to_string(getSRID()) + ")) as dist from ("
+          "select gid, geometry from ("
+          "select * from " + getdbGridTable() + " where ROWID IN (SELECT ROWID FROM SpatialIndex "
+          "WHERE f_table_name = '" + getdbGridTable() + "' and "
+          "search_frame = BuildCircleMbr(" + std::to_string(X) + "," + std::to_string(Y) + "," + std::to_string(range) + "," + std::to_string(getSRID()) + "))"
+          ") "
+        ") as c"
+      ")"
+      ") as a where s.gid = a.gid  and we > " + std::to_string(pCutoff);
+      //std::cout << updateQuery << std::endl;
+      return getDBconnection()->runNoOutputQuery(updateQuery);
+    }
+    return false;
+  }
+
+  bool SearchGridCoverageState::logarithmicModelCoefficients(unsigned rpm, double &b0, double &b1) {
+    const double logitCoefzero[2] = {4.748444238767068,-0.011050835615990};
+    const double logitCoefonetwenty[2] = {10.510644583981138,-0.122312536613913};
+    const double logitCoefoneeighty[2] = {6.172439685021811,-0.033868111399770};
+    const double logitCoeftwofourty[2] = {4.762268533530098,-0.028498319426830};
+    const double logitCoefthreehundred[2] = {3.888776088643779,-0.030189104248954};
+
+    if(rpm > 330) {
+      return false; // No update needed, assume no detections above 300
+    } else if(rpm > 270) {
+      b0=logitCoefthreehundred[0];
+      b1=logitCoefthreehundred[1];
+      return true;
+    } else if(rpm > 210) {
+      b0=logitCoeftwofourty[0];
+      b1=logitCoeftwofourty[1];
+      return true;
+    } else if(rpm > 150) {
+      b0=logitCoefoneeighty[0];
+      b1=logitCoefoneeighty[1];
+      return true;
+    } else if(rpm > 30) {
+      b0=logitCoefonetwenty[0];
+      b1=logitCoefonetwenty[1];
+      return true;
+    } else {
+      b0=logitCoefzero[0];
+      b1=logitCoefzero[1];
+      return true;
+    }
+  }
+
+  bool SearchGridCoverageState::decreaseAll(float fixedDecrease)
+  {
+    std::string decreaseQuery = "update " + getdbGridTable() + " set weight = max(0, weight-" + std::to_string(fixedDecrease) + ")";
+    return getDBconnection()->runNoOutputQuery(decreaseQuery);
+  }
+  bool SearchGridCoverageState::decreaseAll(float fixedDecrease, float decreaseFactor)
+  {
+    std::string decreaseQuery = "update " + getdbGridTable() + " set weight = max(0, weight*" + std::to_string(decreaseFactor) + "-" + std::to_string(fixedDecrease) + ")";
+    return getDBconnection()->runNoOutputQuery(decreaseQuery);
+  }
+}

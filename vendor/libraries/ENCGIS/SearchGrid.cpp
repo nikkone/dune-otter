@@ -2,7 +2,7 @@
 
 #include <iostream>
 namespace ENCGIS {
-    SearchGrid::SearchGrid(ENCGIS::DBconnection *db, std::string in_landTable, std::string in_dbGridTable, unsigned in_SRID) {
+    SearchGrid::SearchGrid(ENCGIS::DBconnection *db, std::string in_dbGridTable, unsigned in_SRID, std::string in_landTable) {
         m_con = db;
         landTable = in_landTable;
         dbGridTable = in_dbGridTable;
@@ -33,14 +33,14 @@ namespace ENCGIS {
         return geometry;
     }
 
-    bool SearchGrid::createGrid(double minX, double minY, double maxX, double maxY, unsigned gridsize, gridtypes_t gridType){
+    bool SearchGrid::createGrid(double minX, double minY, double maxX, double maxY, unsigned gridsize, gridtypes_t gridType, bool spatialIndex){
         std::string EWKTsquare = "SRID=" + std::to_string(SRID) + ";POLYGON((" + std::to_string(minX) + " " + std::to_string(minY) + "," + std::to_string(minX) + " " + std::to_string(maxY) + ","
         "" + std::to_string(maxX) + " " + std::to_string(maxY) + "," + std::to_string(maxX) + " " + std::to_string(minY) + "," + std::to_string(minX) + " " + std::to_string(minY) + "))";
 
-        return createGrid(EWKTsquare, gridsize, gridType);
+        return createGrid(EWKTsquare, gridsize, gridType, spatialIndex);
     }
 
-    bool SearchGrid::createGrid(const std::string &EWKTpolygon, unsigned gridsize, gridtypes_t gridType) {
+    bool SearchGrid::createGrid(const std::string &EWKTpolygon, unsigned gridsize, gridtypes_t gridType, bool spatialIndex) {
 
         std::string create = "create table " + dbGridTable + "raw as select " + gridTypeToString(gridType) + "Grid(transform("
         "GeomFromEWKT('" + EWKTpolygon + "'), " + std::to_string(SRID) + "), " +std::to_string(gridsize)+ ") as geometry";
@@ -53,10 +53,13 @@ namespace ENCGIS {
     "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) as land where intersects(" + dbGridTable + ".geometry, land.geometry))";
         //std::cout << deleteLandCells << std::endl;
-        
+        std::string indexQuery = "SELECT CreateSpatialIndex('" + dbGridTable + "', 'geometry');";
+
         m_con->runNoOutputQuery(create);
         m_con->runNoOutputQuery(recoverMultiTable);
         m_con->runNoOutputQuery(polygonFromMultipolygon);
+        if(spatialIndex)
+            m_con->runNoOutputQuery(indexQuery);
         return m_con->runNoOutputQuery(deleteLandCells);
     }
 

@@ -35,7 +35,8 @@ namespace ENCGIS
         /// @param in_landTable 
         /// @param in_dbGridTable 
         /// @param in_SRID 
-        SearchGrid(ENCGIS::DBconnection *db, std::string in_landTable = "innavigable", std::string in_dbGridTable = "searchgrid", unsigned in_SRID = 32632);
+        SearchGrid(ENCGIS::DBconnection *db, std::string in_dbGridTable = "searchgrid", unsigned in_SRID = 32632, std::string in_landTable = "innavigable");
+        
         /// @brief 
         ~SearchGrid();
 
@@ -51,13 +52,15 @@ namespace ENCGIS
         /// @param maxY Upper Y coordinate defined in this.SRID
         /// @param gridsize Edge length
         /// @param gridType The shape of the grid cells
-        bool createGrid(double minX, double minY, double maxX, double maxY, unsigned gridsize, gridtypes_t gridType = SQUARE);
+        /// @param spatialIndex Should a spatial index be generated for the grid
+        bool createGrid(double minX, double minY, double maxX, double maxY, unsigned gridsize, gridtypes_t gridType = SQUARE, bool spatialIndex = false);
 
         /// @brief Creates a grid within the polygon defined in EWKTpolygon
         /// @param EKWTpolygon An extended well-known text representation of the desired area the grid should cover.
         /// @param gridsize Edge length
         /// @param gridType The shape of the grid cells
-        bool createGrid(const std::string &EWKTpolygon, unsigned gridsize, gridtypes_t gridType = SQUARE);
+        /// @param spatialIndex Should a spatial index be generated for the grid
+        bool createGrid(const std::string &EWKTpolygon, unsigned gridsize, gridtypes_t gridType = SQUARE, bool spatialIndex = false);
 
         /// @brief Set grid weights as distance to landTable
         /// @return TODO: currently unused
