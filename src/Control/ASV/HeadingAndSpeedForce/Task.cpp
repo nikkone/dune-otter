@@ -375,10 +375,11 @@ namespace Control
                 thrust_com = (m_desired_speed / 100.0);
                 break;
               case IMC::SUNITS_METERS_PS:
-                thrust_com = mpsToForce(msg->u, tstep);
+                thrust_com = mpsToForce(m_desired_speed, msg->u, tstep);
                 break;
 
               case IMC::SUNITS_RPM:
+                thrust_com = rpmToThrust(m_desired_speed);
                 break;
               default:
                 break;
@@ -490,9 +491,9 @@ namespace Control
         //! @param[in] vel absolute ground velocity.
         //! @param[in] timestep amount of time since last control step.
         //! @return desired force value.        
-        float mpsToForce(float vel, double timestep) {
+        float mpsToForce(float desiredMPS, float measuredMPS, double timestep) {
           // if desired speed is too low just turn off motor
-          if (m_desired_speed < c_mps_tol)
+          if (desiredMPS < c_mps_tol)
           {
             m_previous_force = 0.0;
             return 0.0;
@@ -501,9 +502,9 @@ namespace Control
           if (timestep <= 0.0)
             return 0.0;
 
-          m_parcel_mps_force.a = m_desired_speed * m_args.mps_force_ffgain;
+          m_parcel_mps_force.a = desiredMPS * m_args.mps_force_ffgain;
           float force = m_parcel_mps_force.a;
-          force += m_mps_force_pid.step(timestep, m_desired_speed - vel);
+          force += m_mps_force_pid.step(timestep, desiredMPS - measuredMPS);
 
 
           // trim acceleration in force
@@ -565,7 +566,7 @@ namespace Control
           if (!m_args.share)
             return;
 
-          for (uint8_t i = 0; i < 2; i++)
+          for(uint8_t i = 0; i < 2; i++)
           {
             if (m_act[i].value > m_args.act_max)
             {
