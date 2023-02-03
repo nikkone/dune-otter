@@ -126,19 +126,19 @@ namespace ENCGIS
         /// @brief Get the neighbor with the lowest weight
         /// @param cell The cell id for which to check the neighbors
         /// @return the neighbor with the lowest weight.
-        int getLocalOptimalNeighbour(int cell);
+        int getLocalOptimalNeighbour(int cell, std::string metric = "weight");
 
         /// @brief Get the neighbor with the lowest weight and lowest change of azimuth
         /// @param cell The cell id for which to check the neighbors
         /// @param azimuth [in] previous azimuth [out] next azimuth
         /// @param azimuthWeight Absolute azimuth change is multiplied with this weight.
         /// @return The neighbor with the lowest weight and azimuth change.
-        int getLocalOptimalNeighbourAzimuth(int cell, double &azimuth);
+        int getLocalOptimalNeighbourAzimuth(int cell, double &azimuth, std::string metric = "weight");
 
         /// @brief Get the neighbor with the lowest weight also considering 
         /// @param cell The cell id for which to check the neighbors
         /// @return the neighbor with the lowest weight.
-        int getDistanceOptimalNextCell(int cell);
+        int getDistanceOptimalNextCell(int cell, std::string metric = "weight");
 
 
         /// @brief Iterates through the cells of a path, removing cells that do not cause a change in azimuth.
@@ -154,7 +154,7 @@ namespace ENCGIS
         /// @param azimuthWeight 
         /// @param distanceWeight 
         /// @return 
-        int getGlobalOptimalCell(int cell, double azimuth);
+        int getGlobalOptimalCell(int cell, double azimuth, std::string metric = "weight");
 
 #if SEARCHGRID_USEOPP_OMPL
         /// @brief 
@@ -179,7 +179,7 @@ namespace ENCGIS
         /// @param startY 
         /// @param endX 
         /// @param endY 
-        void setIntersectingCellsAsVisited(double startX, double startY, double endX, double endY);
+        void setIntersectingCellsAsVisited(double startX, double startY, double endX, double endY, std::string metric = "weight");
         
         void setinitialCell(int desiredinitialCell) {
             initialCell = desiredinitialCell;

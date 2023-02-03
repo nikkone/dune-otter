@@ -143,13 +143,13 @@ namespace Control
                     std::string attachedDb = "db1";
                     try{
                     m_con = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE, 32632);
-                    m_con->runNoOutputQuery("attach '/home/nikolai/lststools/dune/misc/re4utmfinal.sqlite' as db1");
+                    m_con->runNoOutputQuery("attach '" + m_args.dbPath + "' as " + attachedDb + "");
                     //m_con->runQuery("select * from db1.coalne limit 10");
                     } catch(std::runtime_error& e) {
                     err(DTR("Problem opening charts database: %s"), e.what());
                     // Set task state to failure
                     }
-                    m_searchGrid = new ENCGIS::SearchGrid(m_con, m_args.dbInnavigableLayerName);
+                    m_searchGrid = new ENCGIS::SearchGrid(m_con);
                     try{
                     pointCheck = new ENCGIS::isPointInLayerStatement(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632, attachedDb);
                     } catch(std::runtime_error& e) {
@@ -311,18 +311,18 @@ namespace Control
                         spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
                         m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
                         m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
-                        m_searchGrid->setGridWeightsFromLandDistance();
+                        m_searchGrid->setGridMetricFromLandDistance();
                     } else if(msg->area.size() > 2) {
                         m_searchGrid->deleteGrid();
                         m_searchGrid->createGrid(polygonToEWKT(msg->area), m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
                         debug("Grid Created from EKWT");
-                        m_searchGrid->setGridWeightsFromLandDistance();
+                        m_searchGrid->setGridMetricFromLandDistance();
                         spew("Weights of grid set");
                     } else {
                         spew("Polygon too small.");
                         return;
                     }
-                    m_searchGrid->normalizeWeights(true);
+                    m_searchGrid->normalizeMetric(true);
 
                     auto start = std::chrono::high_resolution_clock::now(); // Start of path computation
 
@@ -344,17 +344,21 @@ namespace Control
 
                     m_GridPlanner = new ENCGIS::SearchGridPlanner(m_searchGrid);
                     // Find coverage path
-                    int cell = m_searchGrid->getClosestCell(start_easting, start_northing);
+                    m_GridPlanner->setinitialCell(m_searchGrid->getClosestCell(start_easting, start_northing));
+                    m_GridPlanner->setinitialAzimuth(0.0);
+                    m_GridPlanner->setdistibutionWeight(1);
+                    m_GridPlanner->setazimuthWeight(m_azimuthWeight);
+                    m_GridPlanner->setdistanceWeight(m_distanceWeight);
 
-                    float initialAzimuth = 0.0;
 
 #if SEARCHGRID_USEOPP_OMPL
+                    m_GridPlanner->setmaxPlaningTime(2.0);
                         std::vector<std::pair<double, double>> planVec32632;
                     switch (m_planner)
                     {
                     case 0:
                         spew("Using calculateSearchPath with OMPL");
-                        planVec32632 = m_GridPlanner->calculateSearchPath(cell, setup);
+                        planVec32632 = m_GridPlanner->calculateSearchPath(setup);
                         break;
                     case 1:
                         break;
@@ -377,7 +381,7 @@ namespace Control
                         break; 
                     case 7:
                         spew("Using calculateSearchPathGlobal with OMPL");
-                        planVec32632 = m_GridPlanner->calculateSearchPathGlobal(cell, setup, initialAzimuth, m_azimuthWeight,m_distanceWeight);
+                        planVec32632 = m_GridPlanner->calculateSearchPathGlobal(setup);
                         break;                  
                     default:
                         break;
@@ -390,16 +394,16 @@ namespace Control
                     case 0:
 
                         spew("Using calculateSearchPath");
-                        cells = m_GridPlanner->calculateSearchPath(cell);
+                        cells = m_GridPlanner->calculateSearchPath();
                     
                         break;
                     case 1:
                         spew("Using calculateSearchPathAzimuth");
-                        cells = m_GridPlanner->calculateSearchPathAzimuth(cell, initialAzimuth, m_azimuthWeight);
+                        cells = m_GridPlanner->calculateSearchPathAzimuth();
                         break;
                     case 2:
                         spew("Using calculateSearchPathDistance");
-                        cells = m_GridPlanner->calculateSearchPathDistance(cell);
+                        cells = m_GridPlanner->calculateSearchPathDistance();
                         break;
                     case 3:
                         return;
@@ -418,7 +422,7 @@ namespace Control
                         break; 
                     case 7:
                         spew("Using calculateSearchPathGlobal");
-                        cells = m_GridPlanner->calculateSearchPathGlobal(cell, initialAzimuth, m_azimuthWeight,m_distanceWeight);
+                        cells = m_GridPlanner->calculateSearchPathGlobal();
                         break;                  
                     default:
                         break;
@@ -428,7 +432,7 @@ namespace Control
                     // End time for computation time measurement
                     auto stop1 = std::chrono::high_resolution_clock::now();
 
-                    Memory::clear(m_GridPlanner);
+
                     auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start);
                     std::cout << "Path found in: "
                     << duration1.count() << " microseconds" << std::endl;
@@ -437,13 +441,14 @@ namespace Control
                     auto planVec4326 = m_con->transformSRIDVector(planVec32632, 32632,4326);
 #else
                     // Remove redundant cells from path in order to reduce plan size
-                     std::vector<int> rcells = m_searchGrid->removeRedundantCells(cells);
+                     std::vector<int> rcells = m_GridPlanner->removeRedundantCells(cells);
                     // Create vector of path waypoints
                     auto planVec32632 = m_searchGrid->locationsFromCells(rcells, 32632);
                     auto planVec4326 = m_searchGrid->locationsFromCells(rcells);
                     debug("Got locations from cells");
 
 #endif
+                    Memory::clear(m_GridPlanner);
                     // Write plan to spatialite DBTree, not needed for functionality
                     ENCGIS::DBconnection* m_writable = new ENCGIS::DBconnection(m_args.resultsDBpath, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 32632);
                     ENCGIS::DBTree* tree = new ENCGIS::DBTree(m_writable);
@@ -462,12 +467,16 @@ namespace Control
                     Memory::clear(m_writable);
 
                     // Set weights in grid for visualization purposes, not needed for functionality
-                    m_searchGrid->setGridWeightsFromLandDistance();
-                    m_searchGrid->normalizeWeights(true);
+                    m_searchGrid->setGridMetricFromLandDistance();
+                    m_searchGrid->normalizeMetric(true);
 
 
                     // Turn vector of waypoints into a IMC::PlanDB and dispatch/submit it to the plan database
-                    IMC::PlanDB pdb = createPlanDBEntry(planVec4326, "autoPlan", 1.0);
+                    //IMC::PlanDB pdb = createPlanDBEntry(planVec4326, "autoPlan", msg->speed, msg->speed_units);
+
+                    DUNE::IMC::MessageList<DUNE::IMC::Maneuver> maneuvers;
+                    createStnKpManeuvers(planVec4326, msg->speed, msg->speed_units, 10, 30, maneuvers);
+                    IMC::PlanDB pdb = createPlanDBEntry(maneuvers, "autoPlan");
                     debug("IMC plan created");
                     
                     // Check if path is too long to use
@@ -494,54 +503,82 @@ namespace Control
 
                     DUNE::IMC::MessageList<DUNE::IMC::Maneuver>::const_iterator itr;
                     unsigned i = 0;
-                    for (itr = maneuvers->begin(); itr != maneuvers->end(); itr++, i++)
-                    {
-                    if (*itr == NULL)
-                        continue;
+                    for (itr = maneuvers->begin(); itr != maneuvers->end(); itr++, i++) {
+                        if (*itr == NULL)
+                            continue;
+                        DUNE::IMC::PlanManeuver man_spec;
+                        man_spec.data.set(*(*itr));
+                        man_spec.maneuver_id = DUNE::Utils::String::str(i + 1);
+                        if (itr == maneuvers->begin()) {
+                            // no transitions.
+                        } else {
+                            DUNE::IMC::PlanTransition trans;
+                            trans.conditions = "ManeuverIsDone";
+                            trans.dest_man = man_spec.maneuver_id;
+                            trans.source_man = last_man.maneuver_id;
 
-                    DUNE::IMC::PlanManeuver man_spec;
+                            result.transitions.push_back(trans);
+                        }
 
-                    man_spec.data.set(*(*itr));
-                    man_spec.maneuver_id = DUNE::Utils::String::str(i + 1);
-                    if (itr == maneuvers->begin())
-                    {
-                        // no transitions.
-                    }
-                    else
-                    {
-                        DUNE::IMC::PlanTransition trans;
-                        trans.conditions = "ManeuverIsDone";
-                        trans.dest_man = man_spec.maneuver_id;
-                        trans.source_man = last_man.maneuver_id;
+                        result.maneuvers.push_back(man_spec);
 
-                        result.transitions.push_back(trans);
-                    }
-
-                    result.maneuvers.push_back(man_spec);
-
-                    last_man = man_spec;
+                        last_man = man_spec;
                     }
 
                     result.plan_id = plan_id;
                     result.start_man_id = "1";
                 }
 
-                DUNE::IMC::PlanDB createPlanDBEntry(const std::vector<std::pair<double, double>> &planVec, std::string plan_id, fp32_t speed) {
 
-                DUNE::IMC::MessageList<DUNE::IMC::Maneuver> maneuvers; //Define list of meneuvers
 
+                bool createGoToManeuvers(const std::vector<std::pair<double, double>> &planVec, fp32_t speed, uint8_t speed_units, DUNE::IMC::MessageList<DUNE::IMC::Maneuver> &maneuvers) {
                     // Make maneuvers
                     for(auto i = planVec.begin(); i < planVec.end();i++) {
                         //inf("%f, %f", i->first, i->second);
                         DUNE::IMC::Goto* go_near = new DUNE::IMC::Goto();
                         go_near->lat = DUNE::Math::Angles::radians(i->second);
                         go_near->lon = DUNE::Math::Angles::radians(i->first);
-                        go_near->speed_units = DUNE::IMC::SUNITS_METERS_PS;
+                        go_near->speed_units = speed_units;
                         go_near->speed = speed;
                         maneuvers.push_back(*go_near);
 
                         delete go_near;
                     }
+                    return true;
+                }
+
+                bool createStnKpManeuvers(const std::vector<std::pair<double, double>> &planVec, fp32_t speed, uint8_t speed_units, uint16_t duration, fp32_t radius, DUNE::IMC::MessageList<DUNE::IMC::Maneuver> &maneuvers) {
+                    // Make maneuvers
+                    for(auto i = planVec.begin(); i < planVec.end();i++) {
+                        DUNE::IMC::StationKeeping man;
+                        man.lat = DUNE::Math::Angles::radians(i->second);
+                        man.lon = DUNE::Math::Angles::radians(i->first);
+                        man.speed_units = speed_units;
+                        man.speed = speed;
+                        man.duration = duration;
+                        man.radius = radius;
+                        maneuvers.push_back(man);
+                    }
+                    return true;
+                }
+
+                DUNE::IMC::PlanDB createPlanDBEntry(const std::vector<std::pair<double, double>> &planVec, std::string plan_id, fp32_t speed, uint8_t speed_units) {
+
+                    DUNE::IMC::MessageList<DUNE::IMC::Maneuver> maneuvers; //Define list of meneuvers
+                    createGoToManeuvers(planVec, speed, speed_units, maneuvers);
+                    DUNE::IMC::PlanSpecification pspec;
+                    sequentialPlan(plan_id, &maneuvers, pspec);
+                    DUNE::IMC::PlanDB pdb;
+                    pdb.op = DUNE::IMC::PlanDB::DBOP_SET;
+                    pdb.type = DUNE::IMC::PlanDB::DBT_REQUEST;
+                    pdb.plan_id = pspec.plan_id;
+                    pdb.arg.set(pspec);
+                    pdb.request_id = 0;
+
+                    return pdb;
+                }
+
+                DUNE::IMC::PlanDB createPlanDBEntry(const DUNE::IMC::MessageList<DUNE::IMC::Maneuver> &maneuvers, std::string plan_id) {
                     DUNE::IMC::PlanSpecification pspec;
                     sequentialPlan(plan_id, &maneuvers, pspec);
                     DUNE::IMC::PlanDB pdb;

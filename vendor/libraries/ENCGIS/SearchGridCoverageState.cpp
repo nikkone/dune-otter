@@ -2,9 +2,9 @@
 #include <iostream>
 namespace ENCGIS
 {
-  bool SearchGridCoverageState::update(float X, float Y, float range) {
+  bool SearchGridCoverageState::update(float X, float Y, float range, float timeReduction, std::string metric) {
     std::string updateQuery= 
-    "update " + getdbGridTable() + " as s set weight = 1 from ("
+    "update " + getdbGridTable() + " as s set " + metric + " = 1*" + std::to_string(timeReduction) + " from ("
     "select gid from("
     "select * from " + getdbGridTable() + " where ROWID IN ("
     "SELECT ROWID FROM SpatialIndex "
@@ -17,12 +17,11 @@ namespace ENCGIS
     return getDBconnection()->runNoOutputQuery(updateQuery);
   }
 
-  bool SearchGridCoverageState::updateLogarithmic(float X, float Y, unsigned rpm, double range) {
+  bool SearchGridCoverageState::updateLogarithmic(float X, float Y, unsigned rpm, float timeReduction, double range, double pCutoff, std::string metric) {
     double b0,b1;
     if(logarithmicModelCoefficients(rpm, b0, b1)) {
-      double pCutoff = 0.05;
       std::string updateQuery = 
-      "update " + getdbGridTable() + " as s set weight = min(weight+we, 1) from ("
+      "update " + getdbGridTable() + " as s set " + metric + " = min( (" + metric + "+we*" + std::to_string(timeReduction) + "), 1) from ("
       "select gid, 1/(1+exp(-(" + std::to_string(b0) + " + dist*" + std::to_string(b1) + " ))) as we from ("
         "select gid, distance(c.geometry, makepoint(" + std::to_string(X) + "," + std::to_string(Y) + "," + std::to_string(getSRID()) + ")) as dist from ("
           "select gid, geometry from ("
@@ -71,14 +70,28 @@ namespace ENCGIS
     }
   }
 
-  bool SearchGridCoverageState::decreaseAll(float fixedDecrease)
+  bool SearchGridCoverageState::decreaseAll(float fixedDecrease, std::string metric)
   {
-    std::string decreaseQuery = "update " + getdbGridTable() + " set weight = max(0, weight-" + std::to_string(fixedDecrease) + ")";
+    std::string decreaseQuery = "update " + getdbGridTable() + " set " + metric + " = max(0, " + metric + "-" + std::to_string(fixedDecrease) + ")";
     return getDBconnection()->runNoOutputQuery(decreaseQuery);
   }
-  bool SearchGridCoverageState::decreaseAll(float fixedDecrease, float decreaseFactor)
+  bool SearchGridCoverageState::decreaseAll(float fixedDecrease, float decreaseFactor, std::string metric)
   {
-    std::string decreaseQuery = "update " + getdbGridTable() + " set weight = max(0, weight*" + std::to_string(decreaseFactor) + "-" + std::to_string(fixedDecrease) + ")";
+    std::string decreaseQuery = "update " + getdbGridTable() + " set " + metric + " = max(0, " + metric + "*" + std::to_string(decreaseFactor) + "-" + std::to_string(fixedDecrease) + ")";
     return getDBconnection()->runNoOutputQuery(decreaseQuery);
+  }
+
+  bool SearchGridCoverageState::updateDetectionProbability(std::string detProbLayer, std::string priorMetric, std::string effortLayerMetric) {
+    std::string detProbMetric = "weight";
+    //std::string updateQuery = "update " + detProbLayer + " set " + detProbMetric + " = abs(random() % 10)/10.0;";
+    std::string updateQuery = 
+    "update " + detProbLayer + " set " + detProbMetric + " = we*1.0 from ("
+    "select f.gid as fid, avg(c." + priorMetric + "*(1-c." + effortLayerMetric + ")) as we,f.geometry as rf from " + getdbGridTable() + " as c, " + detProbLayer + " as f where intersects(c.geometry, f.geometry) group by f.gid"
+    ") where gid = fid";
+
+
+    std::cout << updateQuery << std::endl;
+    return getDBconnection()->runNoOutputQuery(updateQuery);
   }
 }
+

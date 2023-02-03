@@ -62,9 +62,9 @@ namespace ENCGIS
         /// @param spatialIndex Should a spatial index be generated for the grid
         bool createGrid(const std::string &EWKTpolygon, unsigned gridsize, gridtypes_t gridType = SQUARE, bool spatialIndex = false);
 
-        /// @brief Set grid weights as distance to landTable
+        /// @brief Set grid metric as distance to landTable
         /// @return TODO: currently unused
-        bool setGridWeightsFromLandDistance();
+        bool setGridMetricFromLandDistance(std::string metric = "weight");
 
         /// @brief Delete the grid from the database (The tables this.dbGridTable and dbGridTable + raw in the db opened by m_db)
         void deleteGrid();
@@ -77,7 +77,7 @@ namespace ENCGIS
 
         /// @brief Finds the maximum and minimum weights, and calculates weights in the intervall [0,1]
         /// @param invert Invert the resulting weights (Ex. For distance.)
-        void normalizeWeights(bool invert);
+        void normalizeMetric(bool invert, std::string metric = "weight");
 
         /// @brief Get the coordinates of a cell in the specified SRID
         /// @param cell The cell in the grid for which the coordinates are returned
@@ -94,7 +94,7 @@ namespace ENCGIS
         /// @brief Finds the closest cell that has yet to be visited (has weight that is not -1).
         /// @param cell Id of the cell to search from
         /// @return The closest unvisited/unsearched cell id.
-        int getClosestUnsearchedCell(int cell);
+        int getClosestUnsearchedCell(int cell, std::string metric = "weight");
 
         /// @brief Get the azimuth/angle of the span between two cells
         /// @param cell1 
@@ -104,9 +104,9 @@ namespace ENCGIS
 
         /// @brief Set the weight of a single cell
         /// @param cell The cell whose weight will be set
-        /// @param weight The weight which the cell is to have
+        /// @param Value The value which the cell is to have
         /// @return 
-        bool setCellWeight(int cell, int weight);
+        bool setCellMetric(int cell, int value, std::string metric = "weight");
 
         unsigned getSRID() {
           return SRID;

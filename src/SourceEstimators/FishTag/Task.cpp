@@ -19,14 +19,14 @@
 //***************************************************************************
  
 /* TODO:
-Test with KTHdata
 Better way to get estimator custom parameters to task arguments
-Irregular timing interval finder.
 Check depth estimates not seeming right
+Check single-receiver estimators bool output, may be wrongly assigned
 Update parameters to estimators online, such as covariance
 Move more parameters to custom/common interface
 Max/min tag period as estimator parameter
 Fix large number period being set at first regular
+Run some estimators only when x amounts after the first reception to allow for transmission from all connected transmitters.
 */
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -93,7 +93,7 @@ namespace SourceEstimators
       FishTagEstimators::EstimatorMap m_emap;
       std::vector<FishTagEstimators::EstimatorMap::estimatorTypeEnum_t> SingleReceiverEstimatorTypeToUse;
       std::vector<FishTagEstimators::EstimatorMap::estimatorTypeEnum_t> MultiReceiverEstimatorTypeToUse;
-
+      FishTagEstimators::tagBool_t newData;
       bool m_ss_valid;
       //! Speed of sound provider entity label.
       int m_c_sound_eid;
@@ -102,6 +102,7 @@ namespace SourceEstimators
       //! Timer responsible for running filter timestep
       Time::Counter<float> m_filter_timer;
 
+      std::string m_startupTimestamp;
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
         m_ss_valid(false)
@@ -278,7 +279,7 @@ namespace SourceEstimators
             //est->setParameter("tag_period", 10.0);
             // Create/clear csv logfile for estimator with header
             std::ofstream logOutStream;
-            logOutStream.open(m_args.log_folder_and_prefix + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
+            logOutStream.open(m_args.log_folder_and_prefix + m_startupTimestamp + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
             if (logOutStream.good()) {
                 logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
                 logOutStream.close();
@@ -308,7 +309,7 @@ namespace SourceEstimators
               );
               // Create/clear csv logfile for estimator with header
               std::ofstream logOutStream;
-              logOutStream.open(m_args.log_folder_and_prefix + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
+              logOutStream.open(m_args.log_folder_and_prefix + m_startupTimestamp + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
               if (logOutStream.good()) {
                   logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
                   logOutStream.close();
@@ -320,9 +321,19 @@ namespace SourceEstimators
             }
           }
           m_emap.updateUnprocessedDataAll(msg->serial_no);
+          newData[msg->trans_id] = true;
           spew("Receivers in buffer: %lu", tagBuffers[msg->trans_id]->size());
-          m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
+
+/*
+Legg til timer, legg til UnprocessedData i m_emap, muligens med tagID i stedet for receiver
+Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]); når unprocessedData
+*/
+          //if(std::time(nullptr) - tagBuffers[msg->trans_id]->getLatestTimestamp() > 2.0) {
+          //  findFishPosition(m_tagDetection);
+          //}
+          //m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
           spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
+          spew("Latest timestamp: %d", tagBuffers[msg->trans_id]->getLatestTimestamp());
         }
       }
 
@@ -347,6 +358,7 @@ namespace SourceEstimators
       onResourceInitialization(void)
       {
         m_filter_timer.setTop(m_args.filter_timestep);
+        m_startupTimestamp = std::to_string( Clock::getSinceEpochMsec() );
       }
 
       //! Function for logging to an external file and dispatching the result as IMC
@@ -393,18 +405,27 @@ namespace SourceEstimators
         while(!stopping()) {
           if(m_filter_timer.overflow()) {
             m_filter_timer.reset();
-            m_emap.predictAll();
+
+
             for (FishTagEstimators::EstimatorMap::EstimatorMap_t::iterator it = m_emap.estimatorMap.begin(); it != m_emap.estimatorMap.end(); it++)
             {
               if (it->second != NULL)
               {
                 for(FishTagEstimators::EstimatorMap::EstimatorVector_t::iterator est = it->second->begin();est != it->second->end();est++) {
+                  if(newData[it->first]) {// && (*est)->checkTime((double)tagBuffers[it->first]->getLatestTimestamp(), Clock::getSinceEpoch())) {
+                    (*est)->update(tagBuffers[it->first]);
+                    //inf("Updated %s %d %f", (*est)->name.c_str(), (*est)->trans_id, Clock::getSinceEpoch() - (double)tagBuffers[it->first]->getLatestTimestamp());
+                  }
+                    inf("Updated %s %d %f", (*est)->name.c_str(), (*est)->trans_id, Clock::getSinceEpoch() - (double)tagBuffers[it->first]->getLatestTimestamp());
+
                   if(( *est)->isActive()) {
-                    logResult((*est), m_args.log_folder_and_prefix + (*est)->name + std::to_string((*est)->trans_id) + ".csv", (*est)->name);
+                    logResult((*est), m_args.log_folder_and_prefix + m_startupTimestamp + (*est)->name + std::to_string((*est)->trans_id) + ".csv", (*est)->name);
                   }
                 }
+                newData[it->first] = false;
               }
             }
+            m_emap.predictAll();
           }
           waitForMessages(m_args.message_wait_time);
         }

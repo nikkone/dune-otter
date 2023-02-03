@@ -57,7 +57,9 @@ namespace Monitors
       //! Defines the bounds of the area the path planner operates on.
       std::vector<double> planningBounds;
 
-      float timestepDecrease;
+      float timestepConstantDecrease;
+      float timestepFactorDecrease;
+
     };
     struct Task: public DUNE::Tasks::Periodic
     {
@@ -88,9 +90,13 @@ namespace Monitors
         .description("The initial maximum range of the sensor")
         .defaultValue("50.0");  
 
-        param("Timestep Grid decrease", m_args.timestepDecrease)
-        .defaultValue("0.01")
-        .description("The value substracted from the grid for each timestep.");
+        param("Timestep Grid Constant Decrease", m_args.timestepConstantDecrease)
+        .defaultValue("0.0")
+        .description("The value substracted from each grid cell at each timestep.");
+
+        param("Timestep Grid Factor Decrease", m_args.timestepFactorDecrease)
+        .defaultValue("1.0")
+        .description("The value multiplied with each grid cell at each timestep. [0.0, 1.0]");
 
         param("Grid DB Path", m_args.gridDBpath)
         .defaultValue("")
@@ -161,6 +167,8 @@ namespace Monitors
       void
       onResourceInitialization(void)
       {
+        if(m_searchGridCoverage != NULL)
+          m_searchGridCoverage->deleteGrid();
         m_searchGridCoverage->createGrid(m_args.planningBounds[0], m_args.planningBounds[1], m_args.planningBounds[2], m_args.planningBounds[3], m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType), true);
         inf("init");
       }
@@ -169,8 +177,8 @@ namespace Monitors
       void
       onResourceRelease(void) {
         inf("Release");
-        if(m_searchGridCoverage != NULL)
-          m_searchGridCoverage->deleteGrid();
+        //if(m_searchGridCoverage != NULL)
+        //  m_searchGridCoverage->deleteGrid();
         try {
           Memory::clear(m_con);
           Memory::clear(m_searchGridCoverage);
@@ -201,14 +209,14 @@ namespace Monitors
       task(void)
       {
         //m_searchGridCoverage->decreaseAll(m_args.timestepDecrease);
-        m_searchGridCoverage->decreaseAll(0.001, 0.99);
+        //m_searchGridCoverage->decreaseAll(m_args.timestepConstantDecrease, m_args.timestepFactorDecrease);
         consumeMessages();
         for(auto iter = pendingUpdates.begin();iter != pendingUpdates.end();iter++) {
           // Convert from WGS-84 to EPSG32632
           double northing, easting;
           m_con->transformSRID(Math::Angles::degrees(iter->second.first), Math::Angles::degrees(iter->second.second), 4326, easting, northing, 32632);
           //m_searchGridCoverage->update(easting, northing, m_args.initialSensorRange);
-          m_searchGridCoverage->updateLogarithmic(easting, northing, rpm);
+          m_searchGridCoverage->updateLogarithmic(easting, northing, rpm, (1/getFrequency())/7, 670); // Assuming 90 sec is needed to guarantee detection
 
           //inf("%f %f", easting, northing);
         }

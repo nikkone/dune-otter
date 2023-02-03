@@ -15,7 +15,7 @@ namespace ENCGIS {
         while(cell != 0) {
             cells.push_back(cell);
             cells_pos.push_back(grid->getCellLocation(cell, outputSRID));
-            grid->setCellWeight(cell,-1);
+            grid->setCellMetric(cell,-1);
             cell = getLocalOptimalNeighbour(cell);
             if(cell == 0) {
                 cell = grid->getClosestUnsearchedCell(cells.back());
@@ -47,7 +47,7 @@ namespace ENCGIS {
         // Greedy algorithm
         while(cell != 0) {
             cells.push_back(cell);
-            grid->setCellWeight(cell,-1);
+            grid->setCellMetric(cell,-1);
             cell = getLocalOptimalNeighbour(cell);
             if(cell == 0) {
                 cell = grid->getClosestUnsearchedCell(cells.back());
@@ -64,7 +64,7 @@ namespace ENCGIS {
         double azimuth = initialAzimuth;
         while(cell != 0) {
             cells.push_back(cell);
-            grid->setCellWeight(cell,-1);
+            grid->setCellMetric(cell,-1);
             cell = getLocalOptimalNeighbourAzimuth(cell, azimuth);
             if(cell == 0) {
                 cell = grid->getClosestUnsearchedCell(cells.back());
@@ -79,7 +79,7 @@ namespace ENCGIS {
         // Greedy algorithm
         while(cell != 0) {
             cells.push_back(cell);
-            grid->setCellWeight(cell,-1);
+            grid->setCellMetric(cell,-1);
             cell = getDistanceOptimalNextCell(cell);
             if(cell == 0) {
                 cell = grid->getClosestUnsearchedCell(cells.back());
@@ -89,8 +89,8 @@ namespace ENCGIS {
         return cells;
     }
 
-    int SearchGridPlanner::getLocalOptimalNeighbour(int cell) {
-        std::string query = "select gid from (select max(weight) as mw,gid from " + grid->getdbGridTable() + " where weight > 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")))";
+    int SearchGridPlanner::getLocalOptimalNeighbour(int cell, std::string metric) {
+        std::string query = "select gid from (select max(" + metric + ") as mw,gid from " + grid->getdbGridTable() + " where " + metric + " > 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")))";
         //std::cout << query << std::endl;
         int errors = 0;
         sqlite3_stmt* m_handle;
@@ -110,15 +110,15 @@ namespace ENCGIS {
         return value;
     }
 
-    int SearchGridPlanner::getLocalOptimalNeighbourAzimuth(int cell, double &azimuth) {
+    int SearchGridPlanner::getLocalOptimalNeighbourAzimuth(int cell, double &azimuth, std::string metric) {
         std::string query = "select gid, azimuth from ("
-        "select gid, azimuth, max(weight - " + std::to_string(azimuthWeight) + "*(abs(" + std::to_string(azimuth) + " - azimuth)/(2*PI()))  ) from ("
-        "select weight,gid,azimuth(centroid(geometry), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")) as azimuth"
-        " from " + grid->getdbGridTable() + " where weight > 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))"
+        "select gid, azimuth, max(" + metric + " - " + std::to_string(azimuthWeight) + "*(abs(" + std::to_string(azimuth) + " - azimuth)/(2*PI()))  ) from ("
+        "select " + metric + ",gid,azimuth(centroid(geometry), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")) as azimuth"
+        " from " + grid->getdbGridTable() + " where " + metric + " > 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))"
         "))";
 
         
-        //std::string query = "select gid from (select max(weight) as mw,gid from " + grid->getdbGridTable() + " where weight > 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")))";
+        //std::string query = "select gid from (select max(" + metric + ") as mw,gid from " + grid->getdbGridTable() + " where " + metric + " > 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")))";
         int errors = 0;
         sqlite3_stmt* m_handle;
 
@@ -139,9 +139,9 @@ namespace ENCGIS {
         return value;
     }
     
-    int SearchGridPlanner::getDistanceOptimalNextCell(int cell) {
+    int SearchGridPlanner::getDistanceOptimalNextCell(int cell, std::string metric) {
         double maxDistance = 1850;
-        std::string query = "select *, max(weight - " + std::to_string(distanceWeight) + "*distance(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))/" + std::to_string(maxDistance) + ") from " + grid->getdbGridTable() + " where weight > 0";
+        std::string query = "select *, max(" + metric + " - " + std::to_string(distanceWeight) + "*distance(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))/" + std::to_string(maxDistance) + ") from " + grid->getdbGridTable() + " where " + metric + " > 0";
         int errors = 0;
         sqlite3_stmt* m_handle;
 
@@ -179,12 +179,12 @@ namespace ENCGIS {
         return resultingCells;
     }
 
-    int SearchGridPlanner::getGlobalOptimalCell(int cell, double azimuth) {
+    int SearchGridPlanner::getGlobalOptimalCell(int cell, double azimuth, std::string metric) {
         std::string query = "select gid from (select gid,"
-        "max(weight"
+        "max(" + metric + ""
         "- " + std::to_string(azimuthWeight) + "*ABS( " + std::to_string(azimuth) + "-azimuth((select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = sg.gid)))"
         "- " + std::to_string(distanceWeight) + "*distance((select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = sg.gid))) as wgt "
-        "from " + grid->getdbGridTable() + " as sg where weight between -0.1 and 1.1)";
+        "from " + grid->getdbGridTable() + " as sg where " + metric + " between -0.1 and 1.1)";
         //std::cout << query << std::endl;
         int errors = 0;
         sqlite3_stmt* m_handle;
@@ -219,7 +219,7 @@ namespace ENCGIS {
         double azimuth = initialAzimuth;
         while(cell != 0) {
             cells.push_back(cell);
-            grid->setCellWeight(cell,-1);
+            grid->setCellMetric(cell,-1);
             cell = getGlobalOptimalCell(cell, azimuth);
             std::cout << cell << std::endl;
         }
@@ -238,7 +238,7 @@ namespace ENCGIS {
         double azimuth = initialAzimuth;
         while(cell != 0) {
             cells.push_back(cell);
-            grid->setCellWeight(cell,-1);
+            grid->setCellMetric(cell,-1);
             cell = getGlobalOptimalCell(cell, azimuth);
             if(cell == 0) {
                 cells_pos.push_back(grid->getCellLocation(cells.back(),grid->getSRID()));
@@ -263,9 +263,9 @@ namespace ENCGIS {
         return cells_pos;
     }
     #endif
-    void SearchGridPlanner::setIntersectingCellsAsVisited(double startX, double startY, double endX, double endY) {
+    void SearchGridPlanner::setIntersectingCellsAsVisited(double startX, double startY, double endX, double endY, std::string metric) {
         // Alternative: Threashold distance to centroid
-        std::string query = "update " + grid->getdbGridTable() + " set weight = -1 from ("
+        std::string query = "update " + grid->getdbGridTable() + " set " + metric + " = -1 from ("
         "select gid as gidsel from " + grid->getdbGridTable() + " where intersects(geometry, makeline(makepoint(" + std::to_string(startX) + ", " + std::to_string(startY) + ", " + std::to_string(grid->getSRID()) + "), makepoint(" + std::to_string(endX) + ", " + std::to_string(endY) + ", " + std::to_string(grid->getSRID()) + ")))"
         ") where gid = gidsel";
         //std::cout << query << std::endl;

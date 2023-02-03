@@ -42,7 +42,7 @@ namespace ENCGIS {
 
     bool SearchGrid::createGrid(const std::string &EWKTpolygon, unsigned gridsize, gridtypes_t gridType, bool spatialIndex) {
 
-        std::string create = "create table " + dbGridTable + "raw as select " + gridTypeToString(gridType) + "Grid(transform("
+        std::string create = "create table " + dbGridTable + "raw as select 0.0 as effort, " + gridTypeToString(gridType) + "Grid(transform("
         "GeomFromEWKT('" + EWKTpolygon + "'), " + std::to_string(SRID) + "), " +std::to_string(gridsize)+ ") as geometry";
         
         std::string recoverMultiTable = "SELECT RecoverGeometryColumn('" + dbGridTable + "raw', 'geometry', " + std::to_string(SRID) + ", 'MULTIPOLYGON', 'XY')";
@@ -52,7 +52,7 @@ namespace ENCGIS {
     "SELECT ROWID FROM SpatialIndex "
     "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) as land where intersects(" + dbGridTable + ".geometry, land.geometry))";
-        //std::cout << deleteLandCells << std::endl;
+        std::cout << create << std::endl;
         std::string indexQuery = "SELECT CreateSpatialIndex('" + dbGridTable + "', 'geometry');";
 
         m_con->runNoOutputQuery(create);
@@ -63,19 +63,19 @@ namespace ENCGIS {
         return m_con->runNoOutputQuery(deleteLandCells);
     }
 
-    bool SearchGrid::setGridWeightsFromLandDistance() {
+    bool SearchGrid::setGridMetricFromLandDistance(std::string metric) {
         /*std::string weights = "update " + dbGridTable + " set weight = distweight from ("
         "select gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select geometry as i from " + landTabledb + "." + landTable + " WHERE ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid) where gid = gidsel";*/
-        std::string weights = "update " + dbGridTable + " set weight = distweight from ("
+        std::string weights = "update " + dbGridTable + " set " + metric + " = distweight from ("
         "select g,gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select t.'group' as g, geometry as i from " + landTabledb + "." + landTable + " as t WHERE"
         " ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid,g ) where gid = gidsel and g = 13";
-        //std::cout << weights << std::endl;
+        std::cout << weights << std::endl;
         return m_con->runNoOutputQuery(weights);
     }
 
@@ -95,9 +95,9 @@ namespace ENCGIS {
         return out;
     }
 
-    void SearchGrid::normalizeWeights(bool invert) {
+    void SearchGrid::normalizeMetric(bool invert, std::string metric) {
         // Find max/min weight
-        std::string maxmin = "select min(weight), max(weight) from " + dbGridTable;
+        std::string maxmin = "select min(" + metric + "), max(" + metric + ") from " + dbGridTable;
         int errors = 0;
         sqlite3_stmt* m_handle;
 
@@ -117,9 +117,9 @@ namespace ENCGIS {
         // Recalculate weights
         std::string recalculateWeights;
         if(invert) {
-            recalculateWeights = "update " + dbGridTable + " set weight = 1 + (" + std::to_string(min) + " - weight)/" + std::to_string(max-min) + "";
+            recalculateWeights = "update " + dbGridTable + " set " + metric + " = 1 + (" + std::to_string(min) + " - " + metric + ")/" + std::to_string(max-min) + "";
         } else {
-            recalculateWeights = "update " + dbGridTable + " set weight = (weight - " + std::to_string(min) + ")/" + std::to_string(max-min) + "";
+            recalculateWeights = "update " + dbGridTable + " set " + metric + " = (" + metric + " - " + std::to_string(min) + ")/" + std::to_string(max-min) + "";
         }
 
         if (sqlite3_prepare_v2(m_con->db, recalculateWeights.c_str(), recalculateWeights.length(), &m_handle, 0) != SQLITE_OK)
@@ -175,9 +175,9 @@ namespace ENCGIS {
         return value;
     }
     
-    int SearchGrid::getClosestUnsearchedCell(int cell) {
+    int SearchGrid::getClosestUnsearchedCell(int cell, std::string metric) {
         std::string query = "select gid from ("
-                            "select gid, min(distance(geometry, (select geometry from " + dbGridTable + " where gid = " + std::to_string(cell) + "))) from " + dbGridTable + " where weight > 0)";
+                            "select gid, min(distance(geometry, (select geometry from " + dbGridTable + " where gid = " + std::to_string(cell) + "))) from " + dbGridTable + " where " + metric + " > 0)";
         int errors = 0;
         sqlite3_stmt* m_handle;
 
@@ -215,8 +215,8 @@ namespace ENCGIS {
         return azimuth;
     }
 
-    bool SearchGrid::setCellWeight(int cell, int weight) {
-        std::string query = "update " + dbGridTable + " set weight = " + std::to_string(weight) + " where gid = " + std::to_string(cell) + "";
+    bool SearchGrid::setCellMetric(int cell, int value, std::string metric) {
+        std::string query = "update " + dbGridTable + " set " + metric + " = " + std::to_string(value) + " where gid = " + std::to_string(cell) + "";
         return m_con->runNoOutputQuery(query);
     }
 }
