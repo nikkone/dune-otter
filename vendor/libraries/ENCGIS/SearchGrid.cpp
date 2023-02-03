@@ -52,7 +52,7 @@ namespace ENCGIS {
     "SELECT ROWID FROM SpatialIndex "
     "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) as land where intersects(" + dbGridTable + ".geometry, land.geometry))";
-        std::cout << create << std::endl;
+        //std::cout << create << std::endl;
         std::string indexQuery = "SELECT CreateSpatialIndex('" + dbGridTable + "', 'geometry');";
 
         m_con->runNoOutputQuery(create);
@@ -75,7 +75,7 @@ namespace ENCGIS {
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid,g ) where gid = gidsel and g = 13";
-        std::cout << weights << std::endl;
+        //std::cout << weights << std::endl;
         return m_con->runNoOutputQuery(weights);
     }
 
@@ -117,9 +117,9 @@ namespace ENCGIS {
         // Recalculate weights
         std::string recalculateWeights;
         if(invert) {
-            recalculateWeights = "update " + dbGridTable + " set " + metric + " = 1 + (" + std::to_string(min) + " - " + metric + ")/" + std::to_string(max-min) + "";
+            recalculateWeights = "update " + dbGridTable + " set " + metric + " = max(0.0, 1.0 + (" + std::to_string(min) + " - " + metric + ")/" + std::to_string(max-min) + ")";
         } else {
-            recalculateWeights = "update " + dbGridTable + " set " + metric + " = (" + metric + " - " + std::to_string(min) + ")/" + std::to_string(max-min) + "";
+            recalculateWeights = "update " + dbGridTable + " set " + metric + " = max(0.0, (" + metric + " - " + std::to_string(min) + ")/" + std::to_string(max-min) + ")";
         }
 
         if (sqlite3_prepare_v2(m_con->db, recalculateWeights.c_str(), recalculateWeights.length(), &m_handle, 0) != SQLITE_OK)
@@ -131,6 +131,7 @@ namespace ENCGIS {
         // Teardown
         if (m_handle)
             sqlite3_finalize(m_handle);
+        //std::cout << recalculateWeights << std::endl;
     }
 
     std::pair<double,double> SearchGrid::getCellLocation(int cell, unsigned outputSRID) {

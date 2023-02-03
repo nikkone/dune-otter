@@ -90,8 +90,8 @@ namespace ENCGIS {
     }
 
     int SearchGridPlanner::getLocalOptimalNeighbour(int cell, std::string metric) {
-        std::string query = "select gid from (select max(" + metric + ") as mw,gid from " + grid->getdbGridTable() + " where " + metric + " > 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")))";
-        //std::cout << query << std::endl;
+        std::string query = "select gid from (select max(" + metric + ") as mw,gid from " + grid->getdbGridTable() + " where " + metric + " >= 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")))";
+        std::cout << query << std::endl;
         int errors = 0;
         sqlite3_stmt* m_handle;
 
