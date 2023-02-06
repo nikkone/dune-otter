@@ -24,7 +24,7 @@ namespace ENCGIS
         /// @param X Southing
         /// @param Y Northing
         /// @param rpm actuation level
-        /// @param timeReduction 
+        /// @param timeReduction From acoustic transmitter model. Should be timestep/maxintervall of tag
         /// @param range range to calculate values around (X,Y)
         /// @return True if query sucess, false if not
         bool updateLogarithmic(float X, float Y, unsigned rpm, float timeReduction = 0.1, double range = 500, double pCutoff = 0.05, std::string metric = "weight");

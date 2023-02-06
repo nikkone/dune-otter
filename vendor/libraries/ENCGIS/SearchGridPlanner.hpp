@@ -135,11 +135,10 @@ namespace ENCGIS
         /// @return The neighbor with the lowest weight and azimuth change.
         int getLocalOptimalNeighbourAzimuth(int cell, double &azimuth, std::string metric = "weight");
 
-        /// @brief Get the neighbor with the lowest weight also considering 
+        /// @brief Get the neighbor with the lowest distance also considering highest metric
         /// @param cell The cell id for which to check the neighbors
         /// @return the neighbor with the lowest weight.
         int getDistanceOptimalNextCell(int cell, std::string metric = "weight");
-
 
         /// @brief Iterates through the cells of a path, removing cells that do not cause a change in azimuth.
         /// This is results in a lossless simplification, potentioaly reducing the number of waypoints required to form a path.
@@ -151,8 +150,6 @@ namespace ENCGIS
         /// @brief 
         /// @param cell 
         /// @param azimuth 
-        /// @param azimuthWeight 
-        /// @param distanceWeight 
         /// @return 
         int getGlobalOptimalCell(int cell, double azimuth, std::string metric = "weight");
 
@@ -187,8 +184,8 @@ namespace ENCGIS
         void setinitialAzimuth(double desiredinitialAzimuth) {
             initialAzimuth = desiredinitialAzimuth;
         }
-        void setdistibutionWeight(double desireddistibutionWeight) {
-            distibutionWeight = desireddistibutionWeight;
+        void setdistributionWeight(double desireddistributionWeight) {
+            distributionWeight = desireddistributionWeight;
         }
         void setazimuthWeight(double desiredazimuthWeight) {
             azimuthWeight = desiredazimuthWeight;
@@ -200,12 +197,16 @@ namespace ENCGIS
         void setmaxPlaningTime(double desiredmaxPlaningTime) {
             maxPlaningTime = desiredmaxPlaningTime;
         }
+
+        double getmaxPlaningTime() {
+            return maxPlaningTime;
+        }
         #endif
         private:
             SearchGrid *grid;
             int initialCell = 1;
             double initialAzimuth = 0.0;
-            double distibutionWeight = 1;
+            double distributionWeight = 1;
             double azimuthWeight = 0.001;
             double distanceWeight = 0.0005;
             #if SEARCHGRID_USEOPP_OMPL

@@ -50,6 +50,11 @@ namespace ENCGIS
     /// @param out_srid 
     void transformSRID(double in_x, double in_y, unsigned in_srid, double &out_x, double &out_y, unsigned out_srid);
 
+    /// @brief 
+    /// @param inVec 
+    /// @param in_srid 
+    /// @param out_srid 
+    /// @return 
     std::vector<std::pair<double,double>> transformSRIDVector(const std::vector<std::pair<double,double>> &inVec,  unsigned in_srid, unsigned out_srid);
 
     /// @brief 

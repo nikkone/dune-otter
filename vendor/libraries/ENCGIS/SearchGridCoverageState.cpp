@@ -90,7 +90,7 @@ namespace ENCGIS
     ") where gid = fid";
 
 
-    std::cout << updateQuery << std::endl;
+    //std::cout << updateQuery << std::endl;
     return getDBconnection()->runNoOutputQuery(updateQuery);
   }
 }

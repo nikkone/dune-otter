@@ -346,7 +346,7 @@ namespace Control
                     // Find coverage path
                     m_GridPlanner->setinitialCell(m_searchGrid->getClosestCell(start_easting, start_northing));
                     m_GridPlanner->setinitialAzimuth(0.0);
-                    m_GridPlanner->setdistibutionWeight(1);
+                    m_GridPlanner->setdistributionWeight(1);
                     m_GridPlanner->setazimuthWeight(m_azimuthWeight);
                     m_GridPlanner->setdistanceWeight(m_distanceWeight);
 

@@ -3,7 +3,7 @@
 
 // Build settings for disabling unneded/unsupported features
 #define NEWOMPL 1
-#define OMPL_BENCHMARK 1
+#define OMPL_BENCHMARK 0
 
 // ENCGIS header
 //#include <ENCGIS/DBconnection.hpp>
