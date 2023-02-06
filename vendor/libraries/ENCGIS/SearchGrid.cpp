@@ -42,11 +42,17 @@ namespace ENCGIS {
 
     bool SearchGrid::createGrid(const std::string &EWKTpolygon, unsigned gridsize, gridtypes_t gridType, bool spatialIndex) {
 
-        std::string create = "create table " + dbGridTable + "raw as select 0.0 as effort, " + gridTypeToString(gridType) + "Grid(transform("
+        std::string create = "create table " + dbGridTable + "raw as select " + gridTypeToString(gridType) + "Grid(transform("
         "GeomFromEWKT('" + EWKTpolygon + "'), " + std::to_string(SRID) + "), " +std::to_string(gridsize)+ ") as geometry";
         
+        std::string addEffort= "ALTER TABLE " + dbGridTable + "raw ADD COLUMN effort REAL";
+        std::string addWeight= "ALTER TABLE " + dbGridTable + "raw ADD COLUMN weight REAL";
+        std::string initMetrics = "update " + dbGridTable + "raw SET effort = 0.0, weight = 0.0";
         std::string recoverMultiTable = "SELECT RecoverGeometryColumn('" + dbGridTable + "raw', 'geometry', " + std::to_string(SRID) + ", 'MULTIPOLYGON', 'XY')";
-        std::string polygonFromMultipolygon = "SELECT ElementaryGeometries('" + dbGridTable + "raw', 'geometry', '" + dbGridTable + "','gid','weight') as geom FROM " + dbGridTable + "raw";
+
+        std::string polygonFromMultipolygon = "SELECT ElementaryGeometries('" + dbGridTable + "raw', 'geometry', '" + dbGridTable + "','gid','delme') as geom FROM " + dbGridTable + "raw";
+
+        std::string removeDelme= "ALTER TABLE " + dbGridTable + " DROP COLUMN delme";
 
         std::string deleteLandCells = "delete from " + dbGridTable + " where gid in (select " + dbGridTable + ".gid from " + dbGridTable + ", (select geometry from " + landTabledb + "." + landTable + " where " + landTabledb + "." + landTable + ".ROWID IN ("
     "SELECT ROWID FROM SpatialIndex "
@@ -56,8 +62,13 @@ namespace ENCGIS {
         std::string indexQuery = "SELECT CreateSpatialIndex('" + dbGridTable + "', 'geometry');";
 
         m_con->runNoOutputQuery(create);
+        m_con->runNoOutputQuery(addEffort);
+        m_con->runNoOutputQuery(addWeight);
+        m_con->runNoOutputQuery(initMetrics);
         m_con->runNoOutputQuery(recoverMultiTable);
         m_con->runNoOutputQuery(polygonFromMultipolygon);
+        m_con->runNoOutputQuery(removeDelme);
+
         if(spatialIndex)
             m_con->runNoOutputQuery(indexQuery);
         return m_con->runNoOutputQuery(deleteLandCells);

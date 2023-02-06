@@ -51,18 +51,23 @@ namespace Control
   Done: Maneuver or FollowReference (TREX)
   DONE: Implement supersampling/downsampling
   DONE: Integrate greedy approaches for choosing desired positions
-  OMPL, and set is as parameter instead of using the define
-  Start calculations once HOVERING is started
-  Ensure numeric types in database are used
-  Implement better/reasoning combination of effort and prior
-  DONE: Implement a StationKeeping Operation
-  Implement interface to change between stationKeeping and GoTo
-  Implement random path generator to unsearched cells
+  DONE: OMPL, and set is as parameter instead of using the define
+  DONE: Start calculations once HOVERING is started
   DONE: Fjerne negative vekter (max(weight, 0))
   DONE: Make effort/prior grid cover planning grid.
   DONE: Legg til flere modus for å finne best cell
+  DONE: Implement a StationKeeping Operation
+  Nye queries i stedet for -1 som blir brukt i offlineplanner
+  Mulig problem FollowRef timeout hvis for land OMPL planning time.
+  Use timer instead of counter to set wait time for stationkeep. This includes planningtime.
+  Ensure numeric types in database are used
+  Implement better/reasoning combination of effort and prior
+  Implement interface to change between stationKeeping and GoTo
+  Implement random path generator to unsearched cells
   Oppdatere Neptus interface med nye parametre
-  Sjekk om hover fungerer som stationKeep, og evt hvor radius settes
+  Sjekk om hover fungerer som stationKeep, og evt. hvor radius settes
+  Pause/continue implementation?
+  Need to keep track of rpm for all vehicles
   */
   //! @author Nikolai Lauvås
   namespace Search
@@ -73,34 +78,43 @@ namespace Control
 
       struct Arguments
       {
-        //!
+        //! The path of the Spatialite database containing the electronic navigational charts
         std::string encDBpath;
-        //!
+
+        //! The path of the Spatialite database to work in (create search, effort and weight grids)
         std::string effortDBpath;
-        //!
-        float initialSensorRange;
-        //! Size of the grid cells
+
+        //! Size of the grid cells used in the effort and weight grids
         unsigned gridSize;
-        //! Geometry type of grid, see ENCGIS::SearchGrid::gridtypes_t
+
+        //! Geometry type of grid used in the effort and weight grids. See ENCGIS::SearchGrid::gridtypes_t for supported values
         unsigned gridType;
-        //!
+
+        //! The names of otherVehicles participating in the search operation. Used to include effort of these vehicles.
         std::vector<std::string> otherVehicles;
-        //!
+
+        //! A constant that is subtracted from the effort metric at each timestep to account for the moving targets
         float timestepConstantDecrease;
-        //!
+
+        //! A factor that is multiplied with the effort metric at each timestep to account for the moving targets
         float timestepFactorDecrease;
-        //!
+
+        //! The maximum time to wait in order to guarantee that the Fish tag has transmitted at least one transmission.
         unsigned tagMaxTransmissionInterval;
-        //!
+
+        //! Limiting range of the effort calculation
         unsigned maxConsideredRange;
-        //!
+
+        //! Once a search cell is reached, the vehicle will wait this many timesteps before starting to move towards the next cell.
         unsigned waitingSteps;
 
-        //! Navigable Layer Name
+        //! Navigable Layer/table Name from encDBpath
         std::string dbNavigableLayerName;
-        //! Innavigable Layer Name
+
+        //! Innavigable Layer/table Name from encDBpath
         std::string dbInnavigableLayerName;
-        //! Variable for enabling/disabling the use of OMPL while operating
+
+        //! Variable to enable/disable the use of OMPL path finder between cells
         bool useOMPL;
       };
 
@@ -110,60 +124,54 @@ namespace Control
         Arguments m_args;
         //! Database connection
         ENCGIS::DBconnection* m_con;
-        //!
+        //! The search grid the planner operates on
         ENCGIS::SearchGrid* m_searchGrid;
-        //!
+        //! The grid object used for effort and weight storage
         ENCGIS::SearchGridCoverageState* m_searchGridCoverage;
-        //!
+        //! Planner instance operating on m_searchGrid
         ENCGIS::SearchGridPlanner* m_GridPlanner;
 #if SEARCHGRID_USEOPP_OMPL
-        //! For use in path planner
+        //! Point collision check For use in path planner
         ENCGIS::isPointInLayerStatement *pointCheck;
+        //! Line segment collision check For use in path planner
         ENCGIS::lineIntersectLayerStatement *lineCheck;
         //! OMPL instance to use for running the path planning on
         og::SimpleSetup* m_OMPLsetup;
-
         //! Storage for path found by OMPL. Keept empty if the cell can be traveled to without collision
         std::vector<std::pair<double,double>> m_OMPLpath;
 #endif
 
-        //!
+        //! Map with vehicle id as index, and a the location used while updating the effort grid weights
         std::map<uint16_t, std::pair<double,double>> pendingUpdates;
-        //!
+        //! Source identifiers for the monitiored vehicles
         std::vector<uint16_t> monitoredVehicles;
-        //!
+        //! Current rpm of this vehicle used for range calculations (This should be changed, or be marked as a simplification for multi-vehicle operations.)
         unsigned m_rpm;
 
-        //! Size of the grid cells
+        //! Parsed size of the grid cells from last received IMC::PlanProbSpec
         unsigned m_gridSize;
-        //! Geometry type of grid, see ENCGIS::SearchGrid::gridtypes_t
+        //! Parsed Geometry type of grid from last received IMC::PlanProbSpec.
         unsigned m_gridType;
-        //!
+        //! Parsed planner type from last received IMC::PlanProbSpec
         unsigned m_planner = 0;
-        //!
+        //! Parsed distance weight from last received IMC::PlanProbSpec. Used in planner.
         float m_distanceWeight = 0;
-        //!
+        //! Parsed azimuth weight from last received IMC::PlanProbSpec. Used in planner.
         float m_azimuthWeight = 0;
+
         //! Last plan control state
         IMC::PlanControlState m_last_plan_state;
         //! Latest estimated state from self
         IMC::EstimatedState m_esta;
-        //!
-        bool m_fishSearch_control;
-
-        //! Store latest transmitted reference
+        //! The current Reference being sent in Task()
         IMC::Reference m_cur_ref;
-        //IMC::Reference m_last_ref;
+        //! The morst recent FollowRefState received
         IMC::FollowRefState m_last_follow_ref;
-        //!
-        int m_lastVisitedCell;
-        //!
+
+        //! The current target cell
+        int m_currentCell;
+        //! Counter used to enable waiting at each cell 
         unsigned m_hooverStartRunCount;
-        //!
-        double m_lastPlanningAzimuth;
-
-
-
 
         //! Constructor.
         //! @param[in] name task name.
@@ -173,16 +181,11 @@ namespace Control
             m_con(NULL),
             m_searchGrid(NULL),
             m_searchGridCoverage(NULL),
-            m_OMPLsetup(NULL),
-            m_fishSearch_control(false)
+            m_OMPLsetup(NULL)
         {
             param("Other Vehicles", m_args.otherVehicles)
             .description("The source/vehicle names of other entities in the system.")
             .defaultValue("");
-
-            param("Initial Sensor Range", m_args.initialSensorRange)
-            .description("The initial maximum range of the sensor")
-            .defaultValue("50.0");  
 
             param("Timestep Grid Constant Decrease", m_args.timestepConstantDecrease)
             .defaultValue("0.0")
@@ -241,15 +244,13 @@ namespace Control
             bind<IMC::PlanControl>(this);
             bind<IMC::PlanControlState>(this);
             bind<IMC::FollowRefState>(this);
-
-
         }
 
         //! Update internal state with new parameter values.
         void
         onUpdateParameters(void)
         {
-            if(paramChanged(m_args.otherVehicles)) {
+          if(paramChanged(m_args.otherVehicles)) {
             monitoredVehicles.clear();
             for(auto iter = m_args.otherVehicles.begin(); iter != m_args.otherVehicles.end(); iter++) {
                 monitoredVehicles.push_back(resolveSystemName(*iter));
@@ -257,7 +258,7 @@ namespace Control
             for(auto iter = monitoredVehicles.begin(); iter != monitoredVehicles.end(); iter++) {
                 inf("%u", *iter);
             }
-            }
+          }        
         }
 
         //! Reserve entity identifiers.
@@ -414,8 +415,8 @@ namespace Control
       {
         m_last_plan_state = *msg;
 
-        m_fishSearch_control = msg->state == IMC::PlanControlState::PCS_EXECUTING
-        && msg->plan_id == "fishSearch_plan";
+        //m_fishSearch_control = msg->state == IMC::PlanControlState::PCS_EXECUTING
+        //&& msg->plan_id == "fishSearch_plan";
       }
 
       void
@@ -423,10 +424,8 @@ namespace Control
       {
         if (msg->type == PlanControl::PC_REQUEST && msg->op == PlanControl::PC_STOP)
         {
-          m_fishSearch_control = m_last_plan_state.plan_id == "fishSearch_plan"
-          && m_last_plan_state.state == IMC::PlanControlState::PCS_EXECUTING;
-
-          if (m_fishSearch_control)
+          if (m_last_plan_state.plan_id == "fishSearch_plan" &&
+              m_last_plan_state.state == IMC::PlanControlState::PCS_EXECUTING)
           {
             requestDeactivation();
             war(DTR("Stop fishSearch detected. Disabling control."));
@@ -456,7 +455,7 @@ namespace Control
       }
 
       void consume(const IMC::Rpm* msg) {
-          m_rpm = std::abs(msg->value); // TODO: Need to keep track of rpm for all vehicles
+          m_rpm = std::abs(msg->value);
       }
 
       std::string polygonToEWKT(const IMC::MessageList<IMC::PolygonVertex> &polygon) {
@@ -548,8 +547,6 @@ namespace Control
               err("Parameter \'pdw\' not unsigned");
           }
           }
-          // Start time for grid creation.
-          //auto startg = std::chrono::high_resolution_clock::now();
 
           // Convert from WGS-84 to EPSG32632
           double start_northing, start_easting;
@@ -612,17 +609,16 @@ namespace Control
           m_searchGridCoverage->normalizeMetric(true);
 
 
-          m_lastVisitedCell = m_searchGrid->getClosestCell(start_easting, start_northing);
+          m_currentCell = m_searchGrid->getClosestCell(start_easting, start_northing);
 
           m_GridPlanner = new ENCGIS::SearchGridPlanner(m_searchGrid);
           // Find coverage path
-          m_GridPlanner->setinitialCell(m_lastVisitedCell);
+          m_GridPlanner->setinitialCell(m_currentCell);
           m_GridPlanner->setinitialAzimuth(m_esta.psi);
           m_GridPlanner->setdistributionWeight(1);
           m_GridPlanner->setazimuthWeight(m_azimuthWeight);
           m_GridPlanner->setdistanceWeight(m_distanceWeight);
 
-          m_lastPlanningAzimuth = m_esta.psi;
 
           // Cumulative search effort tracking setup
           pendingUpdates.clear();
@@ -631,7 +627,7 @@ namespace Control
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
           }
           m_hooverStartRunCount = 0;
-          auto initial_pos = m_searchGrid->getCellLocation(m_lastVisitedCell);
+          auto initial_pos = m_searchGrid->getCellLocation(m_currentCell);
 
           m_cur_ref.lon = DUNE::Math::Angles::radians(initial_pos.first);
           m_cur_ref.lat = DUNE::Math::Angles::radians(initial_pos.second);
@@ -656,20 +652,26 @@ namespace Control
                 nextCell = m_GridPlanner->getLocalOptimalNeighbour(lastVisitedCell);
                 if(nextCell == 0) {
                   nextCell = m_searchGrid->getClosestUnsearchedCell(lastVisitedCell);
+                  spew("Trying getClosestUnsearchedCell instead");
                 }
               break;
           case 1:
+            {
               spew("Using calculateSearchPathAzimuth");
-                nextCell = m_GridPlanner->getLocalOptimalNeighbourAzimuth(lastVisitedCell, m_lastPlanningAzimuth);
+                double currentAzimuth = m_esta.psi;
+                nextCell = m_GridPlanner->getLocalOptimalNeighbourAzimuth(lastVisitedCell, currentAzimuth);
                 if(nextCell == 0) {
                   nextCell = m_searchGrid->getClosestUnsearchedCell(lastVisitedCell);
+                  spew("Trying getClosestUnsearchedCell instead");
                 }
+            }
               break;
           case 2:
-              spew("Using calculateSearchPathDistance");
+              spew("Using getDistanceOptimalNextCell");
                 nextCell = m_GridPlanner->getDistanceOptimalNextCell(lastVisitedCell);
                 if(nextCell == 0) {
                   nextCell = m_searchGrid->getClosestUnsearchedCell(lastVisitedCell);
+                  spew("Trying getClosestUnsearchedCell instead");
                 }
               break;
           case 3:
@@ -685,14 +687,14 @@ namespace Control
               break; 
           case 7:
               spew("Using getGlobalOptimalCell");
-              nextCell = m_GridPlanner->getGlobalOptimalCell(m_lastVisitedCell, 0.0);
+              nextCell = m_GridPlanner->getGlobalOptimalCell(m_currentCell, 0.0);
               break;                  
           default:
               break;
         }
 
 #if SEARCHGRID_USEOPP_OMPL
-        if(m_args.useOMPL) {
+        if(m_args.useOMPL && nextCell != 0) {
           // Start path from current location
           std::pair<double,double> start;
           m_con->transformSRID(Math::Angles::degrees(m_esta.lon), Math::Angles::degrees(m_esta.lat), 4326, start.first, start.second, 32632);
@@ -705,6 +707,7 @@ namespace Control
               m_OMPLpath = OMPLforDUNE::pathToVector(states);
               m_OMPLpath = m_con->transformSRIDVector(m_OMPLpath, 32632,4326);
               std::reverse(m_OMPLpath.begin(), m_OMPLpath.end()); // Reverse so that pop back will give the most recent post
+              m_OMPLpath.pop_back(); // Remove first waypoint (Current position)
               inf("Path Vector: ");
               for(auto iter = m_OMPLpath.begin();iter != m_OMPLpath.end();iter++) {
                 inf("%f, %f", iter->first, iter->second);
@@ -722,20 +725,19 @@ namespace Control
         return nextCell;
       }
 
-        //! Main loop.
-        void
-        task(void)
-        {
-          consumeMessages();
-          if(isActive()) {
+        void updateGrid() {
             // Update cummulative effort
-            //m_searchGridCoverage->decreaseAll(m_args.timestepDecrease, std::string("effort"));
+            if(m_args.timestepFactorDecrease != 1.0) {
+              m_searchGridCoverage->decreaseAll(m_args.timestepConstantDecrease, m_args.timestepFactorDecrease, std::string("effort"));
+            } else if(m_args.timestepConstantDecrease > 0.0) {
+              m_searchGridCoverage->decreaseAll(m_args.timestepConstantDecrease, std::string("effort"));
+            }
+            
             //m_searchGridCoverage->decreaseAll(m_args.timestepConstantDecrease, m_args.timestepFactorDecrease, std::string("effort"));
             for(auto iter = pendingUpdates.begin();iter != pendingUpdates.end();iter++) {
               // Convert from WGS-84 to EPSG32632
               double northing, easting;
               m_con->transformSRID(Math::Angles::degrees(iter->second.first), Math::Angles::degrees(iter->second.second), 4326, easting, northing, 32632);
-              //m_searchGridCoverage->update(easting, northing, m_args.initialSensorRange);
               m_searchGridCoverage->updateLogarithmic(easting, northing, m_rpm, (1/getFrequency())/m_args.tagMaxTransmissionInterval, m_args.maxConsideredRange, 0.05, std::string("effort"));
               inf("%f %f", easting, northing);
             }
@@ -743,14 +745,14 @@ namespace Control
 
             m_searchGridCoverage->updateDetectionProbability("fishsearch");
             m_searchGrid->normalizeMetric(false);
-
-            // Planner update
-            spew("Frefstate: %u", m_last_follow_ref.state);
-            spew("LastCell: %d, hooverstart: %d", m_lastVisitedCell, m_hooverStartRunCount);
-            war("Initial pos: %f, %f", m_cur_ref.lon, m_cur_ref.lat);
-
-              
-              
+        }
+        //! Main loop.
+        void
+        task(void)
+        {
+          consumeMessages();
+          if(isActive()) {
+            updateGrid();
             switch(m_last_follow_ref.state) {
               //! Waiting for first reference. (Set at when parsing planProbSpec)
               case IMC::FollowRefState::FR_WAIT:
@@ -763,41 +765,30 @@ namespace Control
               break;
               //! Hovering after arriving at the reference.
               case IMC::FollowRefState::FR_HOVER:
-                if(!m_OMPLpath.empty()) {
-                  // Followin previously found path 
-                  std::pair<double, double> omplpathpos = m_OMPLpath.back();
-                  m_cur_ref.lon = DUNE::Math::Angles::radians(omplpathpos.first);
-                  m_cur_ref.lat = DUNE::Math::Angles::radians(omplpathpos.second);
-                  spew("Using m_OMPLpath");
-                  m_OMPLpath.pop_back();
+                // Planner update
+                spew("Frefstate: %u", m_last_follow_ref.state);
+                spew("LastCell: %d, hooverstart: %d", m_currentCell, m_hooverStartRunCount);
+                war("Initial pos: %f, %f", m_cur_ref.lon, m_cur_ref.lat);
+                if(m_hooverStartRunCount) {
+                  m_hooverStartRunCount--;
                 } else {
-                  if(m_hooverStartRunCount>m_args.waitingSteps) {
-                      m_hooverStartRunCount = 0;
-
-                      // Run planner
-                      m_lastVisitedCell = calculateNextCell(m_lastVisitedCell);
-                      if(!m_lastVisitedCell) { // If zero is the last visited cell, the search is finished
-                        spew("Zero cell received, ending planner");
-                        requestDeactivation();
-                        return;
-                      } else if(!m_OMPLpath.empty()) {
-                        // Followin previously found path 
-                        spew("Using m_OMPLpath");
-                        std::pair<double, double> omplpathpos = m_OMPLpath.back();
-                        m_cur_ref.lon = DUNE::Math::Angles::radians(omplpathpos.first);
-                        m_cur_ref.lat = DUNE::Math::Angles::radians(omplpathpos.second);
-                        m_OMPLpath.pop_back();
-                      } else {
-                        // Get position of next cell and set it as next position to go to
-                        std::pair<double, double> nextcell_pos= m_searchGrid->getCellLocation(m_lastVisitedCell);
-                        m_cur_ref.lon = DUNE::Math::Angles::radians(nextcell_pos.first);
-                        m_cur_ref.lat = DUNE::Math::Angles::radians(nextcell_pos.second);
-                      }
-
+                  if(!m_OMPLpath.empty()) {
+                    // Followin previously found path 
+                    std::pair<double, double> omplpathpos = m_OMPLpath.back();
+                    m_cur_ref.lon = DUNE::Math::Angles::radians(omplpathpos.first);
+                    m_cur_ref.lat = DUNE::Math::Angles::radians(omplpathpos.second);
+                    spew("Using m_OMPLpath");
+                    m_OMPLpath.pop_back();
                   } else {
-                    m_hooverStartRunCount++;
+                    m_currentCell = calculateNextCell(m_currentCell);
+                    if(!m_currentCell) { // If zero is the last visited cell, the search is finished
+                      spew("Zero cell received, ending planner");
+                      requestDeactivation();
+                      return;
+                    }
+                    m_hooverStartRunCount = m_args.waitingSteps;
                   }
-                }
+                } 
               break;
               //! Moving in z after arriving at the target cylinder. (Not used)
               case IMC::FollowRefState::FR_ELEVATOR:
