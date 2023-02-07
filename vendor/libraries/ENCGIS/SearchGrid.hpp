@@ -79,6 +79,11 @@ namespace ENCGIS
         /// @param invert Invert the resulting weights (Ex. For distance.)
         void normalizeMetric(bool invert, std::string metric = "weight");
 
+        /// @brief Makes the sum of metric equal one by dividing each element with the sum of all items
+        /// @param metric The metric to perform the operation on
+        /// @return success state of database query
+        bool makeMetricSumToOne(std::string metric);
+
         /// @brief Get the coordinates of a cell in the specified SRID
         /// @param cell The cell in the grid for which the coordinates are returned
         /// @param outputSRID The desired SRID of the location

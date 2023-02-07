@@ -106,6 +106,11 @@ namespace ENCGIS {
         return out;
     }
 
+    bool SearchGrid::makeMetricSumToOne(std::string metric) {
+        std::string sumToOneScale = "update " + dbGridTable + " set " + metric + "=" + metric + "/(select sum(" + metric + ") from " + dbGridTable + ")";
+        return m_con->runNoOutputQuery(sumToOneScale);
+    }
+
     void SearchGrid::normalizeMetric(bool invert, std::string metric) {
         // Find max/min weight
         std::string maxmin = "select min(" + metric + "), max(" + metric + ") from " + dbGridTable;
