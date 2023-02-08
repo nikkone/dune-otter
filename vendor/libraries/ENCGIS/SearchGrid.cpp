@@ -2,12 +2,12 @@
 
 #include <iostream>
 namespace ENCGIS {
-    SearchGrid::SearchGrid(ENCGIS::DBconnection *db, std::string in_dbGridTable, unsigned in_SRID, std::string in_landTable) {
-        m_con = db;
-        landTable = in_landTable;
+    SearchGrid::SearchGrid(ENCGIS::DBconnection *in_db, std::string in_dbGridTable, unsigned in_SRID, std::string in_obstacleTable) {
+        m_con = in_db;
+        obstacleTable = in_obstacleTable;
         dbGridTable = in_dbGridTable;
         SRID = in_SRID;
-        landTabledb = "db1";
+        obstacleTabledb = "db1";
         dbGridTabledb = "main";
     }
     
@@ -54,9 +54,9 @@ namespace ENCGIS {
 
         std::string removeDelme= "ALTER TABLE " + dbGridTable + " DROP COLUMN delme";
 
-        std::string deleteLandCells = "delete from " + dbGridTable + " where gid in (select " + dbGridTable + ".gid from " + dbGridTable + ", (select geometry from " + landTabledb + "." + landTable + " where " + landTabledb + "." + landTable + ".ROWID IN ("
+        std::string deleteLandCells = "delete from " + dbGridTable + " where gid in (select " + dbGridTable + ".gid from " + dbGridTable + ", (select geometry from " + obstacleTabledb + "." + obstacleTable + " where " + obstacleTabledb + "." + obstacleTable + ".ROWID IN ("
     "SELECT ROWID FROM SpatialIndex "
-    "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
+    "WHERE f_table_name = 'DB=" + obstacleTabledb + "." + obstacleTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) as land where intersects(" + dbGridTable + ".geometry, land.geometry))";
         //std::cout << create << std::endl;
         std::string indexQuery = "SELECT CreateSpatialIndex('" + dbGridTable + "', 'geometry');";
@@ -76,15 +76,15 @@ namespace ENCGIS {
 
     bool SearchGrid::setGridMetricFromLandDistance(std::string metric) {
         /*std::string weights = "update " + dbGridTable + " set weight = distweight from ("
-        "select gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select geometry as i from " + landTabledb + "." + landTable + " WHERE ROWID IN ("
+        "select gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select geometry as i from " + obstacleTabledb + "." + obstacleTable + " WHERE ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
-        "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
+        "WHERE f_table_name = 'DB=" + obstacleTabledb + "." + obstacleTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid) where gid = gidsel";*/
         std::string weights = "update " + dbGridTable + " set " + metric + " = distweight from ("
-        "select g,gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select t.'group' as g, geometry as i from " + landTabledb + "." + landTable + " as t WHERE"
+        "select g,gid as gidsel, min(distance(centroid(" + dbGridTable + ".geometry), i)) as distweight, " + dbGridTable + ".geometry as geom from " + dbGridTable + ",(select t.'group' as g, geometry as i from " + obstacleTabledb + "." + obstacleTable + " as t WHERE"
         " ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
-        "WHERE f_table_name = 'DB=" + landTabledb + "." + landTable + "' AND "
+        "WHERE f_table_name = 'DB=" + obstacleTabledb + "." + obstacleTable + "' AND "
         "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid,g ) where gid = gidsel and g = 13";
         //std::cout << weights << std::endl;
         return m_con->runNoOutputQuery(weights);

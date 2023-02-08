@@ -1,16 +1,8 @@
 //***************************************************************************
-// Copyright 2013-2021 Norwegian University of Science and Technology (NTNU)*
+// Copyright 2022-2023 Norwegian University of Science and Technology (NTNU)*
 // Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
-//                                                                          *
-// Commercial Licence Usage                                                 *
-// Licencees holding valid commercial DUNE licences may use this file in    *
-// accordance with the commercial licence agreement provided with the       *
-// Software or, alternatively, in accordance with the terms contained in a  *
-// written agreement between you and Faculdade de Engenharia da             *
-// Universidade do Porto. For licensing terms, conditions, and further      *
-// information contact lsts@fe.up.pt.                                       *
 //                                                                          *
 // Modified European Union Public Licence - EUPL v.1.1 Usage                *
 // Alternatively, this file may be used under the terms of the Modified     *
@@ -57,10 +49,13 @@ namespace Control
   DONE: Make effort/prior grid cover planning grid.
   DONE: Legg til flere modus for å finne best cell
   DONE: Implement a StationKeeping Operation
-  Nye queries i stedet for -1 som blir brukt i offlineplanner
+  Run fishsearch update at XY_NEAR or something
+  DONE: Only need to perform fishSearch update before next cell is to be found. 
+    Check for and implement SpatialIndex amd ramge limits for all operations
+    Nye queries i stedet for -1 som blir brukt i offlineplanner
   Mulig problem FollowRef timeout hvis for land OMPL planning time.
   Use timer instead of counter to set wait time for stationkeep. This includes planningtime.
-  Ensure numeric types in database are used
+  DONE: Ensure numeric types in database are used
   Implement better/reasoning combination of effort and prior
   Implement interface to change between stationKeeping and GoTo
   Implement random path generator to unsearched cells
@@ -118,7 +113,7 @@ namespace Control
         bool useOMPL;
       };
 
-        struct Task: public DUNE::Tasks::Periodic
+      struct Task: public DUNE::Tasks::Periodic
         {
         //! Task arguments.
         Arguments m_args;
@@ -159,6 +154,8 @@ namespace Control
         //! Parsed azimuth weight from last received IMC::PlanProbSpec. Used in planner.
         float m_azimuthWeight = 0;
 
+        bool m_reuseMap;
+
         //! Last plan control state
         IMC::PlanControlState m_last_plan_state;
         //! Latest estimated state from self
@@ -177,78 +174,77 @@ namespace Control
         //! @param[in] name task name.
         //! @param[in] ctx context.
         Task(const std::string& name, Tasks::Context& ctx):
-            DUNE::Tasks::Periodic(name, ctx),
-            m_con(NULL),
-            m_searchGrid(NULL),
-            m_searchGridCoverage(NULL),
-            m_OMPLsetup(NULL)
+          DUNE::Tasks::Periodic(name, ctx),
+          m_con(NULL),
+          m_searchGrid(NULL),
+          m_searchGridCoverage(NULL),
+          m_OMPLsetup(NULL)
         {
-            param("Other Vehicles", m_args.otherVehicles)
-            .description("The source/vehicle names of other entities in the system.")
-            .defaultValue("");
+          param("Other Vehicles", m_args.otherVehicles)
+          .description("The source/vehicle names of other entities in the system.")
+          .defaultValue("");
 
-            param("Timestep Grid Constant Decrease", m_args.timestepConstantDecrease)
-            .defaultValue("0.0")
-            .description("The value substracted from each grid cell at each timestep.");
+          param("Timestep Grid Constant Decrease", m_args.timestepConstantDecrease)
+          .defaultValue("0.0")
+          .description("The value substracted from each grid cell at each timestep.");
 
-            param("Timestep Grid Factor Decrease", m_args.timestepFactorDecrease)
-            .defaultValue("1.0")
-            .description("The value multiplied with each grid cell at each timestep. [0.0, 1.0]");
+          param("Timestep Grid Factor Decrease", m_args.timestepFactorDecrease)
+          .defaultValue("1.0")
+          .description("The value multiplied with each grid cell at each timestep. [0.0, 1.0]");
 
-            param("StationKeep steps", m_args.waitingSteps)
-            .defaultValue("14")
-            .description("Passive listening time at each cell, calculated by multiplying with task execution time");
+          param("StationKeep steps", m_args.waitingSteps)
+          .defaultValue("14")
+          .description("Passive listening time at each cell, calculated by multiplying with task execution time");
 
-            param("Tag Max Transmission Interval", m_args.tagMaxTransmissionInterval)
-            .defaultValue("90")
-            .description("The maximum transmission intervall expected for the targeted fish tags/transmitters");
+          param("Tag Max Transmission Interval", m_args.tagMaxTransmissionInterval)
+          .defaultValue("90")
+          .description("The maximum transmission intervall expected for the targeted fish tags/transmitters");
 
-            param("Max Range Considered", m_args.maxConsideredRange)
-            .defaultValue("670")
-            .description("The maximum range to perform effort updates on.");
+          param("Max Range Considered", m_args.maxConsideredRange)
+          .defaultValue("670")
+          .description("The maximum range to perform effort updates on.");
 
-            param("ENC DB Path", m_args.encDBpath)
-            .defaultValue("")
-            .description("The path of the DB to read ENC from.");
+          param("ENC DB Path", m_args.encDBpath)
+          .defaultValue("")
+          .description("The path of the DB to read ENC from.");
 
-            param("Working DB Path", m_args.effortDBpath)
-            .defaultValue("")
-            .description("The path of a DB to store the effort and prior distribution grid in.");
+          param("Working DB Path", m_args.effortDBpath)
+          .defaultValue("")
+          .description("The path of a DB to store the effort and prior distribution grid in.");
 
-            param("Grid Size", m_args.gridSize)
-            .defaultValue("50")
-            .description("Size of the grid cells");
+          param("Grid Size", m_args.gridSize)
+          .defaultValue("50")
+          .description("Size of the grid cells");
 
-            param("Grid Type", m_args.gridType)
-            .defaultValue("1")
-            .description("Geometry type of grid, 0=HEX, 1=Square, 2=Triangular.");
+          param("Grid Type", m_args.gridType)
+          .defaultValue("1")
+          .description("Geometry type of grid, 0=HEX, 1=Square, 2=Triangular.");
 
-            param("Navigable Layer Name", m_args.dbNavigableLayerName)
-            .defaultValue("navigable")
-            .description("Navigable Layer Name");
+          param("Navigable Layer Name", m_args.dbNavigableLayerName)
+          .defaultValue("navigable")
+          .description("Navigable Layer Name");
 
-            param("Innavigable Layer Name", m_args.dbInnavigableLayerName)
-            .defaultValue("innavigable")
-            .description("Innavigable Layer Name");
+          param("Innavigable Layer Name", m_args.dbInnavigableLayerName)
+          .defaultValue("innavigable")
+          .description("Innavigable Layer Name");
 
-            param("Use OMPL", m_args.useOMPL)
-            .defaultValue("true")
-            .description("Toggle if the OMPL path finder should be used to verify/create safe paths between cells when searching.");
+          param("Use OMPL", m_args.useOMPL)
+          .defaultValue("true")
+          .description("Toggle if the OMPL path finder should be used to verify/create safe paths between cells when searching.");
 
-            setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
-            bind<IMC::EstimatedState>(this);
-            bind<IMC::PlanProbSpec>(this);
-            bind<IMC::Rpm>(this);
-            bind<IMC::VehicleState>(this);
-            bind<IMC::Abort>(this);
-            bind<IMC::PlanControl>(this);
-            bind<IMC::PlanControlState>(this);
-            bind<IMC::FollowRefState>(this);
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+          bind<IMC::EstimatedState>(this);
+          bind<IMC::PlanProbSpec>(this);
+          bind<IMC::Rpm>(this);
+          bind<IMC::VehicleState>(this);
+          bind<IMC::Abort>(this);
+          bind<IMC::PlanControl>(this);
+          bind<IMC::PlanControlState>(this);
+          bind<IMC::FollowRefState>(this);
         }
 
         //! Update internal state with new parameter values.
-        void
-        onUpdateParameters(void)
+        void onUpdateParameters(void)
         {
           if(paramChanged(m_args.otherVehicles)) {
             monitoredVehicles.clear();
@@ -262,21 +258,18 @@ namespace Control
         }
 
         //! Reserve entity identifiers.
-        void
-        onEntityReservation(void)
+        void onEntityReservation(void)
         {
         }
 
         //! Resolve entity names.
-        void
-        onEntityResolution(void)
+        void onEntityResolution(void)
         {
 
         }
 
         //! Acquire resources.
-        void
-        onResourceAcquisition(void)
+        void onResourceAcquisition(void)
         {
           std::string attachedDb = "db1";
           try{
@@ -307,8 +300,7 @@ namespace Control
         }
 
         //! Initialize resources.
-        void
-        onResourceInitialization(void)
+        void onResourceInitialization(void)
         {
           // Set OMPL to use the console output of this task
           ompl::msg::OutputHandler *oh = new OMPLforDUNE::OutputHandlerDUNEConsole(this);
@@ -317,8 +309,7 @@ namespace Control
         }
 
         //! Release resources.
-        void
-        onResourceRelease(void) {
+        void onResourceRelease(void) {
             inf("Release");
             //if(m_searchGridCoverage != NULL)
             //  m_searchGridCoverage->deleteGrid();
@@ -335,141 +326,131 @@ namespace Control
             }
         }
 
-
-      void
-      onActivation(void)
-      {
-        inf("Starting FishSearch plan...");
-        IMC::PlanControl startPlan;
-        startPlan.type = IMC::PlanControl::PC_REQUEST;
-        startPlan.op = IMC::PlanControl::PC_START;
-        startPlan.plan_id = "fishSearch_plan";
-        IMC::FollowReference man;
-        man.control_ent = getEntityId();
-        man.control_src = getSystemId();
-        man.altitude_interval = 0;
-        man.timeout = 10;
-
-        IMC::PlanSpecification spec;
-
-        spec.plan_id = "fishSearch_plan";
-        spec.start_man_id = "follow_fishSearch";
-
-        IMC::PlanManeuver pm;
-        pm.data.set(man);
-        pm.maneuver_id = "follow_fishSearch";
-        spec.maneuvers.push_back(pm);
-        startPlan.arg.set(spec);
-        startPlan.request_id = 0;
-        startPlan.flags = 0;
-        startPlan.setDestination(m_ctx.resolver.id());
-        dispatch(startPlan);
-
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-      }
-
-      void
-      onDeactivation(void)
-      {
-        inf("%s", DTR(Status::getString(Status::CODE_IDLE)));
-
-        inf("Stopping fishSearch_plan plan.");
-        IMC::PlanControl stopPlan;
-        stopPlan.type = IMC::PlanControl::PC_REQUEST;
-        stopPlan.op = IMC::PlanControl::PC_STOP;
-        stopPlan.plan_id = "fishSearch_plan";
-        dispatch(stopPlan);
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
-      }
-      
-      void
-      consume(const IMC::FollowRefState * msg) {
-        if(isActive()) {
-          if(msg->control_ent == getEntityId()) {
-            m_last_follow_ref = *msg;
-          }
-        }
-      }
-
-
-      void
-      consume(const IMC::VehicleState * msg)
-      {
-        // if the vehicle is in error mode, set FishSearch task to inactive
-        if (msg->op_mode == IMC::VehicleState::VS_ERROR)
-          requestDeactivation();
-      }
-
-      void
-      consume(const IMC::Abort* msg)
-      {
-        if (msg->getDestination() != getSystemId())
-          return;
-        
-        war(DTR("Abort detected. Disabling FishSearch control."));
-        requestDeactivation();
-      }
-
-      void
-      consume(const IMC::PlanControlState * msg)
-      {
-        m_last_plan_state = *msg;
-
-        //m_fishSearch_control = msg->state == IMC::PlanControlState::PCS_EXECUTING
-        //&& msg->plan_id == "fishSearch_plan";
-      }
-
-      void
-      consume(const IMC::PlanControl* msg)
-      {
-        if (msg->type == PlanControl::PC_REQUEST && msg->op == PlanControl::PC_STOP)
+        void onActivation(void)
         {
-          if (m_last_plan_state.plan_id == "fishSearch_plan" &&
-              m_last_plan_state.state == IMC::PlanControlState::PCS_EXECUTING)
-          {
-            requestDeactivation();
-            war(DTR("Stop fishSearch detected. Disabling control."));
-          }
-        }
-        if(isActive()) {
-          if (msg->type == PlanControl::PC_FAILURE && msg->plan_id == "fishSearch_plan") {
-            requestDeactivation();
-              war(DTR("Failure in PlanControl detected during fishSearch, disabling control."));
-          }
+          inf("Starting FishSearch plan...");
+          IMC::PlanControl startPlan;
+          startPlan.type = IMC::PlanControl::PC_REQUEST;
+          startPlan.op = IMC::PlanControl::PC_START;
+          startPlan.plan_id = "fishSearch_plan";
+          IMC::FollowReference man;
+          man.control_ent = getEntityId();
+          man.control_src = getSystemId();
+          man.altitude_interval = 0;
+          man.timeout = 10;
+
+          IMC::PlanSpecification spec;
+
+          spec.plan_id = "fishSearch_plan";
+          spec.start_man_id = "follow_fishSearch";
+
+          IMC::PlanManeuver pm;
+          pm.data.set(man);
+          pm.maneuver_id = "follow_fishSearch";
+          spec.maneuvers.push_back(pm);
+          startPlan.arg.set(spec);
+          startPlan.request_id = 0;
+          startPlan.flags = 0;
+          startPlan.setDestination(m_ctx.resolver.id());
+          dispatch(startPlan);
+
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         }
 
-      }
+        void onDeactivation(void)
+        {
+          inf("%s", DTR(Status::getString(Status::CODE_IDLE)));
 
-      void consume(const IMC::EstimatedState* msg) {
-        if(msg->getSource() != getSystemId()) {
-          if(!monitoredVehicles.empty()) {
-            if(std::find(monitoredVehicles.begin(), monitoredVehicles.end(), msg->getSource()) == monitoredVehicles.end()) {
-              return;
+          inf("Stopping fishSearch_plan plan.");
+          IMC::PlanControl stopPlan;
+          stopPlan.type = IMC::PlanControl::PC_REQUEST;
+          stopPlan.op = IMC::PlanControl::PC_STOP;
+          stopPlan.plan_id = "fishSearch_plan";
+          dispatch(stopPlan);
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+        }
+        
+        void consume(const IMC::FollowRefState * msg) {
+          if(isActive()) {
+            if(msg->control_ent == getEntityId()) {
+              m_last_follow_ref = *msg;
             }
-          } // Else update on all vehicles
-        } else {
-          // Store latest vehicle position
-          m_esta = *msg;
+          }
         }
-          pendingUpdates[msg->getSource()] = std::pair<double,double>(msg->lon, msg->lat);
-      }
 
-      void consume(const IMC::Rpm* msg) {
-          m_rpm = std::abs(msg->value);
-      }
-
-      std::string polygonToEWKT(const IMC::MessageList<IMC::PolygonVertex> &polygon) {
-        std::string EWKT = "SRID=4326;POLYGON((";
-        for(IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = polygon.begin();itr < polygon.end();itr++) {
-            //spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
-            EWKT += std::to_string(DUNE::Math::Angles::degrees((*itr)->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*itr)->lat)) + ",";
+        void consume(const IMC::VehicleState * msg)
+        {
+          // if the vehicle is in error mode, set FishSearch task to inactive
+          if (msg->op_mode == IMC::VehicleState::VS_ERROR)
+            requestDeactivation();
         }
-        EWKT += std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lat)) + "))";
-        return EWKT;
-      }
 
-      void
-      consume(const IMC::PlanProbSpec* msg)
+        void consume(const IMC::Abort* msg)
+        {
+          if (msg->getDestination() != getSystemId())
+            return;
+          
+          war(DTR("Abort detected. Disabling FishSearch control."));
+          requestDeactivation();
+        }
+
+        void consume(const IMC::PlanControlState * msg)
+        {
+          m_last_plan_state = *msg;
+
+          //m_fishSearch_control = msg->state == IMC::PlanControlState::PCS_EXECUTING
+          //&& msg->plan_id == "fishSearch_plan";
+        }
+
+        void consume(const IMC::PlanControl* msg)
+        {
+          if (msg->type == PlanControl::PC_REQUEST && msg->op == PlanControl::PC_STOP)
+          {
+            if (m_last_plan_state.plan_id == "fishSearch_plan" &&
+                m_last_plan_state.state == IMC::PlanControlState::PCS_EXECUTING)
+            {
+              requestDeactivation();
+              war(DTR("Stop fishSearch detected. Disabling control."));
+            }
+          }
+          if(isActive()) {
+            if (msg->type == PlanControl::PC_FAILURE && msg->plan_id == "fishSearch_plan") {
+              requestDeactivation();
+                war(DTR("Failure in PlanControl detected during fishSearch, disabling control."));
+            }
+          }
+
+        }
+
+        void consume(const IMC::EstimatedState* msg) {
+          if(msg->getSource() != getSystemId()) {
+            if(!monitoredVehicles.empty()) {
+              if(std::find(monitoredVehicles.begin(), monitoredVehicles.end(), msg->getSource()) == monitoredVehicles.end()) {
+                return;
+              }
+            } // Else update on all vehicles
+          } else {
+            // Store latest vehicle position
+            m_esta = *msg;
+          }
+            pendingUpdates[msg->getSource()] = std::pair<double,double>(msg->lon, msg->lat);
+        }
+
+        void consume(const IMC::Rpm* msg) {
+            m_rpm = std::abs(msg->value);
+        }
+
+        std::string polygonToEWKT(const IMC::MessageList<IMC::PolygonVertex> &polygon) {
+          std::string EWKT = "SRID=4326;POLYGON((";
+          for(IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = polygon.begin();itr < polygon.end();itr++) {
+              //spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
+              EWKT += std::to_string(DUNE::Math::Angles::degrees((*itr)->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*itr)->lat)) + ",";
+          }
+          EWKT += std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lat)) + "))";
+          return EWKT;
+        }
+
+        void consume(const IMC::PlanProbSpec* msg)
         {
           spew("Message received");
           spew("Destination: %i", msg->getDestination());
@@ -487,13 +468,18 @@ namespace Control
           // Parse Custom Parameters
           /*
           Supported custom parameters:
-              a = [0,x], activate resulting plan
               gg = Grid geometry
               gs = Grid geometry edge size
               p = Planner
               paw = Planner azimuth weight
               pdw = Planner distance weight
+          To be Implemented: 
+              sk = Station keep steps
+              r = reuse previous map
+              t = [0.0,inf), Max planning time on OMPL
           */
+
+         m_reuseMap = true;
           DUNE::Utils::TupleList custom = DUNE::Utils::TupleList(msg->custom);
           std::map<std::string, std::string> custommap = custom.getMapReversed();
 
@@ -548,44 +534,58 @@ namespace Control
           }
           }
 
-          // Convert from WGS-84 to EPSG32632
+          double planningBounds[4];
+          // Convert initial position from WGS-84 radians to EPSG32632
           double start_northing, start_easting;
           m_con->transformSRID(Math::Angles::degrees(msg->start_lon), Math::Angles::degrees(msg->start_lat), 4326, start_easting, start_northing, 32632);
           spew("Planning start: %f, %f", start_easting, start_northing);
 
-          spew("Checking size");
+          if(m_reuseMap){
+            if(m_con->checkSpatialIndex("coverage", "geometry")) {
+              inf("Found previous map, resuming.");
+            } else {
+              err("Previous map not found or not correct, search will not start.");
+            }
 
-          double planningBounds[4];
-          if(msg->area.size() == 2) {
-              m_searchGrid->deleteGrid();
-              m_searchGridCoverage->deleteGrid();
-              // Create planning bound
-              IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = msg->area.begin();
-              for (unsigned i = 0; itr != msg->area.end(); ++itr, ++i)
-              {
-                  spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
-              }
-              itr = msg->area.begin();
-              m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[0], planningBounds[1], 32632);
-              ++itr;
-              spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
-              m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
-              m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
-              m_searchGridCoverage->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType), true);
-          } else if(msg->area.size() > 2) {
-              m_searchGrid->deleteGrid();
-              m_searchGridCoverage->deleteGrid();
-              std::string EWKT = polygonToEWKT(msg->area);
-              m_searchGrid->createGrid(EWKT, m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
-              m_searchGridCoverage->createGrid(EWKT, m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType), true);
-              m_searchGridCoverage->updateDetectionProbability("fishsearch");
-              debug("Grid Created from EKWT");
-              
-              spew("Weights of grid set");
           } else {
-              spew("Polygon too small.");
-              return;
+            // Create new effort/weight and fishsearch maps
+
+            spew("Checking size");
+            if(msg->area.size() == 2) {
+                m_searchGrid->deleteGrid();
+                m_searchGridCoverage->deleteGrid();
+                // Create planning bound
+                IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = msg->area.begin();
+                for (unsigned i = 0; itr != msg->area.end(); ++itr, ++i)
+                {
+                    spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
+                }
+                itr = msg->area.begin();
+                m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[0], planningBounds[1], 32632);
+                ++itr;
+                spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
+                m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
+                m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
+                m_searchGridCoverage->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType), true);
+            } else if(msg->area.size() > 2) {
+                m_searchGrid->deleteGrid();
+                m_searchGridCoverage->deleteGrid();
+                std::string EWKT = polygonToEWKT(msg->area);
+                m_searchGrid->createGrid(EWKT, m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
+                debug("Search Grid Created from EKWT");
+                m_searchGridCoverage->createGrid(EWKT, m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType), true);
+                debug("Coverage Grid Created from EKWT");
+                m_searchGridCoverage->updateDetectionProbability("fishsearch");
+                debug("Init updateDetectionProbability");
+                
+                spew("Weights of grid set");
+            } else {
+                spew("Polygon too small.");
+                return;
+            }
           }
+
+
 
 #if SEARCHGRID_USEOPP_OMPL
           // Find square covering bounds of search area
@@ -607,6 +607,7 @@ namespace Control
           // Create prior distribution from land distance
           m_searchGridCoverage->setGridMetricFromLandDistance();
           m_searchGridCoverage->normalizeMetric(true);
+          m_searchGridCoverage->makeMetricSumToOne("weight");
 
 
           m_currentCell = m_searchGrid->getClosestCell(start_easting, start_northing);
@@ -633,7 +634,7 @@ namespace Control
           m_cur_ref.lat = DUNE::Math::Angles::radians(initial_pos.second);
           DUNE::IMC::DesiredSpeed m_dsp;
           //DUNE::IMC::DesiredZ m_dz;
-          m_dsp.value = 2.0;
+          m_dsp.value = msg->speed;
           m_dsp.speed_units = IMC::SUNITS_METERS_PS;
           m_cur_ref.speed.set(m_dsp);
           //m_dz.value = 0.0;
@@ -644,6 +645,9 @@ namespace Control
         }
 
         int calculateNextCell(int lastVisitedCell) {
+          m_searchGridCoverage->updateDetectionProbability("fishsearch");
+          spew("makeMetricSumToOne");
+          m_searchGridCoverage->makeMetricSumToOne("fishsearch");
         int nextCell = 0;
         switch (m_planner) {
           case 0:
@@ -742,13 +746,9 @@ namespace Control
               inf("%f %f", easting, northing);
             }
             pendingUpdates.clear();
-
-            m_searchGridCoverage->updateDetectionProbability("fishsearch");
-            m_searchGrid->normalizeMetric(false);
         }
         //! Main loop.
-        void
-        task(void)
+        void task(void)
         {
           consumeMessages();
           if(isActive()) {
@@ -795,6 +795,7 @@ namespace Control
               break;
               //! Controlling system timed out. Only occurs when this task is not active, so this should never happen.
               case IMC::FollowRefState::FR_TIMEOUT:
+                err("Got FollowRefState::FR_TIMEOUT");
                 requestDeactivation();
               break;
             }

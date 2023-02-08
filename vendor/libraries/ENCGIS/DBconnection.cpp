@@ -168,6 +168,28 @@ namespace ENCGIS
     }
     return outVec;
   }
+  bool DBconnection::checkSpatialIndex(const std::string &table, const std::string &column) {
+    std::string query = "select CheckSpatialIndex('" + table + "','" + column + "')";
+    int errors = 0;
+    sqlite3_stmt* m_handle;
+
+    if (sqlite3_prepare_v2(db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
+    {
+        errors++;
+    }
+    int m_idx = 0;
+    // Execute
+    /*int rc = */sqlite3_step(m_handle);
+    int value = sqlite3_column_int(m_handle, m_idx++);
+    if (m_handle) {
+      sqlite3_finalize(m_handle);
+    }
+    if(value)
+      return true;
+    else
+      return false;
+  }
+
 
   bool DBconnection::getExtent(std::string layer, double &minX, double &minY, double &maxX, double &maxY) {
     std::string query = "select MbrMinX(geometry), MbrMinY(geometry), MbrMaxX(geometry), MbrMaxY(geometry) from " + layer;

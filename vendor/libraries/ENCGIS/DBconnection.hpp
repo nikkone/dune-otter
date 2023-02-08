@@ -61,6 +61,8 @@ namespace ENCGIS
     /// @param sql_stmt 
     void runQuery(const std::string &sql_stmt);
 
+    bool checkSpatialIndex(const std::string &table, const std::string &column);
+
     /// @brief 
     /// @param sql_stmt 
     /// @return 
@@ -99,6 +101,8 @@ namespace ENCGIS
 
     bool getExtent(std::string layer, double &minX, double &minY, double &maxX, double &maxY);
     //select MbrMinX(geometry), MbrMinY(geometry), MbrMaxX(geometry), MbrMaxX(geometry) from searchgridraw
+
+
 
     sqlite3 *db;
     int SRID;

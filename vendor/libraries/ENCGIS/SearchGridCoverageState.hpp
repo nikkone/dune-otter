@@ -1,17 +1,30 @@
+//***************************************************************************
+// Copyright 2020-2023 Norwegian University of Science and Technology       *
+// Department of Engineering Technology                                     *
+//***************************************************************************
+//***************************************************************************
+// Author: Nikolai Lauvås                                                   *
+//***************************************************************************
+
+
 #ifndef ENCGIS_SEARCHGRIDCOVERAGESTATE_HPP_INCLUDED
 #define ENCGIS_SEARCHGRIDCOVERAGESTATE_HPP_INCLUDED
 #include "SearchGrid.hpp"
 namespace ENCGIS
 {
-    /// @brief 
+    /// @brief Extends SearchGrid with functions for updating a grid with the current search effort.
+    /// Designed for the FishOtter, with an empirically determined logarithmic detection probability function.
     class SearchGridCoverageState : public SearchGrid{
     public:
+
+        /// Initializes the inherrited SearchGrid
         SearchGridCoverageState(ENCGIS::DBconnection *db, std::string dbGridTableName) : SearchGrid(db, dbGridTableName){
         }
+
+        /// Empty destructor as no new dynamic memory locations have been created
         ~SearchGridCoverageState() {
              
         }
-
         /// @brief Simple update for sensor with definite range law 
         /// @param X Southing
         /// @param Y Northing
@@ -46,7 +59,7 @@ namespace ENCGIS
         /// @param effortLayerMetric 
         /// @param detProbLayer 
         /// @return True if query sucess, false if not
-        bool updateDetectionProbability(std::string detProbLayer, std::string priorMetric = "weight", std::string effortLayerMetric = "effort");
+        bool updateDetectionProbability(std::string detProbLayer, std::string detProbMetric = "weight", std::string priorMetric = "weight", std::string effortLayerMetric = "effort");
     private:
 
         /// @brief Function giving the coefficient for the logaritmic model for the FishOtters according to actuation level

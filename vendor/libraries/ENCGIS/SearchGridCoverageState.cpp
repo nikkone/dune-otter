@@ -81,17 +81,32 @@ namespace ENCGIS
     return getDBconnection()->runNoOutputQuery(decreaseQuery);
   }
 
-  bool SearchGridCoverageState::updateDetectionProbability(std::string detProbLayer, std::string priorMetric, std::string effortLayerMetric) {
-    std::string detProbMetric = "weight";
-    //std::string updateQuery = "update " + detProbLayer + " set " + detProbMetric + " = abs(random() % 10)/10.0;";
+  bool SearchGridCoverageState::updateDetectionProbability(std::string detProbLayer, std::string detProbMetric, std::string priorMetric, std::string effortLayerMetric) {
+    /* Old V1, very slow
     std::string updateQuery = 
     "update " + detProbLayer + " set " + detProbMetric + " = we*1.0 from ("
     "select f.gid as fid, avg(c." + priorMetric + "*(1-c." + effortLayerMetric + ")) as we,f.geometry as rf from " + getdbGridTable() + " as c, " + detProbLayer + " as f where intersects(c.geometry, f.geometry) group by f.gid"
-    ") where gid = fid";
+    ") where gid = fid";*/
 
+    std::string updateQuery = 
+      "update " + detProbLayer + " as f set " + detProbMetric + " = ("
+        "select avg(c." + priorMetric + "*(1-c." + effortLayerMetric + ")) from " + getdbGridTable() + " as c where c.ROWID IN ("
+          "SELECT ROWID "
+          "FROM SpatialIndex "
+          "WHERE f_table_name = '" + getdbGridTable() + "' "
+            "AND search_frame = f.geometry"
+        ") and intersects(c.geometry, f.geometry)"
+      ")";
 
-    //std::cout << updateQuery << std::endl;
+    std::cout << updateQuery << std::endl;
     return getDBconnection()->runNoOutputQuery(updateQuery);
+
+    /* Optimizations:
+      After initial, only use from coverage != 0.0
+      Only include fishsearch where weight is not 0.0
+      Instead of full join, find other way
+    
+    */
   }
 }
 

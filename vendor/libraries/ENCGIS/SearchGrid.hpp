@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2020-2021 Norwegian University of Science and Technology       *
+// Copyright 2020-2023 Norwegian University of Science and Technology       *
 // Department of Engineering Technology                                     *
 //***************************************************************************
 //***************************************************************************
@@ -29,15 +29,14 @@ namespace ENCGIS
         SQUARE = 1,
         TRIANGULAR = 2,
       } gridtypes_t;
-
-        /// @brief 
-        /// @param db 
-        /// @param in_landTable 
-        /// @param in_dbGridTable 
-        /// @param in_SRID 
-        SearchGrid(ENCGIS::DBconnection *db, std::string in_dbGridTable = "searchgrid", unsigned in_SRID = 32632, std::string in_landTable = "innavigable");
+        /// @brief Initializes the private variables of the class
+        /// @param in_db Pointer to a ENCGIS::DBconnection object for running queries on 
+        /// @param in_dbGridTable Name of grid to be worked on.
+        /// @param in_SRID SRID of the created grid
+        /// @param in_obstacleTable Name of the layer/table containing obstacles
+        SearchGrid(ENCGIS::DBconnection *in_db, std::string in_dbGridTable = "searchgrid", unsigned in_SRID = 32632, std::string in_obstacleTable = "innavigable");
         
-        /// @brief 
+        /// @brief Empty destructor as no new dynamic memory locations have been created
         ~SearchGrid();
 
         /// @brief Turns gridtypes_t ENUM into string
@@ -62,7 +61,7 @@ namespace ENCGIS
         /// @param spatialIndex Should a spatial index be generated for the grid
         bool createGrid(const std::string &EWKTpolygon, unsigned gridsize, gridtypes_t gridType = SQUARE, bool spatialIndex = false);
 
-        /// @brief Set grid metric as distance to landTable
+        /// @brief Set grid metric as distance to obstacleTable
         /// @return TODO: currently unused
         bool setGridMetricFromLandDistance(std::string metric = "weight");
 
@@ -128,13 +127,13 @@ namespace ENCGIS
         /// @brief 
         ENCGIS::DBconnection* m_con;
         /// @brief Table of POLYGON geometry considered as obstacle
-        std::string landTable;
+        std::string obstacleTable;
         /// @brief The name of the grid layer/table in the Spatialite database
         std::string dbGridTable;
         /// @brief The SRID to use for the created table
         unsigned SRID;
         /// @brief 
-        std::string landTabledb;
+        std::string obstacleTabledb;
         /// @brief 
         std::string dbGridTabledb;
 
