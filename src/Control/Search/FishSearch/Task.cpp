@@ -49,19 +49,22 @@ namespace Control
   DONE: Make effort/prior grid cover planning grid.
   DONE: Legg til flere modus for å finne best cell
   DONE: Implement a StationKeeping Operation
-  Run fishsearch update at XY_NEAR or something
+  
   DONE: Only need to perform fishSearch update before next cell is to be found. 
+  DONE Pause/continue implementation?
+  DONE: Ensure numeric types in database are used
+  Run fishsearch update at XY_NEAR or something
     Check for and implement SpatialIndex amd ramge limits for all operations
     Nye queries i stedet for -1 som blir brukt i offlineplanner
-  Mulig problem FollowRef timeout hvis for land OMPL planning time.
+  Mulig problem FollowRef timeout hvis for lang OMPL planning time.
   Use timer instead of counter to set wait time for stationkeep. This includes planningtime.
-  DONE: Ensure numeric types in database are used
-  Implement better/reasoning combination of effort and prior
-  Implement interface to change between stationKeeping and GoTo
+  
+  DONE:Implement better/reasoning combination of effort and prior. RESULT: Using Bayes rule
   Implement random path generator to unsearched cells
   Oppdatere Neptus interface med nye parametre
+  Implement interface to change between stationKeeping and GoTo
   Sjekk om hover fungerer som stationKeep, og evt. hvor radius settes
-  Pause/continue implementation?
+  
   Need to keep track of rpm for all vehicles
   */
   //! @author Nikolai Lauvås
@@ -546,11 +549,10 @@ namespace Control
             } else {
               err("Previous map not found or not correct, search will not start.");
             }
-
           } else {
             // Create new effort/weight and fishsearch maps
 
-            spew("Checking size");
+            spew("Creating Search Map, checking input polygon.");
             if(msg->area.size() == 2) {
                 m_searchGrid->deleteGrid();
                 m_searchGridCoverage->deleteGrid();
@@ -565,13 +567,13 @@ namespace Control
                 ++itr;
                 spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
                 m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
-                m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
+                m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType), true);
                 m_searchGridCoverage->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType), true);
             } else if(msg->area.size() > 2) {
                 m_searchGrid->deleteGrid();
                 m_searchGridCoverage->deleteGrid();
                 std::string EWKT = polygonToEWKT(msg->area);
-                m_searchGrid->createGrid(EWKT, m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
+                m_searchGrid->createGrid(EWKT, m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType), true);
                 debug("Search Grid Created from EKWT");
                 m_searchGridCoverage->createGrid(EWKT, m_args.gridSize, ENCGIS::SearchGrid::gridtypes_t(m_args.gridType), true);
                 debug("Coverage Grid Created from EKWT");

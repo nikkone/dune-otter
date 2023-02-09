@@ -98,14 +98,13 @@ namespace ENCGIS
         ") and intersects(c.geometry, f.geometry)"
       ")";
 
-    std::cout << updateQuery << std::endl;
+    //std::cout << updateQuery << std::endl;
     return getDBconnection()->runNoOutputQuery(updateQuery);
 
     /* Optimizations:
       After initial, only use from coverage != 0.0
       Only include fishsearch where weight is not 0.0
       Instead of full join, find other way
-    
     */
   }
 }

@@ -185,7 +185,7 @@ namespace ENCGIS {
         "- " + std::to_string(azimuthWeight) + "*ABS( " + std::to_string(azimuth) + "-azimuth((select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = sg.gid)))"
         "- " + std::to_string(distanceWeight) + "*distance((select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = sg.gid))) as wgt "
         "from " + grid->getdbGridTable() + " as sg where " + metric + " between -0.1 and 1.1)";
-        //std::cout << query << std::endl;
+        std::cout << query << std::endl;
         int errors = 0;
         sqlite3_stmt* m_handle;
 
