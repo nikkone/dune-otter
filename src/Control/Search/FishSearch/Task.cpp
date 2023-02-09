@@ -121,20 +121,23 @@ namespace Control
         //! Task arguments.
         Arguments m_args;
         //! Database connection
-        ENCGIS::DBconnection* m_con;
+        std::shared_ptr<ENCGIS::DBconnection> m_con;
         //! The search grid the planner operates on
-        ENCGIS::SearchGrid* m_searchGrid;
+        std::unique_ptr<ENCGIS::SearchGrid> m_searchGrid;
         //! The grid object used for effort and weight storage
-        ENCGIS::SearchGridCoverageState* m_searchGridCoverage;
+        std::unique_ptr<ENCGIS::SearchGridCoverageState> m_searchGridCoverage;
         //! Planner instance operating on m_searchGrid
-        ENCGIS::SearchGridPlanner* m_GridPlanner;
+        std::unique_ptr<ENCGIS::SearchGridPlanner> m_GridPlanner;
 #if SEARCHGRID_USEOPP_OMPL
         //! Point collision check For use in path planner
-        ENCGIS::isPointInLayerStatement *pointCheck;
+        std::unique_ptr<ENCGIS::isPointInLayerStatement> pointCheck;
         //! Line segment collision check For use in path planner
-        ENCGIS::lineIntersectLayerStatement *lineCheck;
+        std::unique_ptr<ENCGIS::lineIntersectLayerStatement> lineCheck;
         //! OMPL instance to use for running the path planning on
-        og::SimpleSetup* m_OMPLsetup;
+        std::unique_ptr<og::SimpleSetup> m_OMPLsetup;
+
+        std::unique_ptr<ompl::msg::OutputHandler> m_omplMsgOutputHandler;
+
         //! Storage for path found by OMPL. Keept empty if the cell can be traveled to without collision
         std::vector<std::pair<double,double>> m_OMPLpath;
 #endif
@@ -177,11 +180,7 @@ namespace Control
         //! @param[in] name task name.
         //! @param[in] ctx context.
         Task(const std::string& name, Tasks::Context& ctx):
-          DUNE::Tasks::Periodic(name, ctx),
-          m_con(NULL),
-          m_searchGrid(NULL),
-          m_searchGridCoverage(NULL),
-          m_OMPLsetup(NULL)
+          DUNE::Tasks::Periodic(name, ctx)
         {
           param("Other Vehicles", m_args.otherVehicles)
           .description("The source/vehicle names of other entities in the system.")
@@ -251,11 +250,12 @@ namespace Control
         {
           if(paramChanged(m_args.otherVehicles)) {
             monitoredVehicles.clear();
-            for(auto iter = m_args.otherVehicles.begin(); iter != m_args.otherVehicles.end(); iter++) {
-                monitoredVehicles.push_back(resolveSystemName(*iter));
+            for(auto iter : m_args.otherVehicles) {
+                monitoredVehicles.push_back(resolveSystemName(iter));
             }
-            for(auto iter = monitoredVehicles.begin(); iter != monitoredVehicles.end(); iter++) {
-                inf("%u", *iter);
+
+            for(auto iter : monitoredVehicles) {
+                inf("%u", iter);
             }
           }        
         }
@@ -276,7 +276,7 @@ namespace Control
         {
           std::string attachedDb = "db1";
           try{
-            m_con = new ENCGIS::DBconnection(m_args.effortDBpath, SQLITE_OPEN_READWRITE, 32632);
+            m_con = std::make_shared<ENCGIS::DBconnection>(m_args.effortDBpath, SQLITE_OPEN_READWRITE, 32632);
             m_con->runNoOutputQuery("attach '" + m_args.encDBpath + "' as " + attachedDb + "");
             //m_con->runQuery("select * from db1.coalne limit 10");
           } catch(std::runtime_error& e) {
@@ -284,18 +284,18 @@ namespace Control
             // Set task state to failure
           }
 
-          m_searchGrid = new ENCGIS::SearchGrid(m_con, "FishSearch");
-          m_searchGridCoverage = new ENCGIS::SearchGridCoverageState(m_con, std::string("coverage"));
+          m_searchGrid = std::make_unique<ENCGIS::SearchGrid>(m_con.get(), "FishSearch");
+          m_searchGridCoverage = std::make_unique<ENCGIS::SearchGridCoverageState>(m_con.get(), std::string("coverage"));
           
           try{
-            pointCheck = new ENCGIS::isPointInLayerStatement(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632, attachedDb);
+            pointCheck = std::make_unique<ENCGIS::isPointInLayerStatement>(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632, attachedDb);
           } catch(std::runtime_error& e) {
             err(DTR("Problem creating query for navigable layer: %s"), e.what());
             // Set task state to failure
           }
 
           try{
-            lineCheck = new ENCGIS::lineIntersectLayerStatement(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632, attachedDb);
+            lineCheck = std::make_unique<ENCGIS::lineIntersectLayerStatement>(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632, attachedDb);
           } catch(std::runtime_error& e) {
             err(DTR("Problem creating query for innavigable layer: %s"), e.what());
             // Set task state to failure
@@ -306,23 +306,23 @@ namespace Control
         void onResourceInitialization(void)
         {
           // Set OMPL to use the console output of this task
-          ompl::msg::OutputHandler *oh = new OMPLforDUNE::OutputHandlerDUNEConsole(this);
-          ompl::msg::useOutputHandler(oh);
+          m_omplMsgOutputHandler = std::make_unique<OMPLforDUNE::OutputHandlerDUNEConsole>(this);
+          ompl::msg::useOutputHandler(m_omplMsgOutputHandler.get());
           ompl::msg::setLogLevel(ompl::msg::LogLevel::LOG_DEV2);
         }
 
         //! Release resources.
         void onResourceRelease(void) {
             inf("Release");
-            //if(m_searchGridCoverage != NULL)
+            //if(m_searchGridCoverage)
             //  m_searchGridCoverage->deleteGrid();
-            //if(m_searchGrid != NULL)
+            //if(m_searchGrid)
             //  m_searchGrid->deleteGrid();
             try {
-            Memory::clear(m_con);
-            Memory::clear(m_searchGrid);
-            Memory::clear(m_searchGridCoverage);
-            Memory::clear(m_OMPLsetup);
+            m_con.reset();
+            m_searchGrid.reset();
+            m_searchGridCoverage.reset();
+            m_OMPLsetup.reset();
             }
             catch(std::runtime_error& e) {
             err(DTR("Could not clear charts database class: %s"), e.what());
@@ -445,9 +445,8 @@ namespace Control
 
         std::string polygonToEWKT(const IMC::MessageList<IMC::PolygonVertex> &polygon) {
           std::string EWKT = "SRID=4326;POLYGON((";
-          for(IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = polygon.begin();itr < polygon.end();itr++) {
-              //spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
-              EWKT += std::to_string(DUNE::Math::Angles::degrees((*itr)->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*itr)->lat)) + ",";
+          for(const auto itr : polygon) {
+              EWKT += std::to_string(DUNE::Math::Angles::degrees(itr->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees(itr->lat)) + ",";
           }
           EWKT += std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lat)) + "))";
           return EWKT;
@@ -482,7 +481,7 @@ namespace Control
               t = [0.0,inf), Max planning time on OMPL
           */
 
-         m_reuseMap = true;
+         m_reuseMap = false;
           DUNE::Utils::TupleList custom = DUNE::Utils::TupleList(msg->custom);
           std::map<std::string, std::string> custommap = custom.getMapReversed();
 
@@ -557,12 +556,12 @@ namespace Control
                 m_searchGrid->deleteGrid();
                 m_searchGridCoverage->deleteGrid();
                 // Create planning bound
-                IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = msg->area.begin();
-                for (unsigned i = 0; itr != msg->area.end(); ++itr, ++i)
-                {
-                    spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
-                }
-                itr = msg->area.begin();
+                //IMC::MessageList<IMC::PolygonVertex>::const_iterator itr = msg->area.begin();
+                //for (unsigned i = 0; itr != msg->area.end(); ++itr, ++i)
+                //{
+                //    spew("lat %f, lon %f", (*itr)->lat, (*itr)->lon);
+                //}
+                auto itr = msg->area.begin();
                 m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[0], planningBounds[1], 32632);
                 ++itr;
                 spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
@@ -594,11 +593,11 @@ namespace Control
           
           m_con->getExtent("fishsearchraw", planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);
           spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);
-          if(m_OMPLsetup != NULL) {
-            Memory::clear(m_OMPLsetup);
+          if(m_OMPLsetup) {
+            m_OMPLsetup.reset();
           }
           spew("OMPL clear sucess");
-          m_OMPLsetup = new og::SimpleSetup(OMPLintegrationENCGIS::createSetup(planningBounds[1], planningBounds[0], planningBounds[3], planningBounds[2], pointCheck, lineCheck));
+          m_OMPLsetup = std::make_unique<og::SimpleSetup>(OMPLintegrationENCGIS::createSetup(planningBounds[1], planningBounds[0], planningBounds[3], planningBounds[2], pointCheck.get(), lineCheck.get()));
           spew("OMPL init sucess 1");
           //OMPLintegrationENCGIS::setStartAndGoalStates(setup, start_easting, start_northing, end_easting, end_northing);
           //m_GridPlanner->setmaxPlaningTime(2.0);
@@ -614,7 +613,7 @@ namespace Control
 
           m_currentCell = m_searchGrid->getClosestCell(start_easting, start_northing);
 
-          m_GridPlanner = new ENCGIS::SearchGridPlanner(m_searchGrid);
+          m_GridPlanner = std::make_unique<ENCGIS::SearchGridPlanner>(m_searchGrid.get());
           // Find coverage path
           m_GridPlanner->setinitialCell(m_currentCell);
           m_GridPlanner->setinitialAzimuth(m_esta.psi);
@@ -715,8 +714,8 @@ namespace Control
               std::reverse(m_OMPLpath.begin(), m_OMPLpath.end()); // Reverse so that pop back will give the most recent post
               m_OMPLpath.pop_back(); // Remove first waypoint (Current position)
               inf("Path Vector: ");
-              for(auto iter = m_OMPLpath.begin();iter != m_OMPLpath.end();iter++) {
-                inf("%f, %f", iter->first, iter->second);
+              for(auto iter : m_OMPLpath) {
+                inf("%f, %f", iter.first, iter.second);
               }
           } else {
               err("Error finding path from: %f, %f to %f ,%f", start.first, start.second, end.first, end.second);
@@ -739,11 +738,10 @@ namespace Control
               m_searchGridCoverage->decreaseAll(m_args.timestepConstantDecrease, std::string("effort"));
             }
             
-            //m_searchGridCoverage->decreaseAll(m_args.timestepConstantDecrease, m_args.timestepFactorDecrease, std::string("effort"));
-            for(auto iter = pendingUpdates.begin();iter != pendingUpdates.end();iter++) {
+            for(auto iter : pendingUpdates) {
               // Convert from WGS-84 to EPSG32632
               double northing, easting;
-              m_con->transformSRID(Math::Angles::degrees(iter->second.first), Math::Angles::degrees(iter->second.second), 4326, easting, northing, 32632);
+              m_con->transformSRID(Math::Angles::degrees(iter.second.first), Math::Angles::degrees(iter.second.second), 4326, easting, northing, 32632);
               m_searchGridCoverage->updateLogarithmic(easting, northing, m_rpm, (1/getFrequency())/m_args.tagMaxTransmissionInterval, m_args.maxConsideredRange, 0.05, std::string("effort"));
               inf("%f %f", easting, northing);
             }
