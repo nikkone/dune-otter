@@ -34,13 +34,17 @@
   #include <OMPL/setup.hpp>
   #include <OMPL/OMPLfunctions.hpp>
 #endif
+
+#include <cmath>
 namespace Control
 {
-  //! This task implements a fish searching algorithm for 
+  //! This task implements a fish searching algorithm that continously updates an effort map.
+  //! Next step is found by using a cost function with prior distribution, past effort and required motion (Translational/rotational).
+  //! Relies on Spatialite integration to remove land cells from grid, and uses OMPL to verify/create paths between cells.
   /*
   DONE: Create separate grid configurations for search and PD and CEFT
   DONE: Implement way to update desired position/maneuver etc.. 
-  Done: Maneuver or FollowReference (TREX)
+  DONE: Maneuver or FollowReference (TREX)
   DONE: Implement supersampling/downsampling
   DONE: Integrate greedy approaches for choosing desired positions
   DONE: OMPL, and set is as parameter instead of using the define
@@ -49,23 +53,34 @@ namespace Control
   DONE: Make effort/prior grid cover planning grid.
   DONE: Legg til flere modus for å finne best cell
   DONE: Implement a StationKeeping Operation
-  
   DONE: Only need to perform fishSearch update before next cell is to be found. 
-  DONE Pause/continue implementation?
+  DONE: Pause/continue implementation?
   DONE: Ensure numeric types in database are used
-  Run fishsearch update at XY_NEAR or something
-    Check for and implement SpatialIndex amd ramge limits for all operations
-    Nye queries i stedet for -1 som blir brukt i offlineplanner
+  DONE: Implement better/reasoning combination of effort and prior. RESULT: Using Bayes rule
+  DONE: Oppdatere Neptus interface med nye parametre
+  
+Fix:
+  Check for and implement SpatialIndex amd ramge limits for all operations
+  Nye queries i stedet for -1 som blir brukt i offlineplanner
   Mulig problem FollowRef timeout hvis for lang OMPL planning time.
-  Use timer instead of counter to set wait time for stationkeep. This includes planningtime.
-  
-  DONE:Implement better/reasoning combination of effort and prior. RESULT: Using Bayes rule
-  Implement random path generator to unsearched cells
-  Oppdatere Neptus interface med nye parametre
-  Implement interface to change between stationKeeping and GoTo
-  Sjekk om hover fungerer som stationKeep, og evt. hvor radius settes
-  
   Need to keep track of rpm for all vehicles
+  Problem med finne sti i starten av venteperiode, tar ikke hensyn til effort gjort i venteperiode. tar ikke hensyn til evt rotasjon som skjer etterpå
+
+TODO: 
+  Avslutt med stationkeep.
+  Implement random path generator to unsearched cells
+  Implement interface to change between stationKeeping and GoTo
+  Test OMPL disable
+  Ny FishSearch planner type i IMC
+  Sjekk om hover fungerer som stationKeep, og evt. hvor radius settes
+
+Consider:
+  Run fishsearch update at XY_NEAR or something
+  Use timer instead of counter to set wait time for stationkeep. This includes planningtime.
+  For debugging, make update to fishsearcheffort to see weighting distribution.
+  Some way to omit cells that are deemed unreachable, could remove them if ompl fails repeatedly.
+  Run OMPL in separate thread/process to avoid blocking sending Reference messages
+
   */
   //! @author Nikolai Lauvås
   namespace Search
@@ -114,6 +129,12 @@ namespace Control
 
         //! Variable to enable/disable the use of OMPL path finder between cells
         bool useOMPL;
+
+        //! The maxmum planning time allowed for OMPL planning
+        float OMPLmaxPlanningTime;
+
+        //! Acceptable waiting radius when a new location is searched
+        float waitingRadius;
       };
 
       struct Task: public DUNE::Tasks::Periodic
@@ -154,11 +175,11 @@ namespace Control
         //! Parsed Geometry type of grid from last received IMC::PlanProbSpec.
         unsigned m_gridType;
         //! Parsed planner type from last received IMC::PlanProbSpec
-        unsigned m_planner = 0;
+        unsigned m_planner;
         //! Parsed distance weight from last received IMC::PlanProbSpec. Used in planner.
-        float m_distanceWeight = 0;
+        float m_distanceWeight;
         //! Parsed azimuth weight from last received IMC::PlanProbSpec. Used in planner.
-        float m_azimuthWeight = 0;
+        float m_azimuthWeight;
 
         bool m_reuseMap;
 
@@ -175,6 +196,14 @@ namespace Control
         int m_currentCell;
         //! Counter used to enable waiting at each cell 
         unsigned m_hooverStartRunCount;
+        //! Stores waitingSteps parsed from IMC::PlanProbSpec if given in customParameters, else takes from arguments
+        unsigned m_waitingSteps;
+
+        //! Stores OMPLmaxPlanningTime parsed from IMC::PlanProbSpec if given in customParameters, else takes from arguments
+        float m_OMPLmaxPlanningTime;
+
+        //! Variable to enable/disable the use of OMPL path finder between cells
+        bool m_useOMPL;
 
         //! Constructor.
         //! @param[in] name task name.
@@ -197,6 +226,10 @@ namespace Control
           param("StationKeep steps", m_args.waitingSteps)
           .defaultValue("14")
           .description("Passive listening time at each cell, calculated by multiplying with task execution time");
+
+          param("StationKeep Radius", m_args.waitingRadius)
+          .defaultValue("60")
+          .description("Passive listening radius during waiting");
 
           param("Tag Max Transmission Interval", m_args.tagMaxTransmissionInterval)
           .defaultValue("90")
@@ -234,6 +267,11 @@ namespace Control
           .defaultValue("true")
           .description("Toggle if the OMPL path finder should be used to verify/create safe paths between cells when searching.");
 
+          param("OMPL Max Time", m_args.OMPLmaxPlanningTime)
+          .defaultValue("2.0")
+          .description("Time cutoff for OMPL planner.");
+
+
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
           bind<IMC::EstimatedState>(this);
           bind<IMC::PlanProbSpec>(this);
@@ -257,7 +295,15 @@ namespace Control
             for(auto iter : monitoredVehicles) {
                 inf("%u", iter);
             }
-          }        
+          }
+
+          if(paramChanged(m_args.useOMPL)) {
+            m_useOMPL = m_args.useOMPL;
+          }
+
+          if(paramChanged(m_args.OMPLmaxPlanningTime)) {
+            m_OMPLmaxPlanningTime = m_args.OMPLmaxPlanningTime;
+          }
         }
 
         //! Reserve entity identifiers.
@@ -462,7 +508,7 @@ namespace Control
           if (msg->getDestination() != getSystemId())
             return;
 
-          // Only proceed for feasible path problems
+          // Only proceed for coverage problems
           if (msg->problem_type != IMC::PlanProbSpec::TypeEnum::PPT_coverage)
             return;
 
@@ -481,60 +527,122 @@ namespace Control
               t = [0.0,inf), Max planning time on OMPL
           */
 
-         m_reuseMap = false;
+          
           DUNE::Utils::TupleList custom = DUNE::Utils::TupleList(msg->custom);
           std::map<std::string, std::string> custommap = custom.getMapReversed();
 
-          auto parameterit = custommap.find(std::string("a"));
+          //auto parameterit = custommap.find(std::string("a"));
 
-          parameterit = custommap.find(std::string("gg"));
+ //gg = Grid geometry
+          auto parameterit = custommap.find(std::string("gg"));
           if (parameterit != custommap.end()) {
-          spew("Found gg=%s", parameterit->second.c_str());
-          try{
+            spew("Found gg=%s", parameterit->second.c_str());
+            try{
               m_gridType = std::stoul(parameterit->second);
-          } catch(...) {
+            } catch(...) {
               err("Parameter \'gg\' not unsigned");
+            }
+          } else {
+            m_gridType = m_args.gridType;
           }
-          }
-
+// gs = Grid geometry edge size
           parameterit = custommap.find(std::string("gs"));
           if (parameterit != custommap.end()) {
-          spew("Found gs=%s", parameterit->second.c_str());
-          try{
+            spew("Found gs=%s", parameterit->second.c_str());
+            try{
               m_gridSize = std::stof(parameterit->second);
-          } catch(...) {
+            } catch(...) {
               err("Parameter \'gs\' not float");
+            }
+          } else {
+            m_gridSize = m_args.gridSize;
           }
-          }
+// p = Planner
           parameterit = custommap.find(std::string("p"));
           if (parameterit != custommap.end()) {
-          try{
+            try{
               m_planner = std::stoi(parameterit->second);
               spew("Found p=%d", m_planner);
-          } catch(...) {
+            } catch(...) {
               err("Parameter \'p\' not unsigned");
+            }
+          } else {
+            m_planner = 0;
           }
-          }
-
+// paw = Planner azimuth weight
           parameterit = custommap.find(std::string("paw"));
           if (parameterit != custommap.end()) {
-          spew("Found paw=%s", parameterit->second.c_str());
-          try{
+            spew("Found paw=%s", parameterit->second.c_str());
+            try{
               m_azimuthWeight = std::stof(parameterit->second);
-          } catch(...) {
+            } catch(...) {
               err("Parameter \'paw\' not unsigned");
+            }
+          } else {
+            m_azimuthWeight = 0.0;
           }
-          }
-
+// pdw = Planner distance weight
           parameterit = custommap.find(std::string("pdw"));
           if (parameterit != custommap.end()) {
-          spew("Found pdw=%s", parameterit->second.c_str());
-          try{
+            spew("Found pdw=%s", parameterit->second.c_str());
+            try{
               m_distanceWeight = std::stof(parameterit->second);
-          } catch(...) {
+            } catch(...) {
               err("Parameter \'pdw\' not unsigned");
+            }
+          } else {
+            m_distanceWeight = 0.0;
           }
+// sk = Station keep steps
+          parameterit = custommap.find(std::string("sk"));
+          if (parameterit != custommap.end()) {
+            spew("Found sk=%s", parameterit->second.c_str());
+            try{
+              m_waitingSteps = std::stoi(parameterit->second);
+            } catch(...) {
+              err("Parameter \'sk\' not unsigned");
+            }
+          } else {
+            m_waitingSteps = m_args.waitingSteps;
           }
+// r = reuse previous map
+          parameterit = custommap.find(std::string("r"));
+          if (parameterit != custommap.end()) {
+            spew("Found r=%s", parameterit->second.c_str());
+            try{
+              m_reuseMap = (std::stoi(parameterit->second)) ? true : false;
+            } catch(...) {
+              err("Parameter \'r\' not unsigned");
+            }
+          } else {
+            m_reuseMap = false;
+          }
+// t = [0.0,inf), Max planning time on OMPL
+          parameterit = custommap.find(std::string("t"));
+          if (parameterit != custommap.end()) {
+            spew("Found t=%s", parameterit->second.c_str());
+            try{
+              m_OMPLmaxPlanningTime = std::stof(parameterit->second);
+            } catch(...) {
+              err("Parameter \'t\' not unsigned");
+            }
+          } else {
+            m_OMPLmaxPlanningTime = m_args.OMPLmaxPlanningTime;
+          }
+// o = Use OMPL or go direct to next cell
+          parameterit = custommap.find(std::string("o"));
+          if (parameterit != custommap.end()) {
+            spew("Found o=%s", parameterit->second.c_str());
+            try{
+              m_useOMPL = (std::stoi(parameterit->second)) ? true : false;
+            } catch(...) {
+              err("Parameter \'o\' not unsigned");
+            }
+          } else {
+            m_useOMPL = m_args.useOMPL;
+          }
+
+
 
           double planningBounds[4];
           // Convert initial position from WGS-84 radians to EPSG32632
@@ -584,6 +692,11 @@ namespace Control
                 spew("Polygon too small.");
                 return;
             }
+
+          // Create prior distribution from land distance
+          m_searchGridCoverage->setGridMetricFromLandDistance();
+          m_searchGridCoverage->normalizeMetric(true);
+          m_searchGridCoverage->makeMetricSumToOne("weight");
           }
 
 
@@ -599,16 +712,8 @@ namespace Control
           spew("OMPL clear sucess");
           m_OMPLsetup = std::make_unique<og::SimpleSetup>(OMPLintegrationENCGIS::createSetup(planningBounds[1], planningBounds[0], planningBounds[3], planningBounds[2], pointCheck.get(), lineCheck.get()));
           spew("OMPL init sucess 1");
-          //OMPLintegrationENCGIS::setStartAndGoalStates(setup, start_easting, start_northing, end_easting, end_northing);
-          //m_GridPlanner->setmaxPlaningTime(2.0);
-
 #endif
-          spew("OMPL init sucess");
-
-          // Create prior distribution from land distance
-          m_searchGridCoverage->setGridMetricFromLandDistance();
-          m_searchGridCoverage->normalizeMetric(true);
-          m_searchGridCoverage->makeMetricSumToOne("weight");
+ 
 
 
           m_currentCell = m_searchGrid->getClosestCell(start_easting, start_northing);
@@ -620,6 +725,7 @@ namespace Control
           m_GridPlanner->setdistributionWeight(1);
           m_GridPlanner->setazimuthWeight(m_azimuthWeight);
           m_GridPlanner->setdistanceWeight(m_distanceWeight);
+          //m_GridPlanner->setmaxPlaningTime(2.0);
 
 
           // Cumulative search effort tracking setup
@@ -699,7 +805,7 @@ namespace Control
         }
 
 #if SEARCHGRID_USEOPP_OMPL
-        if(m_args.useOMPL && nextCell != 0) {
+        if(m_useOMPL && nextCell != 0) {
           // Start path from current location
           std::pair<double,double> start;
           m_con->transformSRID(Math::Angles::degrees(m_esta.lon), Math::Angles::degrees(m_esta.lat), 4326, start.first, start.second, 32632);
@@ -707,7 +813,7 @@ namespace Control
           auto end = m_searchGrid->getCellLocation(nextCell,m_searchGrid->getSRID());
 
           OMPLintegrationENCGIS::setStartAndGoalStates(*m_OMPLsetup, start.first, start.second, end.first, end.second);
-          og::PathGeometric states = OMPLintegrationENCGIS::findPath(*m_OMPLsetup, m_GridPlanner->getmaxPlaningTime(), OMPLintegrationENCGIS::configurations_t::C_KBIT);
+          og::PathGeometric states = OMPLintegrationENCGIS::findPath(*m_OMPLsetup, m_OMPLmaxPlanningTime, OMPLintegrationENCGIS::configurations_t::C_KBIT);
           if (states.getStateCount()) {
               m_OMPLpath = OMPLforDUNE::pathToVector(states);
               m_OMPLpath = m_con->transformSRIDVector(m_OMPLpath, 32632,4326);
@@ -786,7 +892,7 @@ namespace Control
                       requestDeactivation();
                       return;
                     }
-                    m_hooverStartRunCount = m_args.waitingSteps;
+                    m_hooverStartRunCount = m_waitingSteps;
                   }
                 } 
               break;
@@ -800,7 +906,7 @@ namespace Control
               break;
             }
             dispatch(m_cur_ref);
-            inf("Time Update");
+            //inf("Time Update");
           }
         }
       };
