@@ -180,11 +180,31 @@ namespace ENCGIS {
     }
 
     int SearchGridPlanner::getGlobalOptimalCell(int cell, double azimuth, std::string metric) {
+/*
         std::string query = "select gid from (select gid,"
         "max(" + metric + ""
         "- " + std::to_string(azimuthWeight) + "*ABS( " + std::to_string(azimuth) + "-azimuth((select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = sg.gid)))"
         "- " + std::to_string(distanceWeight) + "*distance((select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = sg.gid))) as wgt "
         "from " + grid->getdbGridTable() + " as sg where " + metric + " between -0.1 and 1.1)";
+*/
+std::string query = 
+"select gid, max(w-" + std::to_string(azimuthWeight) + "/pi()*(abs((a-floor(a/n)*n)-PI()))-" + std::to_string(distanceWeight) + "*d) from ("
+ 	"select geometry,gid,"
+	"" + metric + "/(select max(" + metric + ") from " + grid->getdbGridTable() + ") as w"
+	",( (" + std::to_string(azimuth) + "-azimuth((select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = sg.gid))) + PI())"
+	"as a"
+	",distance((select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = sg.gid))/"
+	"(select max(draw) from ("
+	"select distance((select centroid(geometry) from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "), (select centroid(geometry) from " + grid->getdbGridTable() + " where gid = dg.gid)) as draw "
+	"from " + grid->getdbGridTable() + " as dg"
+	"))"
+  	"as d,"
+ 	"2*PI() as n "
+ 	"from " + grid->getdbGridTable() + " as sg where w>0.0"
+")";
+
+
+
         std::cout << query << std::endl;
         int errors = 0;
         sqlite3_stmt* m_handle;
