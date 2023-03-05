@@ -1,0 +1,49 @@
+          {////////////////////////////////////////////////////
+
+static void ssa(sqlite3_context *context, int argc, sqlite3_value **argv)
+{
+    if (argc == 1) {
+        double angle = sqlite3_value_double(argv[0]);
+        //angle = std::fmod( angle + M_PI, 2 * M_PI ) - M_PI; 
+        angle = angle + M_PI;
+        const double tau = 2*M_PI;
+        angle = (angle - std::floor(angle/tau)*tau) - M_PI;
+        sqlite3_result_double(context, angle);
+        return;
+    }
+    sqlite3_result_null(context);
+}
+
+            sqlite3_create_function(
+            m_con->db,
+            "SSA",
+            1,
+            SQLITE_UTF8|SQLITE_DETERMINISTIC,
+            nullptr,
+            &ssa,
+            nullptr,
+            nullptr
+            );
+            std::string query = "select SSA(-2*PI()), SSA(5*PI())";
+
+            int errors = 0;
+            sqlite3_stmt* m_sqlhandle;
+
+            if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_sqlhandle, 0) != SQLITE_OK)
+            {
+                errors++;
+            }
+            int m_idx = 0;
+            // Execute
+            /*int rc = */sqlite3_step(m_sqlhandle);
+            double minX = sqlite3_column_double(m_sqlhandle, m_idx++);
+            double minY = sqlite3_column_double(m_sqlhandle, m_idx++);
+            inf("sqlitetest: '%f' , '%f'", minX, minY);
+            // Teardown
+            if (m_sqlhandle) {
+              sqlite3_finalize(m_sqlhandle);
+            }
+
+
+
+          }///////////////////////////////////////////////////

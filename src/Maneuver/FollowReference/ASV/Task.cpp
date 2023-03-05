@@ -40,7 +40,6 @@ namespace Maneuver
 
       struct Arguments
       {
-        float vertical_tolerance;
         float horizontal_tolerance;
         float loitering_radius;
         float default_speed;
@@ -96,13 +95,8 @@ namespace Maneuver
           .defaultValue("15.0").units(Units::Meter)
           .description("Minimum distance required to consider that the vehicle has arrived at the reference (XY)");
 
-          param("Vertical Tolerance", m_args.vertical_tolerance)
-          .defaultValue("2.0")
-          .units(Units::Meter)
-          .description("Minimum distance required to consider that the vehicle has arrived at the reference (Z)");
-
           param("Default Speed", m_args.default_speed)
-          .defaultValue("50")
+          .defaultValue("2")
           .description("Speed to use in case no speed is given by reference source.");
 
           param("Default Speed Units", m_args.default_speed_units)

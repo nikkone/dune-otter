@@ -47,6 +47,12 @@
 
 namespace Control
 {
+/* TODO: 
+  Check for and implement SpatialIndex amd range limits for all operations
+  No termination in presearch global
+    Check if grid creation can be made more efficent by first taking interception between search area and navigable, then create tessellation. Reduces the amount of cells needed for intersection checking
+  */
+  //! @author Nikolai Lauvås
     namespace Search
     {
         namespace Greedy
@@ -194,6 +200,7 @@ namespace Control
                         EWKT += std::to_string(DUNE::Math::Angles::degrees((*itr)->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*itr)->lat)) + ",";
                     }
                     EWKT += std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lon)) + " " + std::to_string(DUNE::Math::Angles::degrees((*(polygon.begin()))->lat)) + "))";
+                    spew("%s", EWKT.c_str());
                     return EWKT;
                 }
 
@@ -311,17 +318,18 @@ namespace Control
                         spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[2], planningBounds[1], planningBounds[3]);
                         m_con->transformSRID(Math::Angles::degrees((*itr)->lon), Math::Angles::degrees((*itr)->lat), 4326, planningBounds[2], planningBounds[3], 32632);
                         m_searchGrid->createGrid(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
-                        m_searchGrid->setGridMetricFromLandDistance();
                     } else if(msg->area.size() > 2) {
                         m_searchGrid->deleteGrid();
                         m_searchGrid->createGrid(polygonToEWKT(msg->area), m_gridSize, ENCGIS::SearchGrid::gridtypes_t(m_gridType));
                         debug("Grid Created from EKWT");
-                        m_searchGrid->setGridMetricFromLandDistance();
-                        spew("Weights of grid set");
+
                     } else {
+
                         spew("Polygon too small.");
                         return;
                     }
+                    m_searchGrid->setGridMetricFromLandDistance();
+                    spew("Weights of grid set");
                     m_searchGrid->normalizeMetric(true);
 
                     auto start = std::chrono::high_resolution_clock::now(); // Start of path computation
@@ -329,7 +337,6 @@ namespace Control
                     auto durationg = std::chrono::duration_cast<std::chrono::microseconds>(start - startg);
                     std::cout << "Grid found in: "
                     << durationg.count() << " microseconds" << std::endl;
-                    // Start time for computation measurments.
 
 
 #if SEARCHGRID_USEOPP_OMPL
@@ -382,7 +389,16 @@ namespace Control
                     case 7:
                         spew("Using calculateSearchPathGlobal with OMPL");
                         planVec32632 = m_GridPlanner->calculateSearchPathGlobal(setup);
-                        break;                  
+                        break;
+                    case 8:
+                        spew("Using calculateRandomLocalSearchPath with OMPL");
+                        planVec32632 = m_GridPlanner->calculateRandomLocalSearchPath(setup);
+                        break; 
+                    case 9:
+                        spew("Using calculateRandomSearchPathGlobal with OMPL");
+                        planVec32632 = m_GridPlanner->calculateRandomSearchPathGlobal(setup);
+                        break; 
+
                     default:
                         break;
                         return;
