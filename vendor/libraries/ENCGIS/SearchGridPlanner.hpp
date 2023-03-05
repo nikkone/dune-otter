@@ -104,6 +104,8 @@ namespace ENCGIS
         /// @param startCell The first cell to be visited
         /// @return A vector of describing the cell visitation order
         std::vector<std::pair<double, double>> calculateSearchPath(og::SimpleSetup &setup);
+
+        std::vector<std::pair<double, double>> calculateRandomLocalSearchPath(og::SimpleSetup &setup);
 #endif
 
         /// @brief Uses a greedy algorithm to create a path covering all grid cells.
@@ -153,6 +155,17 @@ namespace ENCGIS
         /// @return 
         int getGlobalOptimalCell(int cell, double azimuth, std::string metric = "weight");
 
+
+
+        /// @brief Get random neighbor for use in paper to demonstrate the benefit of the other planners
+        /// @param cell The cell id for which to check the neighbors
+        /// @return A random neighbouring cell
+        int getLocalRandomNeighbour(int cell, std::string metric = "weight");
+
+        /// @brief Get random cell from global for use in paper to demonstrate the benefit of the other planners
+        /// @return A random unsearched cell
+        int getGlobalRandomCell(std::string metric = "weight");
+
 #if SEARCHGRID_USEOPP_OMPL
         /// @brief 
         /// @param startCell 
@@ -162,6 +175,8 @@ namespace ENCGIS
         /// @param distanceWeight 
         /// @return 
         std::vector<std::pair<double, double>> calculateSearchPathGlobal(og::SimpleSetup &setup);
+
+        std::vector<std::pair<double, double>> calculateRandomSearchPathGlobal(og::SimpleSetup &setup);
 #endif
         /// @brief 
         /// @param startCell 

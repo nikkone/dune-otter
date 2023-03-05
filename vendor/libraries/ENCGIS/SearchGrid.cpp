@@ -40,6 +40,11 @@ namespace ENCGIS {
         return createGrid(EWKTsquare, gridsize, gridType, spatialIndex);
     }
 
+
+
+
+
+
     bool SearchGrid::createGrid(const std::string &EWKTpolygon, unsigned gridsize, gridtypes_t gridType, bool spatialIndex) {
 
         std::string create = "create table " + dbGridTable + "raw as select " + gridTypeToString(gridType) + "Grid(transform("
@@ -50,15 +55,33 @@ namespace ENCGIS {
         std::string initMetrics = "update " + dbGridTable + "raw SET effort = 0.0, weight = 0.0";
         std::string recoverMultiTable = "SELECT RecoverGeometryColumn('" + dbGridTable + "raw', 'geometry', " + std::to_string(SRID) + ", 'MULTIPOLYGON', 'XY')";
 
-        std::string polygonFromMultipolygon = "SELECT ElementaryGeometries('" + dbGridTable + "raw', 'geometry', '" + dbGridTable + "','gid','delme') as geom FROM " + dbGridTable + "raw";
+        std::string polygonFromMultipolygon = "SELECT ElementaryGeometries('" + dbGridTable + "raw', 'geometry', '" + dbGridTable + "temp','gid','delme') as geom FROM " + dbGridTable + "raw";
 
-        std::string removeDelme= "ALTER TABLE " + dbGridTable + " DROP COLUMN delme";
+        std::string removeDelme= "ALTER TABLE " + dbGridTable + "temp DROP COLUMN delme";
 
-        std::string deleteLandCells = "delete from " + dbGridTable + " where gid in (select " + dbGridTable + ".gid from " + dbGridTable + ", (select geometry from " + obstacleTabledb + "." + obstacleTable + " where " + obstacleTabledb + "." + obstacleTable + ".ROWID IN ("
+        std::string deleteLandCells = "delete from " + dbGridTable + "temp where gid in (select " + dbGridTable + "temp.gid from " + dbGridTable + "temp, (select geometry from " + obstacleTabledb + "." + obstacleTable + " where " + obstacleTabledb + "." + obstacleTable + ".ROWID IN ("
     "SELECT ROWID FROM SpatialIndex "
     "WHERE f_table_name = 'DB=" + obstacleTabledb + "." + obstacleTable + "' AND "
-        "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) as land where intersects(" + dbGridTable + ".geometry, land.geometry))";
-        //std::cout << create << std::endl;
+        "search_frame = (select GetLayerExtent('" + dbGridTable + "temp')))) as land where intersects(" + dbGridTable + "temp.geometry, land.geometry))";
+
+
+        std::string createCentroidTable = 
+        "CREATE TABLE " + dbGridTable + " ("
+            "\"gid\"	INTEGER,"
+            "\"effort\"	REAL,"
+            "\"weight\"	REAL,"
+            "\"geometry\"	POLYGON, "
+            "\"center\"	POINT,"
+            "PRIMARY KEY(\"gid\" AUTOINCREMENT)"
+        ")";
+        std::string populateCentroidTable = "insert into " + dbGridTable + " select *, centroid(geometry) as center from " + dbGridTable + "temp;";
+        std::string recoverCentroidTable = "SELECT RecoverGeometryColumn('" + dbGridTable + "', 'center', " + std::to_string(SRID) + ", 'POINT', 'XY')";
+        std::string recoverGeometryTable = "SELECT RecoverGeometryColumn('" + dbGridTable + "', 'geometry', " + std::to_string(SRID) + ", 'POLYGON', 'XY')";
+        //std::string dropTempTable = ;
+        std::string createCentroidTableIndex = "select createSpatialIndex('" + dbGridTable + "','center')";
+
+
+        //std::cout << polygonFromMultipolygon << std::endl;
         std::string indexQuery = "SELECT CreateSpatialIndex('" + dbGridTable + "', 'geometry');";
 
         m_con->runNoOutputQuery(create);
@@ -68,10 +91,17 @@ namespace ENCGIS {
         m_con->runNoOutputQuery(recoverMultiTable);
         m_con->runNoOutputQuery(polygonFromMultipolygon);
         m_con->runNoOutputQuery(removeDelme);
+        m_con->runNoOutputQuery(deleteLandCells);
 
-        if(spatialIndex)
-            m_con->runNoOutputQuery(indexQuery);
-        return m_con->runNoOutputQuery(deleteLandCells);
+        m_con->runNoOutputQuery(createCentroidTable);
+        m_con->runNoOutputQuery(populateCentroidTable);
+        m_con->runNoOutputQuery(recoverCentroidTable);
+        bool ret = m_con->runNoOutputQuery(recoverGeometryTable);
+        if(spatialIndex) {
+            m_con->runNoOutputQuery(createCentroidTableIndex);
+            ret = m_con->runNoOutputQuery(indexQuery);
+        }
+        return ret;
     }
 
     bool SearchGrid::setGridMetricFromLandDistance(std::string metric) {
@@ -85,7 +115,7 @@ namespace ENCGIS {
         " ROWID IN ("
         "SELECT ROWID FROM SpatialIndex "
         "WHERE f_table_name = 'DB=" + obstacleTabledb + "." + obstacleTable + "' AND "
-        "search_frame = (select GetLayerExtent('" + dbGridTable + "')))) group by gid,g ) where gid = gidsel and g = 13";
+        "search_frame = (select GetLayerExtent('" + dbGridTable + "', 'geometry')))) group by gid,g ) where gid = gidsel and g = 13";
         //std::cout << weights << std::endl;
         return m_con->runNoOutputQuery(weights);
     }
@@ -93,9 +123,11 @@ namespace ENCGIS {
     void SearchGrid::deleteGrid() {
         std::string deleteQuery = "select DropTable(NULL, '" + dbGridTable + "', TRUE)";
         std::string deleteQueryraw = "select DropTable(NULL, '" + dbGridTable + "raw', TRUE)";
-
+        std::string deleteQuerytemp = "select DropTable(NULL, '" + dbGridTable + "temp', TRUE)";
         m_con->runNoOutputQuery(deleteQuery);
         m_con->runNoOutputQuery(deleteQueryraw);
+        m_con->runNoOutputQuery(deleteQuerytemp);
+
     }
 
     std::vector<std::pair<double, double>> SearchGrid::locationsFromCells(const std::vector<int> &cells, unsigned outputSRID) {
@@ -151,7 +183,8 @@ namespace ENCGIS {
     }
 
     std::pair<double,double> SearchGrid::getCellLocation(int cell, unsigned outputSRID) {
-        std::string query = "select X(center), Y(center) from (select transform(centroid(geometry), " + std::to_string(outputSRID) + ") as center from " + dbGridTable + " where gid = " + std::to_string(cell) + ")";
+        //std::string query = "select X(center), Y(center) from (select transform(centroid(geometry), " + std::to_string(outputSRID) + ") as center from " + dbGridTable + " where gid = " + std::to_string(cell) + ")";
+        std::string query = "select X(center), Y(center) from (select transform(center, " + std::to_string(outputSRID) + ") as center from " + dbGridTable + " where gid = " + std::to_string(cell) + ")";
         int errors = 0;
         sqlite3_stmt* m_handle;
 
@@ -214,7 +247,7 @@ namespace ENCGIS {
     }
 
     double SearchGrid::getAzimuth(int cell1, int cell2) {
-        std::string query = " select azimuth((select centroid(geometry) from " + dbGridTable + " where gid = " + std::to_string(cell1) + "), (select centroid(geometry) from " + dbGridTable + " where gid = " + std::to_string(cell2) + "))";
+        std::string query = " select azimuth((select center from " + dbGridTable + " where gid = " + std::to_string(cell1) + "), (select center from " + dbGridTable + " where gid = " + std::to_string(cell2) + "))";
         int errors = 0;
         sqlite3_stmt* m_handle;
 
