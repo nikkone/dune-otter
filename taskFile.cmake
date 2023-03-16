@@ -50,8 +50,8 @@ dune_add_task(${PROJECT_SOURCE_DIR}/src Autonomy/TextActions/Task.cmake)
 
 dune_add_task(${PROJECT_SOURCE_DIR}/src Supervisors/AUV/LostComms/Task.cmake)
 
-dune_add_task(${PROJECT_SOURCE_DIR}/private/src SourceEstimators/MultipleReceiverEKF/Task.cmake)
-dune_add_task(${PROJECT_SOURCE_DIR}/private/src SourceEstimators/MultipleReceiverXKF/Task.cmake)
-dune_add_task(${PROJECT_SOURCE_DIR}/private/src SourceEstimators/MultipleReceivers/Task.cmake)
+#dune_add_task(${PROJECT_SOURCE_DIR}/private/src SourceEstimators/MultipleReceiverEKF/Task.cmake)
+#dune_add_task(${PROJECT_SOURCE_DIR}/private/src SourceEstimators/MultipleReceiverXKF/Task.cmake)
+#dune_add_task(${PROJECT_SOURCE_DIR}/private/src SourceEstimators/MultipleReceivers/Task.cmake)
 
 #dune_add_task(${PROJECT_SOURCE_DIR}/private/src Sensors/RemoteSensorSender/Task.cmake)
