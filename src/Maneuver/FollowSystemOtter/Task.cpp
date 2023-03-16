@@ -26,20 +26,19 @@
 //***************************************************************************
 // Author: Nikolai Lauvås (Based on the task created byPedro Calado)
 /* Main changes:
+Complete:
 Fixed orientation following for announce
-TODO: Closest safe spot generator
-Added Obstacle avoidance
-TODO: Added adaptive speed control
-TODO: Added collision avoidance with all IMC repporting vehicles
+Adaptive speed control
+Sjekk end condition og legg til taskStopp/abort/stop
+Bare send DesiredSpeed når desiredPathz har blitt sendt
+Closest safe spot generator
+Safe path generation
 
 TODO:
 Bedre replanning, f.eks hver gang en får announce
-
 Sjekk replanning i OMPL for å optimere. 
+Added collision avoidance with selected IMC repporting vehicles
 
-Complete:
-Sjekk end condition og legg til taskStopp/abort/stop
-Bare send DesiredSpeed når desiredPathz har blitt sendt
 
 */
 //***************************************************************************
@@ -70,6 +69,9 @@ namespace Maneuver
       std::string dbNavigableLayerName;
       //! Innavigable Layer/table Name from encDBpath
       std::string dbInnavigableLayerName;
+
+      //! The names of otherVehicles participating in the search operation. Used to include effort of these vehicles.
+      std::vector<std::string> otherVehicles;
 
       //! PID gains for mps controller.
       std::vector<float> mps_pid_gains;
@@ -143,6 +145,10 @@ namespace Maneuver
       double m_offset_target_lon;
       //! Set if a PlanControlState message has been received
       bool m_has_pcs;
+
+      bool distanceLimitBreached;
+      //! Source identifiers for the monitiored vehicles
+      std::map<uint16_t, std::tuple<fp64_t, fp64_t, DUNE::Time::Delta>> monitoredVehicles;
 
       //! the last Clock::get() when the pcs was received
       Counter<double> m_last_pcs;
@@ -245,6 +251,9 @@ namespace Maneuver
         .units(Units::Second)
         .description("Minimum time to wait between speed updates");
 
+        param("Other Vehicles", m_args.otherVehicles)
+        .description("The source/vehicle names of other entities in the system.")
+        .defaultValue("ntnu-otter-03");
 
         bindToManeuver<Task, IMC::FollowSystem>();
         //bind<IMC::RemoteState>(this);
@@ -271,6 +280,18 @@ namespace Maneuver
         }
         if (paramChanged(m_args.mps_pid_max_int)) {
           m_mps_pid.setIntegralLimits(m_args.mps_pid_max_int);
+        }
+
+        if(paramChanged(m_args.otherVehicles)) {
+          monitoredVehicles.clear();
+          for(auto iter : m_args.otherVehicles) {
+              //monitoredVehicles.push_back({resolveSystemName(iter)});
+              monitoredVehicles[resolveSystemName(iter)] = std::tuple<fp64_t, fp64_t, DUNE::Time::Delta>{0.0,0.0,DUNE::Time::Delta()};
+          }
+
+          //for(auto iter : monitoredVehicles) {
+          //    inf("%u", iter);
+          //}
         }
 
         m_last_pcs.setTop(3); // TODO: Parameter
@@ -345,6 +366,16 @@ namespace Maneuver
           m_estate = *msg;
           m_has_estimated_state = true;
 
+          if(checkDistanceToMonitoredVehicles()) {
+            spew("Distance Limit Violated, disabling movement");
+            enableMovement(false);
+            m_path_to_target.clear();
+            distanceLimitBreached = true;
+            return;
+          } else {
+            distanceLimitBreached = false;
+          }
+          // Speed PID update
           if(!m_last_pcs.overflow() && m_has_pcs) { // Only update speed pid when plan control is responsive
             double tstep = m_delta.check();
             if(m_args.speed_update_ts_min < tstep) {
@@ -384,8 +415,21 @@ namespace Maneuver
       consume(const IMC::Announce* msg)
       {
         // Not the vehicle we are following or the announce method is inactive
-        if (msg->getSource() != m_maneuver.system || !m_args.announce_active)
+        if (msg->getSource() != m_maneuver.system || !m_args.announce_active) {
+          if(msg->getSource() != getSystemId()) {
+            if(!monitoredVehicles.empty()) {
+              auto current = monitoredVehicles.find(msg->getSource());
+              if( current != monitoredVehicles.end()) {
+                // Add position to list, then check for collisions in EstimatedState
+                std::get<0>(current->second) = msg->lat;
+                std::get<1>(current->second) = msg->lon; 
+                std::get<2>(current->second).reset(); 
+              }
+            }
+          }
           return;
+        }
+          
 
         // update the variable last update
         m_last_update.reset();
@@ -456,7 +500,9 @@ namespace Maneuver
         // update "last" variables
         m_last_known_lat = msg->lat;
         m_last_known_lon = msg->lon;
-
+          if(distanceLimitBreached) {
+            return;
+          }
         // Only enable movement when distance to offset target pos is sufficiently large TODO: Parameter
         if(DUNE::Coordinates::WGS84::distance(m_estate.lat, m_estate.lon,0.0, m_offset_target_lat, m_offset_target_lon,0.0) > 10) {
           enableMovement(true);
@@ -656,6 +702,21 @@ namespace Maneuver
 
         return result;
       }
+
+      bool checkDistanceToMonitoredVehicles() {
+        for(auto iter : monitoredVehicles) {
+          // Check if timestamp is recent
+          if(std::get<2>(iter.second).getDelta() > 30.0) {
+            continue;
+          }
+          // Check if distance threashold too large
+          if(!checkSafety(std::get<0>(iter.second), std::get<1>(iter.second))) {
+            return true; // Distance limit violated
+          }
+        }
+        return false; // No distance limits violated
+      }
+
 
       //! Function to check if the vehicle is getting near to the next waypoint
       void
