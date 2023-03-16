@@ -24,18 +24,23 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Nikolai Lauvås (Based on the Pedro Calado)
-/* Changes:
+// Author: Nikolai Lauvås (Based on the task created byPedro Calado)
+/* Main changes:
 Fixed orientation following for announce
 TODO: Closest safe spot generator
-TODO: Added Obstacle avoidance
+Added Obstacle avoidance
 TODO: Added adaptive speed control
 TODO: Added collision avoidance with all IMC repporting vehicles
 
 TODO:
+Bedre replanning, f.eks hver gang en får announce
+
 Sjekk replanning i OMPL for å optimere. 
+
+Complete:
 Sjekk end condition og legg til taskStopp/abort/stop
 Bare send DesiredSpeed når desiredPathz har blitt sendt
+
 */
 //***************************************************************************
 
@@ -66,6 +71,14 @@ namespace Maneuver
       //! Innavigable Layer/table Name from encDBpath
       std::string dbInnavigableLayerName;
 
+      //! PID gains for mps controller.
+      std::vector<float> mps_pid_gains;
+      double mps_pid_min;
+      double mps_pid_max;
+      double mps_pid_max_int;
+      //! Minimum time to wait between speed updates
+      double speed_update_ts_min;
+
       double loiter_radius;
       double timeout;
       bool announce_active;
@@ -93,7 +106,7 @@ namespace Maneuver
       std::unique_ptr<ompl::msg::OutputHandler> m_omplMsgOutputHandler;
 
       //! Speed PID taking distance from desired position and returns desired speed in mps
-      DiscretePID m_mps_pid;
+      DiscretePID m_mps_pid; // TODO: Change to USER::PID
       //! Time of last estimated state message used for speed controller.
       Delta m_replanDelta;
       //! Time of last estimated state message used for speed controller.
@@ -131,6 +144,8 @@ namespace Maneuver
       //! Set if a PlanControlState message has been received
       bool m_has_pcs;
 
+      //! the last Clock::get() when the pcs was received
+      Counter<double> m_last_pcs;
       bool m_target_moved;
       //! Path to the desired position calculated from the followed system
       std::vector<std::pair<double,double>> m_path_to_target;
@@ -163,10 +178,27 @@ namespace Maneuver
 
         param("Use Speed Controller", m_args.use_speed_PID)
         .defaultValue("False")
-        .description("Use PID control to controll speed accordingto distance from setpoint.");
+        .description("Use PID control to controll speed according to distance from setpoint.");
+
+        param("MPS PID Gains", m_args.mps_pid_gains)
+        .defaultValue("0.05, 0.0, 0.0")
+        .size(3)
+        .description("PID gains for MPS controller");
+
+        param("MPS PID Lower Limit", m_args.mps_pid_min)
+        .defaultValue("0.4")
+        .description("Use PID control to controll speed according to distance from setpoint.");
+
+        param("MPS PID Upper Limit", m_args.mps_pid_max)
+        .defaultValue("2.2")
+        .description("Use PID control to controll speed according to distance from setpoint.");
+
+        param("MPS PID Integral Limit", m_args.mps_pid_max_int)
+        .defaultValue("1")
+        .description("Use PID control to controll speed accordingt o distance from setpoint.");
 
         param("Use OMPL", m_args.use_ompl)
-        .defaultValue("True")
+        .defaultValue("False")
         .description("Use OMPL to plan safe ways towards desired position.");
 
         param("ENC DB Path", m_args.encDBpath)
@@ -208,12 +240,17 @@ namespace Maneuver
         .units(Units::Meter)
         .description("Minimum safe distance to target system");
 
+        param("Minimum Speed Update Interval", m_args.speed_update_ts_min)
+        .defaultValue("5.0")
+        .units(Units::Second)
+        .description("Minimum time to wait between speed updates");
+
+
         bindToManeuver<Task, IMC::FollowSystem>();
         //bind<IMC::RemoteState>(this);
-        bind<IMC::EstimatedState>(this, true); // consume even if inactive
+        bind<IMC::EstimatedState>(this); // Not needed so disabled(consume even if inactive)
         bind<IMC::Announce>(this);
       }
-
 
       void
       onUpdateParameters(void)
@@ -226,8 +263,18 @@ namespace Maneuver
           m_mps_pid.reset();
           m_delta.reset();
         }
-      }
+        if((paramChanged(m_args.mps_pid_min)) || (paramChanged(m_args.mps_pid_max))) {
+          m_mps_pid.setOutputLimits(m_args.mps_pid_min, m_args.mps_pid_max);
+        }
+        if (paramChanged(m_args.mps_pid_gains)) {
+          m_mps_pid.setGains(m_args.mps_pid_gains);
+        }
+        if (paramChanged(m_args.mps_pid_max_int)) {
+          m_mps_pid.setIntegralLimits(m_args.mps_pid_max_int);
+        }
 
+        m_last_pcs.setTop(3); // TODO: Parameter
+      }
 
       //! Acquire resources.
       void onResourceAcquisition(void)
@@ -297,21 +344,18 @@ namespace Maneuver
 
           m_estate = *msg;
           m_has_estimated_state = true;
-          //if(isActive() && IMC::SUNITS_METERS_PS == m_maneuver.speed_units && m_args.use_speed_PID) {
-          //  double tstep = m_delta.getDelta();
-//
-          //  float error = 20; 
-          //  m_desired_speed = m_maneuver.speed;//m_mps_pid.step(tstep, error);
-          //  IMC::DesiredSpeed speed_msg;
-          //  speed_msg.speed_units = IMC::SUNITS_METERS_PS;
-          //  speed_msg.value = m_desired_speed*1.1;
-          //  dispatch(speed_msg);
-          //}
-          //if(!isActive() && !m_path_to_target.empty()) {
-          //  enableMovement(true);
-          //  inf("EstimatedState transmitting DesiredPath");
-          //  dispatch(m_path);
-          //}
+
+          if(!m_last_pcs.overflow() && m_has_pcs) { // Only update speed pid when plan control is responsive
+            double tstep = m_delta.check();
+            if(m_args.speed_update_ts_min < tstep) {
+              double x,y;
+              WGS84::displacement(msg->lat, msg->lon, 0.0, m_offset_target_lat, m_offset_target_lon, 0.0, &x, &y);
+              double error = Math::norm((x - m_estate.x), (y - m_estate.y));
+              m_path.speed = m_mps_pid.step(tstep, error);
+              dispatch(m_path);
+              m_delta.reset();
+            }
+          }
         } else if (msg->getSource() == m_maneuver.system) {
           // Received EstimatedState of followed system
           inf("Received EstimatedState from followed system: Psi: %f", msg->psi);
@@ -329,7 +373,7 @@ namespace Maneuver
         // Initialize the variable last update to the beggining of the maneuver
         m_last_update.reset();
 
-        //m_desired_speed = m_maneuver.speed;
+        m_desired_speed = m_maneuver.speed;
 
         debug("loitering radius is %0.2f meters", m_args.loiter_radius);
         debug("offsets are %0.2f %0.2f %0.2f", m_maneuver.x, m_maneuver.y, m_maneuver.z);
@@ -354,6 +398,7 @@ namespace Maneuver
           m_last_known_lon = msg->lon;
           spew("Checksafety returned false, disabling movement");
           enableMovement(false);
+          m_path_to_target.clear();
           return;
         }
 
@@ -389,14 +434,16 @@ namespace Maneuver
         else // it is the first time announce is running
         {
           // compute lat and lon of the desired path
-          m_offset_target_lat = msg->lat;
-          m_offset_target_lon = msg->lon;
-          computeNEDOffsets(m_offset_target_lat, m_offset_target_lon, 0.0, 0.0);
+          //m_offset_target_lat = msg->lat;
+          //m_offset_target_lon = msg->lon;
+          //computeNEDOffsets(m_offset_target_lat, m_offset_target_lon, 0.0, 0.0);
           m_first_announce = false;
+          debug("Waiting for first announce");
+          return;
         }
 
         m_path.lradius = m_args.loiter_radius;
-        m_path.flags = IMC::DesiredPath::FL_START | IMC::DesiredPath::FL_NO_Z;
+        m_path.flags = IMC::DesiredPath::FL_NO_Z;
 
         if(IMC::SUNITS_METERS_PS == m_maneuver.speed_units && m_args.use_speed_PID) {
           m_path.speed = m_desired_speed;
@@ -415,8 +462,27 @@ namespace Maneuver
           enableMovement(true);
 
           if(m_args.use_ompl) { // TODO: Check straight line, and only start OMPL if collision detected
+            m_path.flags |= IMC::DesiredPath::FL_START;
             if(m_path_to_target.empty()) {
-              if(runOMPL(m_estate.lat, m_estate.lon, m_offset_target_lat, m_offset_target_lon)) {
+          ////////////////////////////////////////////////////
+
+
+        std::pair<double,double> utmpoint;
+        m_con->transformSRID(Math::Angles::degrees(m_offset_target_lon), Math::Angles::degrees(m_offset_target_lat), 4326, utmpoint.first, utmpoint.second, 32632);
+
+          if(findClosestSafePointUTM(utmpoint.first, utmpoint.second)) {
+            inf("Original Pos: %f, %f", m_offset_target_lat, m_offset_target_lon);
+            inf("Safe Pos: %f, %f", utmpoint.first, utmpoint.second);
+            spew("End Pointinlayer: %d", pointCheck->run(utmpoint.first, utmpoint.second));
+          } else {
+            err("findClosestSafePoint failed, probably DB error.");
+            return;
+          }
+        std::pair<double,double> utmstart;
+        m_con->transformSRID(Math::Angles::degrees(m_estate.lon), Math::Angles::degrees(m_estate.lat), 4326, utmstart.first, utmstart.second, 32632);
+
+          ////////////////////////////////////////////////////
+              if(runOMPLUTM(utmstart.first, utmstart.second, utmpoint.first, utmpoint.second)) {
                   //m_path_to_target.pop_back(); // Remove first waypoint (Current position)
                   m_path.start_lat = DUNE::Math::Angles::radians(m_path_to_target.back().second);
                   m_path.start_lon = DUNE::Math::Angles::radians(m_path_to_target.back().first);
@@ -439,12 +505,13 @@ namespace Maneuver
               war("New announce received before safe path to current point was finished. Recalculating at next waypoint.");
             }
           } else {
+            m_path.flags |= IMC::DesiredPath::FL_DIRECT;
             inf("Going direct (announce)");
             m_path.end_lat = m_offset_target_lat;
             m_path.end_lon = m_offset_target_lon;
             dispatch(m_path);
           }
-        } else{
+        } else {
           spew("Close to desired position, doing nothing");
         }
         //trace("system being pursued has heading: %0.2f and was displaced %0.2f", m_last_known_bearing, announced_displace);
@@ -455,37 +522,42 @@ namespace Maneuver
         //trace("offset: x %0.2f, %0.2f, %0.2f", offx, offy, m_estate.z);
       }
 
-      
+      //! Updates m_path_to_target with an OMPL generated path from start to end
+
       bool runOMPL(double startLat, double startLon, double endLat, double endLon) {
-        if(m_OMPLsetup) {
-          m_OMPLsetup.reset();
-        }
         // Convert EPSG4326 radians to EPSG32632 meters
         std::pair<double,double> start, end;
         m_con->transformSRID(Math::Angles::degrees(startLon), Math::Angles::degrees(startLat), 4326, start.first, start.second, 32632);
         m_con->transformSRID(Math::Angles::degrees(endLon), Math::Angles::degrees(endLat), 4326, end.first, end.second, 32632);
+        return runOMPLUTM(start.first, start.second, end.first, end.second);
+      }
 
-
+      bool runOMPLUTM(double startX, double startY, double endX, double endY) {
+        if(m_OMPLsetup) {
+          m_OMPLsetup.reset();
+        }
         double extension = 300;
-        double planningBounds[4] = {std::min(start.second, end.second)-extension, std::min(start.first, end.first)-extension, std::max(start.second, end.second)+extension, std::max(start.first, end.first)+extension};
+        double planningBounds[4] = {std::min(startY, endY)-extension, std::min(startX, endX)-extension, std::max(startY, endY)+extension, std::max(startX, endX)+extension};
         spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);        
 
         try {
           m_OMPLsetup = std::make_unique<og::SimpleSetup>(OMPLintegrationENCGIS::createSetup(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], pointCheck.get(), lineCheck.get()));
           inf("OMPL init sucess 1");
 
-          OMPLintegrationENCGIS::setStartAndGoalStates(*m_OMPLsetup, start.first, start.second, end.first, end.second);
+          std::cout << std::setprecision(12) << "Increase printpres to 12 from bitstars setprecision(5) call" << std::endl;
+          OMPLintegrationENCGIS::setStartAndGoalStates(*m_OMPLsetup, startX, startY, endX, endY);
 
           og::PathGeometric states = OMPLintegrationENCGIS::findPath(*m_OMPLsetup, m_args.OMPLmaxPlanningTime, OMPLintegrationENCGIS::configurations_t::C_KBIT);
           if (states.getStateCount()) {
               m_path_to_target = OMPLforDUNE::pathToVector(states);
               m_path_to_target = m_con->transformSRIDVector(m_path_to_target, 32632,4326);
               std::reverse(m_path_to_target.begin(), m_path_to_target.end()); // Reverse so that pop back will give the most recent post
-              inf("Created path from: %f, %f to %f ,%f", start.first, start.second, end.first, end.second);
+              inf("Created path from: %f, %f to %f ,%f", startX, startY, endX, endY);
               return true;
           } else {
-              err("Error finding path from: %f, %f to %f ,%f", start.first, start.second, end.first, end.second);
-              err("Pointinlayer: %d", pointCheck->run(start.second, start.first));
+              err("Error finding path from: %f, %f to %f ,%f", startX, startY, endX, endY);
+              spew("Start Pointinlayer: %d", pointCheck->run(startX, startY));
+              spew("End Pointinlayer: %d", pointCheck->run(endX, endY));
               return false; 
           }   
         } catch(...) {
@@ -495,6 +567,96 @@ namespace Maneuver
         return false;
       }
 
+      bool findClosestSafePointUTM(double &X, double &Y, double MBROffset = 200) {
+        //// Find Point on border between navigable and innavigable
+        std::stringstream ss;
+        ss.precision(12);
+        ss << "SELECT sam, X(cpnt), Y(cpnt) from(";
+        ss << "select";
+        ss << " CASE WHEN dist == 0.0";
+        ss << " THEN 1";
+        ss << " ELSE 0";
+        ss << " END AS sam, ";
+        ss << " CASE WHEN dist == 0.0";
+        ss << " THEN makepoint(" << X <<  "," << Y << ", 32632)";
+        ss << " ELSE closestPoint(geometry, makepoint(" << X <<  "," << Y << ", 32632))";
+        ss << " END AS cpnt ";
+        ss << "FROM (";
+        ss << "select *, min(distance(geometry, makepoint(" << X <<  "," << Y << ", 32632))) as dist from navigable where ROWID IN (";
+        ss << " SELECT ROWID";
+        ss << " FROM SpatialIndex";
+        ss << " WHERE f_table_name = 'navigable'";
+        ss << " AND search_frame = BuildMbr(" + std::to_string(X - MBROffset) + "," + std::to_string(Y - MBROffset) + ", " + std::to_string(X + MBROffset) + "," + std::to_string(Y + MBROffset) + "))";
+        ss << ")";
+        ss << ")";
+
+        auto x = ss.str();
+         inf("%s", x.c_str());
+        int errors = 0;
+        sqlite3_stmt* db_handle;
+
+        if (sqlite3_prepare_v2(m_con->db, x.c_str(), x.length(), &db_handle, 0) != SQLITE_OK)
+        {
+            errors++;
+        }
+        int m_idx = 0;
+        // Execute
+        /*int rc = */sqlite3_step(db_handle);
+        if(sqlite3_column_int(db_handle, m_idx++)) {
+          // Returned point same as given point, so no need to shift
+        } else {
+          // Returned point on intersection line between innavigable and navigable, therefore:
+          // Read intersection point
+          double tempX = sqlite3_column_double(db_handle, m_idx++);
+          double tempY = sqlite3_column_double(db_handle, m_idx++);
+          //// Shift the point slightly more into the navigable area to ensure no collision
+          double shiftDistance = 1.0;
+          ss.str(std::string());
+          ss << "SELECT X(pnt), Y(pnt) from(";
+          ss << "select transform(project(";
+          ss << "  transform(makepoint(" << tempX << ", " << tempY << ", 32632), 4326), ";
+          ss << "  " << shiftDistance << ", ";
+          ss << "  azimuth(";
+          ss << "    makepoint(" << X << ", " << Y << ", 32632), makepoint(" << tempX << ", " << tempY << ", 32632)";
+          ss << "  )";
+          ss << "), 32632) as pnt";
+          ss << ")";
+          x = ss.str();
+          inf("%s", x.c_str());
+          if (sqlite3_prepare_v2(m_con->db, x.c_str(), x.length(), &db_handle, 0) != SQLITE_OK)
+          {
+              errors++;
+          }
+          m_idx = 0;
+          // Execute
+          /*int rc = */sqlite3_step(db_handle);
+          X = sqlite3_column_double(db_handle, m_idx++);
+          Y = sqlite3_column_double(db_handle, m_idx++);
+        }
+
+        // Teardown
+        if (db_handle) {
+          sqlite3_finalize(db_handle);
+          return true;
+        } else {
+          return false;
+        }
+
+        return false;
+      }
+
+      //! May be prone to rounding errors
+      bool findClosestSafePoint(double &lat, double &lon, double MBROffset = 200) {
+        std::pair<double,double> utmpoint;
+        m_con->transformSRID(Math::Angles::degrees(lon), Math::Angles::degrees(lat), 4326, utmpoint.first, utmpoint.second, 32632);
+        bool result = findClosestSafePointUTM(utmpoint.first, utmpoint.second, MBROffset);
+        m_con->transformSRID(utmpoint.first, utmpoint.second, 32632, utmpoint.first, utmpoint.second, 4326);
+        lon = Math::Angles::radians(utmpoint.first);
+        lat = Math::Angles::radians(utmpoint.second);
+
+        return result;
+      }
+
       //! Function to check if the vehicle is getting near to the next waypoint
       void
       onPathControlState(const IMC::PathControlState* pcs)
@@ -502,6 +664,7 @@ namespace Maneuver
         
         static bool path_recalculated = false;
         m_has_pcs = true;
+        m_last_pcs.reset();
         if (pcs->flags & IMC::PathControlState::FL_NEAR) {
           if(m_path_to_target.empty()) {
             spew("m_path_to_target empty, disabling movement");
