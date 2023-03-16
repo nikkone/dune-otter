@@ -330,6 +330,7 @@ namespace MotionPlanners
           }
         } else {
           err("Could not find valid path within %f seconds.", maxPlaningTime);
+          err("Error finding path from: %f, %f to %f ,%f", start_easting, start_northing, end_easting, end_northing);
         }
       }
       
