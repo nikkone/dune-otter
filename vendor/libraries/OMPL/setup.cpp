@@ -108,12 +108,12 @@ namespace OMPLintegrationENCGIS
   void setStartAndGoalStates(ompl::geometric::SimpleSetup &ss,double startY, double startX, double goalY, double goalX) {
     //std::cout << startY << "," << startX << "," << goalY << "," << goalX << std::endl;
     // Create the start state
-    ompl::base::ScopedState<> start(ss.getSpaceInformation());
+    ompl::base::ScopedState<ob::RealVectorStateSpace> start(ss.getSpaceInformation());
     start[0]=startX;
     start[1]=startY;
 
     // Create the goal state
-    ompl::base::ScopedState<> goal(ss.getSpaceInformation());
+    ompl::base::ScopedState<ob::RealVectorStateSpace> goal(ss.getSpaceInformation());
     goal[0]=goalX;
     goal[1]=goalY;
 
@@ -161,6 +161,10 @@ namespace OMPLintegrationENCGIS
     if (state != nullptr)
     {
       const auto *rstate = static_cast<const ompl::base::RealVectorStateSpace::StateType *>(state);
+      //const auto *rlstate = state->as<ompl::base::RealVectorStateSpace::StateType>();
+      //std::cout << "Checking: " << rstate->values[1] << ", " << rstate->values[0] << std::endl;
+      //std::cout << std::setprecision(9) << "Checking2: " << rlstate->values[1] << ", " << rlstate->values[0] << std::endl;
+
       return qry->run(rstate->values[1], rstate->values[0]);
     }
     else
