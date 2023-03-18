@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2013-2021 Norwegian University of Science and Technology (NTNU)*
+// Copyright 2013-2023 Norwegian University of Science and Technology (NTNU)*
 // Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
