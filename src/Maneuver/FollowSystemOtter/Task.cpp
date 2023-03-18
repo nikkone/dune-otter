@@ -1,16 +1,8 @@
 //***************************************************************************
-// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
-// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
+// Copyright 2013-2023 Norwegian University of Science and Technology (NTNU)*
+// Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
-// This file is part of DUNE: Unified Navigation Environment.               *
-//                                                                          *
-// Commercial Licence Usage                                                 *
-// Licencees holding valid commercial DUNE licences may use this file in    *
-// accordance with the commercial licence agreement provided with the       *
-// Software or, alternatively, in accordance with the terms contained in a  *
-// written agreement between you and Faculdade de Engenharia da             *
-// Universidade do Porto. For licensing terms, conditions, and further      *
-// information contact lsts@fe.up.pt.                                       *
+// This file is an extension to the DUNE: Unified Navigation Environment.   *
 //                                                                          *
 // Modified European Union Public Licence - EUPL v.1.1 Usage                *
 // Alternatively, this file may be used under the terms of the Modified     *
@@ -24,7 +16,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Nikolai Lauvås (Based on the task created byPedro Calado)
+// Author: Nikolai Lauvås (Based on the task created by Pedro Calado)
 /* Main changes:
 Complete:
 Fixed orientation following for announce
@@ -33,12 +25,12 @@ Sjekk end condition og legg til taskStopp/abort/stop
 Bare send DesiredSpeed når desiredPathz har blitt sendt
 Closest safe spot generator
 Safe path generation
+Add collision avoidance with selected IMC repporting vehicles
 
 TODO:
 Bedre replanning, f.eks hver gang en får announce
 Sjekk replanning i OMPL for å optimere. 
-Added collision avoidance with selected IMC repporting vehicles
-
+Todo: Hvem skal forstsette i collision avoidance?
 
 */
 //***************************************************************************
@@ -266,18 +258,23 @@ namespace Maneuver
       {
         if (paramChanged(m_args.timeout))
           m_last_update.setTop(m_args.timeout);
+
         if (paramChanged(m_args.heading_cooldown))
           m_heading_timestamp.setTop(m_args.heading_cooldown);
+
         if (paramChanged(m_args.use_speed_PID)) {
           m_mps_pid.reset();
           m_delta.reset();
         }
+
         if((paramChanged(m_args.mps_pid_min)) || (paramChanged(m_args.mps_pid_max))) {
           m_mps_pid.setOutputLimits(m_args.mps_pid_min, m_args.mps_pid_max);
         }
+
         if (paramChanged(m_args.mps_pid_gains)) {
           m_mps_pid.setGains(m_args.mps_pid_gains);
         }
+
         if (paramChanged(m_args.mps_pid_max_int)) {
           m_mps_pid.setIntegralLimits(m_args.mps_pid_max_int);
         }
@@ -285,13 +282,12 @@ namespace Maneuver
         if(paramChanged(m_args.otherVehicles)) {
           monitoredVehicles.clear();
           for(auto iter : m_args.otherVehicles) {
-              //monitoredVehicles.push_back({resolveSystemName(iter)});
               monitoredVehicles[resolveSystemName(iter)] = std::tuple<fp64_t, fp64_t, DUNE::Time::Delta>{0.0,0.0,DUNE::Time::Delta()};
           }
+        }
 
-          //for(auto iter : monitoredVehicles) {
-          //    inf("%u", iter);
-          //}
+        if(paramChanged(m_args.loiter_radius)) {
+          m_path.lradius = m_args.loiter_radius;
         }
 
         m_last_pcs.setTop(3); // TODO: Parameter
@@ -486,7 +482,7 @@ namespace Maneuver
           return;
         }
 
-        m_path.lradius = m_args.loiter_radius;
+        
         m_path.flags = IMC::DesiredPath::FL_NO_Z;
 
         if(IMC::SUNITS_METERS_PS == m_maneuver.speed_units && m_args.use_speed_PID) {
