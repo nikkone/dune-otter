@@ -516,7 +516,7 @@ namespace Maneuver
               std::pair<double,double> utmend;
               m_con->transformSRID(Math::Angles::degrees(m_offset_target_lon), Math::Angles::degrees(m_offset_target_lat), 4326, utmend.first, utmend.second, 32632);
 
-                if(findClosestSafePointUTM(utmend.first, utmend.second)) {
+                if(m_con->findClosestSafePointUTM(utmend.first, utmend.second)) {
                   inf("Original Pos: %f, %f", m_offset_target_lat, m_offset_target_lon);
                   inf("Safe Pos: %f, %f", utmend.first, utmend.second);
                   spew("End Pointinlayer: %d", pointCheck->run(utmend.first, utmend.second));
@@ -529,7 +529,7 @@ namespace Maneuver
               m_con->transformSRID(Math::Angles::degrees(m_estate.lon), Math::Angles::degrees(m_estate.lat), 4326, utmstart.first, utmstart.second, 32632);
               if(!pointCheck->run(utmstart.first, utmstart.second)) {
                 war("Startpoint collison");
-                if(findClosestSafePointUTM(utmstart.first, utmstart.second)) {
+                if(m_con->findClosestSafePointUTM(utmstart.first, utmstart.second)) {
                   inf("Original Pos: %f, %f", m_offset_target_lat, m_offset_target_lon);
                   inf("Safe Pos: %f, %f", utmstart.first, utmstart.second);
                   spew("Start Pointinlayer: %d", pointCheck->run(utmstart.first, utmstart.second));
@@ -574,7 +574,7 @@ namespace Maneuver
       }
 
       //! Updates m_path_to_target with an OMPL generated path from start to end
-
+/*
       bool runOMPL(double startLat, double startLon, double endLat, double endLon) {
         // Convert EPSG4326 radians to EPSG32632 meters
         std::pair<double,double> start, end;
@@ -582,7 +582,7 @@ namespace Maneuver
         m_con->transformSRID(Math::Angles::degrees(endLon), Math::Angles::degrees(endLat), 4326, end.first, end.second, 32632);
         return runOMPLUTM(start.first, start.second, end.first, end.second);
       }
-
+*/
       bool runOMPLUTM(double startX, double startY, double endX, double endY) {
         if(m_OMPLsetup) {
           m_OMPLsetup.reset();
@@ -618,98 +618,6 @@ namespace Maneuver
         return false;
       }
 
-      bool findClosestSafePointUTM(double &X, double &Y, double shiftDistance = 1.0, double MBROffset = 200) {
-        //// Find Point on border between navigable and innavigable
-        std::stringstream ss;
-        ss.precision(12);
-        ss << "SELECT sam, X(cpnt), Y(cpnt) from(";
-        ss << "select";
-        ss << " CASE WHEN dist == 0.0";
-        ss << " THEN 1";
-        ss << " ELSE 0";
-        ss << " END AS sam, ";
-        ss << " CASE WHEN dist == 0.0";
-        ss << " THEN makepoint(" << X <<  "," << Y << ", 32632)";
-        ss << " ELSE closestPoint(geometry, makepoint(" << X <<  "," << Y << ", 32632))";
-        ss << " END AS cpnt ";
-        ss << "FROM (";
-        ss << "select *, min(distance(geometry, makepoint(" << X <<  "," << Y << ", 32632))) as dist from navigable where ROWID IN (";
-        ss << " SELECT ROWID";
-        ss << " FROM SpatialIndex";
-        ss << " WHERE f_table_name = 'navigable'";
-        ss << " AND search_frame = BuildMbr(" + std::to_string(X - MBROffset) + "," + std::to_string(Y - MBROffset) + ", " + std::to_string(X + MBROffset) + "," + std::to_string(Y + MBROffset) + "))";
-        ss << ")";
-        ss << ")";
-
-        auto x = ss.str();
-        // inf("%s", x.c_str());
-        int errors = 0;
-        sqlite3_stmt* db_handle;
-
-        if (sqlite3_prepare_v2(m_con->db, x.c_str(), x.length(), &db_handle, 0) != SQLITE_OK)
-        {
-            errors++;
-        }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(db_handle);
-        if(sqlite3_column_int(db_handle, m_idx++)) {
-          // Returned point same as given point, so no need to shift
-        } else if(shiftDistance <= 0.0) {
-          X = sqlite3_column_double(db_handle, m_idx++);
-          Y = sqlite3_column_double(db_handle, m_idx++);
-        } else {
-          // Returned point on intersection line between innavigable and navigable, therefore:
-          // Read intersection point
-          double tempX = sqlite3_column_double(db_handle, m_idx++);
-          double tempY = sqlite3_column_double(db_handle, m_idx++);
-          
-          ss.str(std::string());
-          ss << "SELECT X(pnt), Y(pnt) from(";
-          ss << "select transform(project(";
-          ss << "  transform(makepoint(" << tempX << ", " << tempY << ", 32632), 4326), ";
-          ss << "  " << shiftDistance << ", ";
-          ss << "  azimuth(";
-          ss << "    makepoint(" << X << ", " << Y << ", 32632), makepoint(" << tempX << ", " << tempY << ", 32632)";
-          ss << "  )";
-          ss << "), 32632) as pnt";
-          ss << ")";
-          x = ss.str();
-          //inf("%s", x.c_str());
-          if (sqlite3_prepare_v2(m_con->db, x.c_str(), x.length(), &db_handle, 0) != SQLITE_OK)
-          {
-              errors++;
-          }
-          m_idx = 0;
-          // Execute
-          /*int rc = */sqlite3_step(db_handle);
-          X = sqlite3_column_double(db_handle, m_idx++);
-          Y = sqlite3_column_double(db_handle, m_idx++);
-        }
-
-        // Teardown
-        if (db_handle) {
-          sqlite3_finalize(db_handle);
-          return true;
-        } else {
-          return false;
-        }
-
-        return false;
-      }
-
-      //! May be prone to rounding errors
-      bool findClosestSafePoint(double &lat, double &lon, double MBROffset = 200) {
-        std::pair<double,double> utmpoint;
-        m_con->transformSRID(Math::Angles::degrees(lon), Math::Angles::degrees(lat), 4326, utmpoint.first, utmpoint.second, 32632);
-        bool result = findClosestSafePointUTM(utmpoint.first, utmpoint.second, MBROffset);
-        m_con->transformSRID(utmpoint.first, utmpoint.second, 32632, utmpoint.first, utmpoint.second, 4326);
-        lon = Math::Angles::radians(utmpoint.first);
-        lat = Math::Angles::radians(utmpoint.second);
-
-        return result;
-      }
-
       bool checkDistanceToMonitoredVehicles() {
         for(auto iter : monitoredVehicles) {
           // Check if timestamp is recent
@@ -729,7 +637,7 @@ namespace Maneuver
       onPathControlState(const IMC::PathControlState* pcs)
       {
         
-        static bool path_recalculated = false;
+        //static bool path_recalculated = false;
         m_has_pcs = true;
         m_last_pcs.reset();
         if (pcs->flags & IMC::PathControlState::FL_NEAR) {
@@ -750,20 +658,7 @@ namespace Maneuver
                     inf("%f, %f", iter.first, iter.second);
                   }
           }
-          path_recalculated = false;
-        }/* else {
-          if ( m_target_moved && !path_recalculated && (pcs->eta < 3*m_args.OMPLmaxPlanningTime) ) {
-            if(runOMPL(m_path.end_lat, m_path.end_lon, m_offset_target_lat, m_offset_target_lon)) {
-              m_path.start_lat = DUNE::Math::Angles::radians(m_path_to_target.back().second);
-              m_path.start_lon = DUNE::Math::Angles::radians(m_path_to_target.back().first);
-              m_path_to_target.pop_back(); // Remove fullfilled waypoint
-              m_path.end_lat = DUNE::Math::Angles::radians(m_path_to_target.back().second);
-              m_path.end_lon = DUNE::Math::Angles::radians(m_path_to_target.back().first);
-              dispatch(m_path);
-              path_recalculated = true;
-            }
-          }
-        }*/
+        }
       }
 
       void

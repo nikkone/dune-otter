@@ -102,7 +102,7 @@ namespace ENCGIS
     bool getExtent(std::string layer, double &minX, double &minY, double &maxX, double &maxY);
     //select MbrMinX(geometry), MbrMinY(geometry), MbrMaxX(geometry), MbrMaxX(geometry) from searchgridraw
 
-
+    bool findClosestSafePointUTM(double &X, double &Y, double shiftDistance = 1.0, double MBROffset = 200);
 
     sqlite3 *db;
     int SRID;

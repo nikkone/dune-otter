@@ -1,5 +1,7 @@
 #include "DBconnection.hpp"
 #include <iostream>
+#include <sstream>
+
 namespace ENCGIS
 {
   DBconnection::DBconnection(std::string filename, int flag, int SRIDin): SRID(SRIDin) {
@@ -217,4 +219,83 @@ namespace ENCGIS
         }
 
   }
+      bool DBconnection::findClosestSafePointUTM(double &X, double &Y, double shiftDistance, double MBROffset) {
+        //// Find Point on border between navigable and innavigable
+        std::stringstream ss;
+        ss.precision(12);
+        ss << "SELECT sam, X(cpnt), Y(cpnt) from(";
+        ss << "select";
+        ss << " CASE WHEN dist == 0.0";
+        ss << " THEN 1";
+        ss << " ELSE 0";
+        ss << " END AS sam, ";
+        ss << " CASE WHEN dist == 0.0";
+        ss << " THEN makepoint(" << X <<  "," << Y << ", 32632)";
+        ss << " ELSE closestPoint(geometry, makepoint(" << X <<  "," << Y << ", 32632))";
+        ss << " END AS cpnt ";
+        ss << "FROM (";
+        ss << "select *, min(distance(geometry, makepoint(" << X <<  "," << Y << ", 32632))) as dist from navigable where ROWID IN (";
+        ss << " SELECT ROWID";
+        ss << " FROM SpatialIndex";
+        ss << " WHERE f_table_name = 'navigable'";
+        ss << " AND search_frame = BuildMbr(" + std::to_string(X - MBROffset) + "," + std::to_string(Y - MBROffset) + ", " + std::to_string(X + MBROffset) + "," + std::to_string(Y + MBROffset) + "))";
+        ss << ")";
+        ss << ")";
+
+        auto x = ss.str();
+        // inf("%s", x.c_str());
+        int errors = 0;
+        sqlite3_stmt* db_handle;
+
+        if (sqlite3_prepare_v2(db, x.c_str(), x.length(), &db_handle, 0) != SQLITE_OK)
+        {
+            errors++;
+        }
+        int m_idx = 0;
+        // Execute
+        /*int rc = */sqlite3_step(db_handle);
+        if(sqlite3_column_int(db_handle, m_idx++)) {
+          // Returned point same as given point, so no need to shift
+        } else if(shiftDistance <= 0.0) {
+          X = sqlite3_column_double(db_handle, m_idx++);
+          Y = sqlite3_column_double(db_handle, m_idx++);
+        } else {
+          // Returned point on intersection line between innavigable and navigable, therefore:
+          // Read intersection point
+          double tempX = sqlite3_column_double(db_handle, m_idx++);
+          double tempY = sqlite3_column_double(db_handle, m_idx++);
+          
+          ss.str(std::string());
+          ss << "SELECT X(pnt), Y(pnt) from(";
+          ss << "select transform(project(";
+          ss << "  transform(makepoint(" << tempX << ", " << tempY << ", 32632), 4326), ";
+          ss << "  " << shiftDistance << ", ";
+          ss << "  azimuth(";
+          ss << "    makepoint(" << X << ", " << Y << ", 32632), makepoint(" << tempX << ", " << tempY << ", 32632)";
+          ss << "  )";
+          ss << "), 32632) as pnt";
+          ss << ")";
+          x = ss.str();
+          //inf("%s", x.c_str());
+          if (sqlite3_prepare_v2(db, x.c_str(), x.length(), &db_handle, 0) != SQLITE_OK)
+          {
+              errors++;
+          }
+          m_idx = 0;
+          // Execute
+          /*int rc = */sqlite3_step(db_handle);
+          X = sqlite3_column_double(db_handle, m_idx++);
+          Y = sqlite3_column_double(db_handle, m_idx++);
+        }
+
+        // Teardown
+        if (db_handle) {
+          sqlite3_finalize(db_handle);
+          return true;
+        } else {
+          return false;
+        }
+
+        return false;
+      }
 }
