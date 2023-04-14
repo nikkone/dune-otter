@@ -45,6 +45,10 @@ namespace Control
         double fishtag_min_interval;
         //! Sync Period;
         double ref_send_interval;
+        //!
+        bool rotate_formation;
+        //!
+        double formation_rotation_step;
       };
 
       struct Task : public DUNE::Tasks::Task
@@ -59,7 +63,16 @@ namespace Control
         //!
         std::vector<uint16_t> participant_ids;
         std::vector<IMC::Reference> participant_refs;
-        Task(const std::string &name, Tasks::Context &ctx) : DUNE::Tasks::Task(name, ctx)
+
+        double m_formation_rotate_radians;
+        bool m_rotate_formation;
+        double m_formation_rotation_step;
+
+        Task(const std::string &name, Tasks::Context &ctx) : 
+        DUNE::Tasks::Task(name, ctx),
+        m_formation_rotate_radians(0.0),
+        m_rotate_formation(true),
+        m_formation_rotation_step(M_PI/2) // 90deg
         {
           param("FishTag min interval", m_args.fishtag_min_interval)
               .units(Units::Second)
@@ -71,6 +84,17 @@ namespace Control
               .units(Units::Second)
               .defaultValue("5.0")
               .minimumValue("0.0")
+              .description("Period between sync messages");
+
+          param("Reference Sending Interval", m_args.rotate_formation)
+              .defaultValue("False")
+              .description("Period between sync messages");
+
+          param("Reference Sending Interval", m_args.formation_rotation_step)
+              .units(Units::Radian)
+              .defaultValue("0.0")
+              .minimumValue("0.0")
+              .maximumValue("6.284") // ~2PI
               .description("Period between sync messages");
 
           bind<IMC::RemoteSensorInfo>(this);
@@ -85,6 +109,10 @@ namespace Control
             m_last_tag_timer.setTop(m_args.fishtag_min_interval);
           if (paramChanged(m_args.ref_send_interval))
             m_ref_send_timer.setTop(m_args.ref_send_interval);
+          if (paramChanged(m_args.rotate_formation))
+            m_rotate_formation = m_args.rotate_formation;
+          if (paramChanged(m_args.formation_rotation_step))
+            m_formation_rotation_step = m_args.formation_rotation_step;
         }
         
         void
@@ -147,6 +175,7 @@ namespace Control
           }
           m_last_tag_timer.reset();
           m_ref_send_timer.reset();
+          m_formation_rotate_radians = 0;
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         }
 
@@ -174,6 +203,9 @@ namespace Control
           if(!isActive()) {
             requestActivation();
           }
+          if(m_rotate_formation) {
+            m_formation_rotate_radians += m_formation_rotation_step;
+          }
         }
 
         void consume(const IMC::Abort* msg)
@@ -199,11 +231,49 @@ namespace Control
           return retval;
         }
 
+        std::vector<std::pair<double, double>> generateTrackingFormation(double x0, double y0, double radius, unsigned numVertices, double rotAngle)
+        {
+          std::vector<std::pair<double, double>> retval;
+          double angle = 2 * M_PI / numVertices; // Calculate the angle between each vertex
+          if(numVertices%2) { // Odd number of searchers, regular polygon can be used
+          spew("Odd");
+            for (unsigned i = 0; i < numVertices; i++)
+            {
+              double x = x0 + radius * std::cos(i * angle + rotAngle); // Calculate the x-coordinate of the vertex
+              double y = y0 + radius * std::sin(i * angle + rotAngle); // Calculate the y-coordinate of the vertex
+              //std::cout << "(" << x << "," << y << ")" << std::endl; // Output the vertex coordinates
+              retval.push_back(std::pair<double, double>(x, y));
+            }
+          } else { // Even number of searchers, must skew half of the regular polygon
+           spew("Even");
+            for (unsigned i = 0; i < numVertices/2; i++)
+            {
+              double x = x0 + radius * std::cos(i * angle + rotAngle); // Calculate the x-coordinate of the vertex
+              double y = y0 + radius * std::sin(i * angle + rotAngle); // Calculate the y-coordinate of the vertex
+              //std::cout << "(" << x << "," << y << ")" << std::endl; // Output the vertex coordinates
+              spew("Ri: %d, x: %f, y: %f", i,x,y);
+              retval.push_back(std::pair<double, double>(x, y));
+            }
+            rotAngle -= angle/2;
+            for (unsigned i = numVertices/2; i < numVertices; i++)
+            {
+              double x = x0 + radius * std::cos(i * angle + rotAngle); // Calculate the x-coordinate of the vertex
+              double y = y0 + radius * std::sin(i * angle + rotAngle); // Calculate the y-coordinate of the vertex
+              //std::cout << "(" << x << "," << y << ")" << std::endl; // Output the vertex coordinates
+              spew("Si: %d, x: %f, y: %f", i,x,y);
+              retval.push_back(std::pair<double, double>(x, y));
+            }
+          }
+
+          return retval;
+        }
+
         void updateReference() {
           DUNE::IMC::DesiredSpeed m_dsp;
           m_dsp.value = 1.0;
           m_dsp.speed_units = IMC::SUNITS_METERS_PS;
-          std::vector<std::pair<double, double>> pos = generateRegularPolygonVertices(0,0, 60, participant_refs.size(), 0);
+          std::vector<std::pair<double, double>> pos = generateTrackingFormation(0,0, 60, participant_refs.size(), m_formation_rotate_radians);
+          inf("Participants: %ld", participant_refs.size());
           double lat,lon;
           for (unsigned i = 0;i<participant_refs.size();i++)
           {
@@ -214,7 +284,7 @@ namespace Control
             participant_refs[i].setDestination(participant_ids[i]);
             participant_refs[i].lon = lon;
             participant_refs[i].lat = lat;
-            //spew("%d - %f, %f", i, DUNE::Math::Angles::degrees(participant_refs[i].lon), DUNE::Math::Angles::degrees(participant_refs[i].lat));
+            spew("%d - %f, %f", i, DUNE::Math::Angles::degrees(participant_refs[i].lon), DUNE::Math::Angles::degrees(participant_refs[i].lat));
             participant_refs[i].speed.set(m_dsp);
             participant_refs[i].flags = IMC::Reference::FlagsBits::FLAG_LOCATION | IMC::Reference::FlagsBits::FLAG_SPEED;
             dispatch(participant_refs[i]);
