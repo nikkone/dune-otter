@@ -30,6 +30,13 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 
+// ENCGIS
+#include <ENCGIS/isPointInLayerStatement.hpp>
+#include <ENCGIS/lineIntersectLayerStatement.hpp>
+// OMPL integration for DUNE
+#include <OMPL/setup.hpp>
+#include <OMPL/OMPLfunctions.hpp>
+
 namespace Maneuver
 {
   namespace FollowReference
@@ -40,14 +47,44 @@ namespace Maneuver
 
       struct Arguments
       {
+        //!
         float horizontal_tolerance;
+        //!
         float loitering_radius;
+        //!
         float default_speed;
+        //!
         std::string default_speed_units;
+        //! Enable/disable the anti-obstacle mechanism
+        bool anti_obstacle;
+        //! Enable/disable the anti-collision mechanism
+        bool anti_collision;
+        //! The path of the Spatialite database containing the electronic navigational charts
+        std::string encDBpath;
+        //! The maxmum planning time allowed for OMPL planning
+        float OMPLmaxPlanningTime;
+        //! Navigable Layer/table Name from encDBpath
+        std::string dbNavigableLayerName;
+        //! Innavigable Layer/table Name from encDBpath
+        std::string dbInnavigableLayerName;
+
+        bool useClosestSafePoint;
       };
 
       struct Task : public DUNE::Maneuvers::Maneuver
       {
+        //! Task arguments.
+        Arguments m_args;
+        //! Database connection
+        std::shared_ptr<ENCGIS::DBconnection> m_con;
+        //! Point collision check For use in path planner
+        std::unique_ptr<ENCGIS::isPointInLayerStatement> pointCheck;
+        //! Line segment collision check For use in path planner
+        std::unique_ptr<ENCGIS::lineIntersectLayerStatement> lineCheck;
+        //! OMPL instance to use for running the path planning on
+        std::unique_ptr<og::SimpleSetup> m_OMPLsetup;
+        //! Object that lets OMPL write to the DUNE prompt
+        std::unique_ptr<ompl::msg::OutputHandler> m_omplMsgOutputHandler;
         //! Store maneuver specification
         IMC::FollowReference m_spec;
         //! Store latest received reference
@@ -72,10 +109,13 @@ namespace Maneuver
         double m_last_ref_time;
         //! sent path ref
         int m_path_ref;
-        //! Task arguments.
-        Arguments m_args;
+        //! Path to the desired position calculated from the followed system
+        std::vector<std::pair<double,double>> m_path_to_target;
 
-        IMC::DesiredPath m_last_desired_path;
+        //! The most recent reference endpoint in UTM found by the closestSafePoint algorithm
+        std::pair<double,double> m_last_utm_pos_end;
+
+        IMC::DesiredPath m_path;
         bool m_path_sent;
         static const uint8_t Z_CHANGED         = 1;
         static const uint8_t SPEED_CHANGED     = 2;
@@ -103,6 +143,35 @@ namespace Maneuver
           .defaultValue("m/s")
           .description("Units to use for default speed (one of 'm/s', 'rpm' or '%').");
 
+          param("Use anti-obstacle", m_args.anti_obstacle)
+              .defaultValue("false")
+              .description("Period between sync messages");
+
+          param("Use anti-collision", m_args.anti_collision)
+              .defaultValue("false")
+              .description("Period between sync messages");
+
+          param("Use ClosestSafePoint", m_args.useClosestSafePoint)
+              .defaultValue("true")
+              .description("Period between sync messages");
+
+          param("ENC DB Path", m_args.encDBpath)
+          .defaultValue("/home/nikolai/lststools/dune/misc/re4utmfinal.sqlite")
+          .description("The path of the DB to read ENC from.");
+
+          param("Navigable Layer Name", m_args.dbNavigableLayerName)
+          .defaultValue("navigable")
+          .description("Navigable Layer Name");
+
+          param("Innavigable Layer Name", m_args.dbInnavigableLayerName)
+          .defaultValue("innavigable")
+          .description("Innavigable Layer Name");
+
+          param("OMPL Max Time", m_args.OMPLmaxPlanningTime)
+          .defaultValue("1.0")
+          .description("Time cutoff for OMPL planner.");
+
+
           m_got_reference = false;
           m_got_reference_start = false;
           m_start_lat = 0;
@@ -115,6 +184,62 @@ namespace Maneuver
           bindToManeuver<Task, IMC::FollowReference>();
           bind<IMC::Reference>(this);
           bind<IMC::EstimatedState>(this);
+        }
+
+        //! Acquire resources.
+        void onResourceAcquisition(void)
+        {
+          try{
+            m_con = std::make_shared<ENCGIS::DBconnection>(m_args.encDBpath, SQLITE_OPEN_READWRITE, 32632);
+          } catch(std::runtime_error& e) {
+            err(DTR("Problem opening charts database: %s"), e.what());
+            // Set task state to failure
+          }
+
+          try{
+            pointCheck = std::make_unique<ENCGIS::isPointInLayerStatement>(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632);
+          } catch(std::runtime_error& e) {
+            err(DTR("Problem creating query for navigable layer: %s"), e.what());
+            // Set task state to failure
+          }
+
+          try{
+            lineCheck = std::make_unique<ENCGIS::lineIntersectLayerStatement>(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632);
+          } catch(std::runtime_error& e) {
+            err(DTR("Problem creating query for innavigable layer: %s"), e.what());
+            // Set task state to failure
+          }  
+        }
+
+        //! Initialize resources.
+        void onResourceInitialization(void)
+        {
+          // Call the default maneuver initialization
+          DUNE::Maneuvers::Maneuver::onResourceInitialization();
+          // Set OMPL to use the console output of this task
+          m_omplMsgOutputHandler = std::make_unique<OMPLforDUNE::OutputHandlerDUNEConsole>(this);
+          ompl::msg::useOutputHandler(m_omplMsgOutputHandler.get());
+          ompl::msg::setLogLevel(ompl::msg::LogLevel::LOG_DEV2);
+        }
+
+        //! Release resources.
+        void onResourceRelease(void) {
+          inf("Release");
+          try {
+            m_con.reset();
+            m_OMPLsetup.reset();
+          }
+            catch(std::runtime_error& e) {
+            err(DTR("Could not clear charts database class: %s"), e.what());
+          }
+        }
+
+        void
+        onManeuverDeactivation(void)
+        {
+          //m_has_estimated_state = false;
+          m_path_to_target.clear();
+          //m_has_pcs = false;
         }
 
         void
@@ -136,69 +261,9 @@ namespace Maneuver
           // send a notify to controlling peer that the maneuver was activated
           dispatch(m_fref_state);
           m_last_ref = IMC::Reference();
-          m_last_desired_path = IMC::DesiredPath();
+          m_path = IMC::DesiredPath();
           m_path_sent = false;
           inf(DTR("waiting for first reference"));
-        }
-
-        uint8_t pathDifferences(const IMC::DesiredPath *msg1, const IMC::DesiredPath *msg2)
-        {
-          uint8_t flags = 0;
-
-          if (msg1->end_lat != msg2->end_lat)
-            flags |= LOC_CHANGED;
-          if (msg1->end_lon != msg2->end_lon)
-            flags |= LOC_CHANGED;
-          if (msg1->lradius != msg2->lradius)
-            flags |= RADIUS_CHANGED;
-          if (msg1->end_z != msg2->end_z || msg1->end_z_units != msg2->end_z_units)
-            flags |= Z_CHANGED;
-
-          if (msg1->speed != msg2->speed || msg1->speed_units != msg2->speed_units)
-            flags |= SPEED_CHANGED;
-
-          return flags;
-        }
-
-        bool
-        sameReference(const IMC::Reference *msg1, const IMC::Reference *msg2)
-        {
-          if (msg1->flags != msg2->flags)
-            return false;
-          if (msg1->lat != msg2->lat)
-            return false;
-          if (msg1->lon != msg2->lon)
-            return false;
-          if (msg1->radius != msg2->radius)
-            return false;
-
-          if (msg1->z.isNull() != msg2->z.isNull())
-          {
-            return false;
-          }
-          else if (!msg1->z.isNull())
-          {
-            const IMC::DesiredZ *z1 = msg1->z.get();
-            const IMC::DesiredZ *z2 = msg2->z.get();
-
-            if (!z1->fieldsEqual(*z2))
-              return false;
-          }
-
-          if (msg1->speed.isNull() != msg2->speed.isNull())
-          {
-            return false;
-          }
-          else if (!msg1->speed.isNull())
-          {
-            const IMC::DesiredSpeed *s1 = msg1->speed.get();
-            const IMC::DesiredSpeed *s2 = msg2->speed.get();
-
-            if (!s1->fieldsEqual(*s2))
-              return false;
-          }
-
-          return true;
         }
 
         //! Consume Reference messages and generate DesiredPath messages accordingly
@@ -209,6 +274,11 @@ namespace Maneuver
         void
         consume(const IMC::Reference* msg)
         {
+          if(msg->getDestination() != getSystemId()) {
+            spew("Ignored reference not to this vehicle");
+            return;
+          }
+
           // verify that the source is acceptable
           if (m_spec.control_src != 0xFFFF
               && m_spec.control_src != msg->getSource())
@@ -272,30 +342,26 @@ namespace Maneuver
         onPathControlState(const IMC::PathControlState* pcs)
         {
           m_pcs = *pcs;
-        }
+          if (pcs->flags & IMC::PathControlState::FL_NEAR) {
+            if(m_path_to_target.empty()) {
+              spew("m_path_to_target empty, disabling movement");
+              enableMovement(false);
+            } else if( 1 == m_path_to_target.size()) {
+              m_path_to_target.pop_back();
+            } else {
+              m_path.start_lat = DUNE::Math::Angles::radians(m_path_to_target.back().second);
+              m_path.start_lon = DUNE::Math::Angles::radians(m_path_to_target.back().first);
+              m_path_to_target.pop_back(); // Remove fullfilled waypoint
+              m_path.end_lat = DUNE::Math::Angles::radians(m_path_to_target.back().second);
+              m_path.end_lon = DUNE::Math::Angles::radians(m_path_to_target.back().first);
+              dispatchDesiredPath(m_path);
+              inf("Using m_path_to_target");
+                    for(auto iter : m_path_to_target) {
+                      inf("%f, %f", iter.first, iter.second);
+                    }
+            }
+          }
 
-        IMC::SpeedUnits
-        parseSpeedUnitsStr(std::string sunits_str)
-        {
-          if (sunits_str == "m/s")
-            return IMC::SUNITS_METERS_PS;
-          else if (sunits_str == "rpm")
-            return IMC::SUNITS_RPM;
-          else
-            return IMC::SUNITS_PERCENTAGE;
-        }
-
-        IMC::ZUnits
-        parseZUnitsStr(std::string zunits_str)
-        {
-          if (zunits_str == "HEIGHT")
-            return IMC::Z_HEIGHT;
-          else if (zunits_str == "ALTITUDE")
-            return IMC::Z_ALTITUDE;
-          else if (zunits_str == "DEPTH")
-            return IMC::Z_DEPTH;
-          else
-            return IMC::Z_NONE;
         }
 
         void
@@ -311,10 +377,10 @@ namespace Maneuver
 
           double curlat = state->lat;
           double curlon = state->lon;
-          bool near_ref = (pcs == NULL) || pcs->path_ref != m_last_desired_path.path_ref ? false :
+          bool near_ref = (pcs == NULL) || pcs->path_ref != m_path.path_ref ? false :
           (pcs->flags & IMC::PathControlState::FL_NEAR) != 0;
 
-          WGS84::displace(state->x, state->y, &curlat, &curlon);
+          WGS84::displace(state->x, state->y, &curlat, &curlon); // Only usefull if there is a x,y offset in state. Not needed for purely GPS navigation
 
           // command start corresponds to current position
 
@@ -323,43 +389,39 @@ namespace Maneuver
           updateEndLoc(ref, desired_path, curlat, curlon);
           updateSpeed(ref, desired_path);
 
+
+          if(m_args.useClosestSafePoint) {
+            m_con->transformSRID(Math::Angles::degrees(desired_path.end_lon), Math::Angles::degrees(desired_path.end_lat), 4326, m_last_utm_pos_end.first, m_last_utm_pos_end.second, 32632);
+
+            if(m_con->findClosestSafePointUTM(m_last_utm_pos_end.first, m_last_utm_pos_end.second)) {
+              inf("Original Pos: %f, %f", desired_path.end_lat, desired_path.end_lon);
+              inf("Safe Pos: %f, %f", m_last_utm_pos_end.first, m_last_utm_pos_end.second);
+              spew("End Pointinlayer: %d", pointCheck->run(m_last_utm_pos_end.first, m_last_utm_pos_end.second));
+            } else {
+              err("findClosestSafePoint failed, probably DB error.");
+              return;
+            }
+
+            m_con->transformSRID(m_last_utm_pos_end.first, m_last_utm_pos_end.second, 32632, desired_path.end_lon, desired_path.end_lat, 4326);
+            desired_path.end_lat = DUNE::Math::Angles::radians(desired_path.end_lat);
+            desired_path.end_lon = DUNE::Math::Angles::radians(desired_path.end_lon);
+          }
           // check to see if we are already at the target...
           double xy_dist = WGS84::distance(desired_path.end_lat,
                                            desired_path.end_lon, 0, curlat,
                                            curlon, 0);
           bool at_xy_target = xy_dist < std::fabs(ref->radius) + m_args.horizontal_tolerance;
-          bool target_at_surface = desired_path.end_z == 0
-                                      && desired_path.end_z_units == Z_DEPTH;
 
           bool still_same_reference = (ref->flags & IMC::Reference::FLAG_START_POINT) ||
                                       sameReference(ref, &m_last_ref);
 
           updateRadius(ref, desired_path);
           int prev_mode = m_fref_state.state;
-          std::string mode;
 
-          switch (prev_mode)
-          {
-          case IMC::FollowRefState::FR_GOTO:
-        	mode = "GOTO";
-        	break;
-          case IMC::FollowRefState::FR_HOVER:
-        	mode = "Hover";
-            break;
-          case IMC::FollowRefState::FR_LOITER:
-            mode = "Loiter";
-        	break;
-          case IMC::FollowRefState::FR_ELEVATOR:
-            mode = "Elevator";
-            break;
-          default:
-            mode = "Elevator";
-            break;
-          }
+          debug("Mode: %s, XY_DIST: %f/%d, SAME_REF: %d",
+          				modeToStr(prev_mode).c_str(), xy_dist, at_xy_target, still_same_reference);
 
-          debug("Mode: %s, XY_DIST: %f/%d, TARGET_AT_SURF: %d, SAME_REF: %d",
-          				mode.c_str(), xy_dist, at_xy_target, target_at_surface, still_same_reference);
-
+// Update m_fref_state.state
           if (still_same_reference && prev_mode != IMC::FollowRefState::FR_WAIT)
           {
             switch (prev_mode)
@@ -374,8 +436,12 @@ namespace Maneuver
                 if (!at_xy_target)
                   m_fref_state.state = IMC::FollowRefState::FR_GOTO;
                 break;
-              case (IMC::FollowRefState::FR_ELEVATOR):
-                  m_fref_state.state = IMC::FollowRefState::FR_HOVER;
+              case (IMC::FollowRefState::FR_LOITER):
+                err("Loiter encountered.");
+                break;
+              default:
+                err("Unsuported prev_mode received.");
+                return;
             }
           }
           else
@@ -384,15 +450,7 @@ namespace Maneuver
               m_fref_state.state = IMC::FollowRefState::FR_GOTO;
           }
 
-          if (m_fref_state.state == IMC::FollowRefState::FR_LOITER || m_fref_state.state == IMC::FollowRefState::FR_ELEVATOR)
-          {
-            if (desired_path.lradius == 0)
-              desired_path.lradius = m_args.loitering_radius;
-          }
-          else
-          {
-            desired_path.lradius = 0;
-          }
+          desired_path.lradius = 0;
 
           m_fref_state.proximity = 0;
 
@@ -414,8 +472,9 @@ namespace Maneuver
 
           if (!ref->speed.isNull() && ref->speed.get()->value == 0)
             enableMovement(false);
-          else
+          else {
             updateDesiredPath(desired_path);
+          } 
         }
 
         //! Function for enabling and disabling the control loops
@@ -433,7 +492,7 @@ namespace Maneuver
             if (!was_moving)
             {
               m_path_sent = false;
-              updateDesiredPath(m_last_desired_path);
+              updateDesiredPath(m_path);
             }
           }
           else
@@ -444,7 +503,196 @@ namespace Maneuver
           }
         }
 
+      bool findSafePath(double desired_lat, double desired_lon) {
+            m_path.flags |= IMC::DesiredPath::FL_START;
+            if(!m_path_to_target.empty()) {
+              m_path_to_target.clear();
+              inf("Target moved, recalculating path");
+            }
+            if(m_path_to_target.empty()) {
+              //////////////////////////////////////////////////// Find end point of planner
+              std::pair<double,double> utmend;
+              m_con->transformSRID(Math::Angles::degrees(desired_lon), Math::Angles::degrees(desired_lat), 4326, utmend.first, utmend.second, 32632);
+
+              if(m_con->findClosestSafePointUTM(utmend.first, utmend.second)) {
+                inf("Original Pos: %f, %f", desired_lat, desired_lon);
+                inf("Safe Pos: %f, %f", utmend.first, utmend.second);
+                spew("End Pointinlayer: %d", pointCheck->run(utmend.first, utmend.second));
+              } else {
+                err("findClosestSafePoint failed, probably DB error.");
+                return false;
+              }
+              ////////////////////////////////////////////////////
+              std::pair<double,double> utmstart;
+              m_con->transformSRID(Math::Angles::degrees(m_estate.lon), Math::Angles::degrees(m_estate.lat), 4326, utmstart.first, utmstart.second, 32632);
+              if(!pointCheck->run(utmstart.first, utmstart.second)) {
+                war("Startpoint collison");
+                if(m_con->findClosestSafePointUTM(utmstart.first, utmstart.second)) {
+                  inf("Original Pos: %f, %f", desired_lat, desired_lon);
+                  inf("Safe Pos: %f, %f", utmstart.first, utmstart.second);
+                  spew("Start Pointinlayer: %d", pointCheck->run(utmstart.first, utmstart.second));
+                } else {
+                  err("findClosestSafePoint failed, probably DB error.");
+                  return false;
+                }
+              }
+
+
+              
+              if(runOMPLUTM(utmstart.first, utmstart.second, utmend.first, utmend.second)) {
+                  //m_path_to_target.pop_back(); // Remove first waypoint (Current position)
+                  m_path.start_lat = DUNE::Math::Angles::radians(m_path_to_target.back().second);
+                  m_path.start_lon = DUNE::Math::Angles::radians(m_path_to_target.back().first);
+                  m_path_to_target.pop_back(); // Remove first waypoint (Current position)
+                  m_path.end_lat = DUNE::Math::Angles::radians(m_path_to_target.back().second);
+                  m_path.end_lon = DUNE::Math::Angles::radians(m_path_to_target.back().first);
+                  if(!m_moving) {
+                    enableMovement(true);
+                  }
+                  dispatchDesiredPath(m_path);
+                  m_path_sent = true;
+                  return true;
+              } else {
+                m_path.end_lat = m_estate.lat;
+                m_path.end_lon = m_estate.lon;
+                war("OMPL failed, doing nothing");
+                return false;
+              }
+            }
+        return false;
+      }
+      
+      bool runOMPLUTM(double startX, double startY, double endX, double endY) {
+        if(m_OMPLsetup) {
+          m_OMPLsetup.reset();
+        }
+        double extension = 300;
+        double planningBounds[4] = {std::min(startY, endY)-extension, std::min(startX, endX)-extension, std::max(startY, endY)+extension, std::max(startX, endX)+extension};
+        spew("Planning bounds:  %f, %f, %f, %f", planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3]);        
+
+        try {
+          m_OMPLsetup = std::make_unique<og::SimpleSetup>(OMPLintegrationENCGIS::createSetup(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], pointCheck.get(), lineCheck.get()));
+          inf("OMPL init sucess 1");
+
+          std::cout << std::setprecision(12) << "Increase printpres to 12 from bitstars setprecision(5) call" << std::endl;
+          OMPLintegrationENCGIS::setStartAndGoalStates(*m_OMPLsetup, startX, startY, endX, endY);
+
+          og::PathGeometric states = OMPLintegrationENCGIS::findPath(*m_OMPLsetup, m_args.OMPLmaxPlanningTime, OMPLintegrationENCGIS::configurations_t::C_KBIT);
+          if (states.getStateCount()) {
+              m_path_to_target = OMPLforDUNE::pathToVector(states);
+              m_path_to_target = m_con->transformSRIDVector(m_path_to_target, 32632,4326);
+              std::reverse(m_path_to_target.begin(), m_path_to_target.end()); // Reverse so that pop back will give the most recent post
+              inf("Created path from: %f, %f to %f ,%f", startX, startY, endX, endY);
+              return true;
+          } else {
+              err("Error finding path from: %f, %f to %f ,%f", startX, startY, endX, endY);
+              spew("Start Pointinlayer: %d", pointCheck->run(startX, startY));
+              spew("End Pointinlayer: %d", pointCheck->run(endX, endY));
+              return false; 
+          }   
+        } catch(...) {
+          err("Error using OMPL");
+          return false;
+        }
+        return false;
+      }
+
       private:
+
+        uint8_t pathDifferences(const IMC::DesiredPath *msg1, const IMC::DesiredPath *msg2)
+        {
+          uint8_t flags = 0;
+
+          if (msg1->end_lat != msg2->end_lat)
+            flags |= LOC_CHANGED;
+          if (msg1->end_lon != msg2->end_lon)
+            flags |= LOC_CHANGED;
+          if (msg1->lradius != msg2->lradius)
+            flags |= RADIUS_CHANGED;
+          if (msg1->end_z != msg2->end_z || msg1->end_z_units != msg2->end_z_units)
+            flags |= Z_CHANGED;
+
+          if (msg1->speed != msg2->speed || msg1->speed_units != msg2->speed_units)
+            flags |= SPEED_CHANGED;
+
+          return flags;
+        }
+
+        bool
+        sameReference(const IMC::Reference *msg1, const IMC::Reference *msg2)
+        {
+          if (msg1->flags != msg2->flags)
+            return false;
+          if (msg1->lat != msg2->lat)
+            return false;
+          if (msg1->lon != msg2->lon)
+            return false;
+          if (msg1->radius != msg2->radius)
+            return false;
+
+          if (msg1->z.isNull() != msg2->z.isNull())
+          {
+            return false;
+          }
+          else if (!msg1->z.isNull())
+          {
+            const IMC::DesiredZ *z1 = msg1->z.get();
+            const IMC::DesiredZ *z2 = msg2->z.get();
+
+            if (!z1->fieldsEqual(*z2))
+              return false;
+          }
+
+          if (msg1->speed.isNull() != msg2->speed.isNull())
+          {
+            return false;
+          }
+          else if (!msg1->speed.isNull())
+          {
+            const IMC::DesiredSpeed *s1 = msg1->speed.get();
+            const IMC::DesiredSpeed *s2 = msg2->speed.get();
+
+            if (!s1->fieldsEqual(*s2))
+              return false;
+          }
+
+          return true;
+        }
+        
+        IMC::SpeedUnits
+        parseSpeedUnitsStr(std::string sunits_str)
+        {
+          if (sunits_str == "m/s")
+            return IMC::SUNITS_METERS_PS;
+          else if (sunits_str == "rpm")
+            return IMC::SUNITS_RPM;
+          else
+            return IMC::SUNITS_PERCENTAGE;
+        }
+
+        std::string modeToStr(int prev_mode) {
+           std::string mode;
+          switch (prev_mode)
+          {
+          case IMC::FollowRefState::FR_GOTO:
+        	mode = "GOTO";
+        	break;
+          case IMC::FollowRefState::FR_HOVER:
+        	mode = "Hover";
+            break;
+          case IMC::FollowRefState::FR_LOITER:
+            mode = "Loiter";
+        	break;
+          case IMC::FollowRefState::FR_ELEVATOR:
+            mode = "Elevator";
+            break;
+          default:
+            mode = "Hover";
+            break;
+          }
+          return mode;
+        }
+
         void
         updateStartLoc(const IMC::Reference* ref, IMC::DesiredPath &desired_path,
                      double curlat, double curlon)
@@ -573,17 +821,17 @@ namespace Maneuver
         {
           desired_path.path_ref = ++m_path_ref;
           dispatch(desired_path);
-          m_last_desired_path = desired_path;
+          m_path = desired_path;
         }
 
         void
         updateDesiredPath(IMC::DesiredPath desired_path)
         {
 
-          int diff = pathDifferences(&m_last_desired_path, &desired_path);
+          int diff = pathDifferences(&m_path, &desired_path);
           desired_path.flags &= ~DesiredPath::FL_NO_Z;
 
-          m_last_desired_path = desired_path;
+          m_path = desired_path;
 
 
           bool changedLoc = (diff & LOC_CHANGED) != 0;
@@ -610,7 +858,6 @@ namespace Maneuver
           switch (m_fref_state.state)
           {
             case (IMC::FollowRefState::FR_LOITER):
-              //desired_path.lradius = m_args.loitering_radius;
               enableMovement(true);
               if (send_desired_path)
               {
@@ -621,7 +868,6 @@ namespace Maneuver
               }
               break;
             case (IMC::FollowRefState::FR_ELEVATOR):
-              //desired_path.lradius = m_args.loitering_radius;
               enableMovement(true);
               if (send_desired_path)
               {
@@ -636,13 +882,18 @@ namespace Maneuver
               enableMovement(true);
               if (send_desired_path)
               {
-                dispatchDesiredPath(desired_path);
-                inf(DTR("going towards (%f, %f, %f)."), Angles::degrees(desired_path.end_lat),
-                    Angles::degrees(desired_path.end_lon), desired_path.end_z);
+                if(m_args.anti_obstacle) {
+                  findSafePath(desired_path.end_lat, desired_path.end_lon);
+                } else {
+                  dispatchDesiredPath(desired_path);
+                  inf(DTR("going towards (%f, %f, %f)."), Angles::degrees(desired_path.end_lat),
+                      Angles::degrees(desired_path.end_lon), desired_path.end_z);
+                }
+
               }
               break;
-            default:
-              if (send_desired_path)
+            case (IMC::FollowRefState::FR_HOVER):
+              if (send_desired_path && !m_args.anti_obstacle)
               {
             	dispatchDesiredPath(desired_path);
             	enableMovement(true);
@@ -651,6 +902,9 @@ namespace Maneuver
               }
               enableMovement(false);
               break;
+            default:
+              err("Unknown FollowRefState");
+              return;
           }
           m_path_sent = true;
         }
