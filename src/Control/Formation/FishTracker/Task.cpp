@@ -60,6 +60,8 @@ namespace Control
         Time::Counter<float> m_ref_send_timer;
         //!
         IMC::RemoteSensorInfo m_last_rs_msg;
+
+        IMC::otterFormation m_last_of_msg;
         //!
         std::vector<uint16_t> participant_ids;
         std::vector<IMC::Reference> participant_refs;
@@ -86,17 +88,18 @@ namespace Control
               .minimumValue("0.0")
               .description("Period between sync messages");
 
-          param("Reference Sending Interval", m_args.rotate_formation)
+          param("Rotate Formation", m_args.rotate_formation)
               .defaultValue("False")
               .description("Period between sync messages");
 
-          param("Reference Sending Interval", m_args.formation_rotation_step)
+          param("Rotation Step", m_args.formation_rotation_step)
               .units(Units::Radian)
               .defaultValue("0.0")
               .minimumValue("0.0")
               .maximumValue("6.284") // ~2PI
               .description("Period between sync messages");
 
+          bind<IMC::otterFormation>(this);
           bind<IMC::RemoteSensorInfo>(this);
           bind<IMC::Abort>(this);
           //bind<IMC::TBRFishTag>(this);
@@ -195,16 +198,37 @@ namespace Control
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
         }
 
+        void consume(const IMC::otterFormation* msg) {
+          inf("Got otterFormation following %s", msg->target.c_str());
+          m_last_of_msg = *msg;
+          switch(msg->msg_type) {
+            case IMC::otterFormation::MessageTypeEnum::T_start:
+            if(!isActive()) {
+              requestActivation();
+            }
+            break;
+            case IMC::otterFormation::MessageTypeEnum::T_stop:
+            if(isActive()) {
+              requestDeactivation();
+            }
+            break;
+            case IMC::otterFormation::MessageTypeEnum::T_param_change:
+            inf("Updating controller with parameter changes");
+            //TODO;
+            break;
+            default:
+            err("Unsupported msg_type, doing nothing.");
+          }
+        }
+
         void consume(const IMC::RemoteSensorInfo *msg)
         {
-          // TODO: Filter
-          m_last_rs_msg = *msg;
-          m_last_tag_timer.reset();
-          if(!isActive()) {
-            requestActivation();
-          }
-          if(m_rotate_formation) {
-            m_formation_rotate_radians += m_formation_rotation_step;
+          if(m_last_of_msg.target == msg->id) {
+            m_last_rs_msg = *msg;
+            m_last_tag_timer.reset();
+            if(m_rotate_formation) {
+              m_formation_rotate_radians += m_formation_rotation_step;
+            }
           }
         }
 

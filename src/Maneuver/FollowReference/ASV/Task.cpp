@@ -69,6 +69,11 @@ namespace Maneuver
         std::string dbInnavigableLayerName;
 
         bool useClosestSafePoint;
+
+        //! The names of other IMC vehicles to avoid while performing this maneuver.
+        std::vector<std::string> otherVehicles;
+
+        double safe_distance;
       };
 
       struct Task : public DUNE::Maneuvers::Maneuver
@@ -111,9 +116,14 @@ namespace Maneuver
         int m_path_ref;
         //! Path to the desired position calculated from the followed system
         std::vector<std::pair<double,double>> m_path_to_target;
-
         //! The most recent reference endpoint in UTM found by the closestSafePoint algorithm
         std::pair<double,double> m_last_utm_pos_end;
+        //! Source identifiers for the monitiored vehicles
+        std::map<uint16_t, std::tuple<fp64_t, fp64_t, DUNE::Time::Delta>> monitoredVehicles;
+        //! this boolean tells us if we have an estimated state already
+        bool m_has_estimated_state;
+
+        bool distanceLimitBreached;
 
         IMC::DesiredPath m_path;
         bool m_path_sent;
@@ -123,7 +133,9 @@ namespace Maneuver
         static const uint8_t RADIUS_CHANGED    = 8;
 
         Task(const std::string& name, Tasks::Context& ctx) :
-          DUNE::Maneuvers::Maneuver(name, ctx)
+          DUNE::Maneuvers::Maneuver(name, ctx),
+          m_has_estimated_state(false),
+          distanceLimitBreached(false)
         {
 
           param("Loitering Radius", m_args.loitering_radius)
@@ -171,6 +183,14 @@ namespace Maneuver
           .defaultValue("1.0")
           .description("Time cutoff for OMPL planner.");
 
+          param("Other Vehicles", m_args.otherVehicles)
+          .description("The source/vehicle names of other entities in the system.")
+          .defaultValue("ntnu-otter-03");
+
+          param("Minimum Safe Distance", m_args.safe_distance)
+          .defaultValue("15.0")
+          .units(Units::Meter)
+          .description("Minimum safe distance to other vehicles");
 
           m_got_reference = false;
           m_got_reference_start = false;
@@ -182,9 +202,24 @@ namespace Maneuver
           m_path_ref = 0;
 
           bindToManeuver<Task, IMC::FollowReference>();
-          bind<IMC::Reference>(this);
+          bind<IMC::Announce>(this);
           bind<IMC::EstimatedState>(this);
+          bind<IMC::Reference>(this);
         }
+
+      void
+      onUpdateParameters(void)
+      {
+        if(paramChanged(m_args.otherVehicles)) {
+          monitoredVehicles.clear();
+          for(auto iter : m_args.otherVehicles) {
+              monitoredVehicles[resolveSystemName(iter)] = std::tuple<fp64_t, fp64_t, DUNE::Time::Delta>{0.0,0.0,DUNE::Time::Delta()};
+          }
+          for(auto iter : monitoredVehicles) {
+              inf("Monitored Vehicle: %d", iter.first);
+          }
+        }
+      }
 
         //! Acquire resources.
         void onResourceAcquisition(void)
@@ -220,6 +255,16 @@ namespace Maneuver
           m_omplMsgOutputHandler = std::make_unique<OMPLforDUNE::OutputHandlerDUNEConsole>(this);
           ompl::msg::useOutputHandler(m_omplMsgOutputHandler.get());
           ompl::msg::setLogLevel(ompl::msg::LogLevel::LOG_DEV2);
+
+        if(!monitoredVehicles.empty()) 
+          monitoredVehicles.clear();
+
+        for(auto iter : m_args.otherVehicles) {
+            monitoredVehicles[resolveSystemName(iter)] = std::tuple<fp64_t, fp64_t, DUNE::Time::Delta>{0.0,0.0,DUNE::Time::Delta()};
+        }
+        for(auto iter : monitoredVehicles) {
+            inf("Monitored Vehicle: %d", iter.first);
+        }
         }
 
         //! Release resources.
@@ -237,9 +282,25 @@ namespace Maneuver
         void
         onManeuverDeactivation(void)
         {
-          //m_has_estimated_state = false;
+          m_has_estimated_state = false;
           m_path_to_target.clear();
           //m_has_pcs = false;
+        }
+
+        void
+        consume(const IMC::Announce* msg)
+        {
+            if(msg->getSource() != getSystemId()) {
+              if(!monitoredVehicles.empty()) {
+                auto current = monitoredVehicles.find(msg->getSource());
+                if( current != monitoredVehicles.end()) {
+                  // Add position to list, then check for collisions in EstimatedState
+                  std::get<0>(current->second) = msg->lat;
+                  std::get<1>(current->second) = msg->lon; 
+                  std::get<2>(current->second).reset(); 
+                }
+              }
+          }
         }
 
         void
@@ -275,7 +336,7 @@ namespace Maneuver
         consume(const IMC::Reference* msg)
         {
           if(msg->getDestination() != getSystemId()) {
-            spew("Ignored reference not to this vehicle");
+            //spew("Ignored reference not to this vehicle");
             return;
           }
 
@@ -323,10 +384,22 @@ namespace Maneuver
         {
           if (msg->getSource() != getSystemId())
             return;
-
           m_estate = *msg;
-          double delta = 0;
+          m_has_estimated_state = true;
 
+          if(checkDistanceToMonitoredVehicles()) {
+            spew("Distance Limit Violated, disabling movement");
+            enableMovement(false);
+            m_path_to_target.clear();
+            distanceLimitBreached = true;
+          } else {
+            distanceLimitBreached = false;
+            //if(!m_moving && ) {
+            //  enableMovement(true);
+            //}
+          }
+
+          double delta = 0;
           if (m_spec.timeout != 0)
             delta = Clock::get() - m_last_ref_time;
 
@@ -470,7 +543,7 @@ namespace Maneuver
             return;
           }
 
-          if (!ref->speed.isNull() && ref->speed.get()->value == 0)
+          if ( (!ref->speed.isNull() && ref->speed.get()->value == 0))
             enableMovement(false);
           else {
             updateDesiredPath(desired_path);
@@ -908,6 +981,52 @@ namespace Maneuver
           }
           m_path_sent = true;
         }
+
+        bool checkDistanceToMonitoredVehicles() {
+          for(auto iter : monitoredVehicles) {
+            // Check if timestamp is recent
+            if(std::get<2>(iter.second).getDelta() > 30.0) {
+              continue;
+            }
+            // Check if distance threashold too large
+            if(!checkSafety(std::get<0>(iter.second), std::get<1>(iter.second))) {
+              return true; // Distance limit violated
+            }
+          }
+          return false; // No distance limits violated
+        }
+
+        //! Routine for checking the safety of the vehicle's position
+        //! this routine return true if the present location is safe
+        //! and returns false otherwise
+        bool
+        checkSafety(double lat, double lon)
+        {
+          if (m_has_estimated_state)
+          {
+
+            double x, y, r;
+
+            WGS84::displacement(m_estate.lat, m_estate.lon, 0.0, lat, lon, 0.0, &x, &y);
+
+            r = Math::norm((x - m_estate.x), (y - m_estate.y));
+
+            // if the distance between them is below the safe distance
+            if (r < m_args.safe_distance)
+            {
+              return false;
+            }
+            else
+            {
+              return true;
+            }
+          }
+          else
+          {
+            return true;
+          }
+        }
+
       };
     }
   }

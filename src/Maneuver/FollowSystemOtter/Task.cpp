@@ -62,7 +62,7 @@ namespace Maneuver
       //! Innavigable Layer/table Name from encDBpath
       std::string dbInnavigableLayerName;
 
-      //! The names of otherVehicles participating in the search operation. Used to include effort of these vehicles.
+      //! The names of other IMC vehicles to avoid while performing this maneuver.
       std::vector<std::string> otherVehicles;
 
       //! PID gains for mps controller.
@@ -158,7 +158,8 @@ namespace Maneuver
         m_first_announce(true),
         m_has_estimated_state(false),
         m_desired_speed(0.0), 
-        m_has_pcs(false)
+        m_has_pcs(false),
+        distanceLimitBreached(false)
       {
         param("Loitering Radius", m_args.loiter_radius)
         .defaultValue("-1.0")
