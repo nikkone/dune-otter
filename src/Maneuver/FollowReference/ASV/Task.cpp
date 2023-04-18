@@ -970,6 +970,7 @@ namespace Maneuver
 
               }
               break;
+            case (IMC::FollowRefState::FR_WAIT):
             case (IMC::FollowRefState::FR_HOVER):
               if (send_desired_path && !m_args.anti_obstacle)
               {
