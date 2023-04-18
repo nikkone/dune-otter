@@ -123,6 +123,8 @@ namespace Maneuver
         //! this boolean tells us if we have an estimated state already
         bool m_has_estimated_state;
 
+        bool m_anti_collision;
+
         bool distanceLimitBreached;
 
         IMC::DesiredPath m_path;
@@ -218,6 +220,9 @@ namespace Maneuver
           for(auto iter : monitoredVehicles) {
               inf("Monitored Vehicle: %d", iter.first);
           }
+        }
+        if(paramChanged(m_args.anti_collision)) {
+          m_anti_collision = m_args.anti_collision;
         }
       }
 
@@ -387,7 +392,7 @@ namespace Maneuver
           m_estate = *msg;
           m_has_estimated_state = true;
 
-          if(checkDistanceToMonitoredVehicles()) {
+          if(m_anti_collision && checkDistanceToMonitoredVehicles()) {
             spew("Distance Limit Violated, disabling movement");
             enableMovement(false);
             m_path_to_target.clear();
