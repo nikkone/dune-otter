@@ -60,6 +60,8 @@ namespace Control
         IMC::RemoteSensorInfo m_last_rs_msg;
 
         IMC::otterFormation m_last_of_msg;
+
+        DUNE::IMC::DesiredSpeed m_dsp;
         //! The rotation state of the entire formation
         double m_formation_rotate_rad;
         //! Initialized from args, may be overwritten by custom parameter
@@ -78,7 +80,9 @@ namespace Control
         double m_formation_radius;
         //! vehicleid - Lat(rad), Lon(rad), LastReference, time since last position update
         std::map<uint16_t, std::tuple<fp64_t, fp64_t, IMC::Reference, DUNE::Time::Delta>> m_participants; 
+        typedef std::map<uint16_t, std::tuple<fp64_t, fp64_t, IMC::Reference, DUNE::Time::Delta>>::iterator participant_t;
 
+        std::vector<participant_t> m_allocation;
         Task(const std::string &name, Tasks::Context &ctx) : 
         DUNE::Tasks::Task(name, ctx),
         m_formation_rotate_rad(0.0),
@@ -199,6 +203,7 @@ namespace Control
           }
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
           m_formation_started = false;
+          m_allocation.clear();
         }
 
         void consume(const IMC::Abort* msg)
@@ -212,16 +217,14 @@ namespace Control
 
         void consume(const IMC::Announce* msg)
         {
-            if(msg->getSource() != getSystemId()) {
-              if(!m_participants.empty()) {
-                auto current = m_participants.find(msg->getSource());
-                if( current != m_participants.end()) {
-                  // Add position to list, then check for collisions in EstimatedState
-                  std::get<0>(current->second) = msg->lat;
-                  std::get<1>(current->second) = msg->lon; 
-                  std::get<3>(current->second).reset(); 
-                }
-              }
+          if(!m_participants.empty()) {
+            auto current = m_participants.find(msg->getSource());
+            if( current != m_participants.end()) {
+              // Add position to list, then check for collisions in EstimatedState
+              std::get<0>(current->second) = msg->lat;
+              std::get<1>(current->second) = msg->lon; 
+              std::get<3>(current->second).reset(); 
+            }
           }
         }
 
@@ -232,6 +235,8 @@ namespace Control
             case IMC::otterFormation::MessageTypeEnum::T_start:
               m_last_of_msg = *msg;
               m_formation_radius = msg->minradius;
+              m_dsp.value = msg->maxspeed;
+              m_dsp.speed_units = msg->speed_units;
               if(!isActive()) {
 
                 // Add vehicles
@@ -253,6 +258,8 @@ namespace Control
               break;
             case IMC::otterFormation::MessageTypeEnum::T_param_change:
               inf("Updating controller with parameter changes");
+              m_dsp.value = msg->maxspeed;
+              m_dsp.speed_units = msg->speed_units;
               parseCustomParameters(msg->custom);
               m_formation_radius = msg->minradius;
               //TODO;
@@ -348,35 +355,139 @@ namespace Control
 
           return retval;
         }
-        // TODO
-        void formationAllocator() {
+        
+        
+        /// @brief This function tries all allocation combinations, and selects the one minimizing the total length traveled
+        /// Alternative approach TODO: minimize the longest distance traveled to reduce the time before formation is ready
+        /// @param pos 
+        std::vector<participant_t> formationAllocator(const std::vector<std::pair<double, double>> pos) {
+          std::vector<participant_t> retVal;
 
+          if(pos.size() == 2){
+            // Find positions in lat/lon
+            double lon[2] = {m_last_rs_msg.lon, m_last_rs_msg.lon};
+            double lat[2] = {m_last_rs_msg.lat, m_last_rs_msg.lat};
+            for(unsigned i = 0; i<2;i++) {
+              DUNE::Coordinates::WGS84::displace(pos[i].first, pos[i].second, &lat[i], &lon[i]);
+              inf("%f, %f", lat[i], lon[i]);
+            }
+            // Calculate distances betwen all vehicles and all formation positions
+            double distMatrix[2][2];
+            {
+              unsigned i=0;
+              for (auto &participant : m_participants) {
+                for(unsigned j = 0; j<2;j++) {
+                  distMatrix[i][j] = DUNE::Coordinates::WGS84::distance((double)std::get<0>(participant.second), std::get<1>(participant.second), 0.0, lat[j], lon[j], 0.0);
+                }
+                i++;
+              }
+            }
+            // Find distance sum of each solution and select best combination
+            participant_t firstVehicle  = m_participants.begin();
+            participant_t secondVehicle  = std::next(m_participants.begin());
+            double minDist = distMatrix[0][0] + distMatrix[1][1];
+            retVal.push_back(firstVehicle);
+            retVal.push_back(secondVehicle);
+
+            if( (distMatrix[0][1] + distMatrix[1][0]) < minDist) {
+              retVal[0] = secondVehicle;
+              retVal[1] = firstVehicle;
+            }
+
+          } else if(pos.size() == 3) {
+            // Find positions in lat/lon
+            double lon[3] = {m_last_rs_msg.lon, m_last_rs_msg.lon, m_last_rs_msg.lon};
+            double lat[3] = {m_last_rs_msg.lat, m_last_rs_msg.lat, m_last_rs_msg.lat};
+            for(unsigned i = 0; i<3;i++) {
+              DUNE::Coordinates::WGS84::displace(pos[i].first, pos[i].second, &lat[i], &lon[i]);
+              //inf("%f, %f", lat[i], lon[i]);
+            }
+            // Calculate distances betwen all vehicles and all formation positions
+            double distMatrix[3][3];
+            {
+              unsigned i=0;
+              for (auto &participant : m_participants) {
+                for(unsigned j = 0; j<3;j++) {
+                  distMatrix[i][j] = DUNE::Coordinates::WGS84::distance((double)std::get<0>(participant.second), std::get<1>(participant.second), 0.0, lat[j], lon[j], 0.0);
+                }
+                i++;
+              }
+            }
+            // Find distance sum of each solution and select best combination
+            participant_t firstVehicle  = m_participants.begin();
+            participant_t secondVehicle  = std::next(m_participants.begin());
+            participant_t thirdVehicle  = std::next(std::next(m_participants.begin())) ;
+            double tempsum;
+            double minDist = distMatrix[0][0] + distMatrix[1][1] + distMatrix[2][2];
+            retVal.push_back(firstVehicle);
+            retVal.push_back(secondVehicle);
+            retVal.push_back(thirdVehicle);
+
+            if( (tempsum = distMatrix[0][0] + distMatrix[1][2] + distMatrix[2][1]) < minDist) {
+              minDist = tempsum;
+              retVal[0] = firstVehicle;
+              retVal[1] = thirdVehicle;
+              retVal[2] = secondVehicle;
+            }
+            if( (tempsum = distMatrix[0][1] + distMatrix[1][0] + distMatrix[2][2]) < minDist) {
+              minDist = tempsum;
+              retVal[0] = secondVehicle;
+              retVal[1] = firstVehicle;
+              retVal[2] = thirdVehicle;
+            }
+            if( (tempsum = distMatrix[0][1] + distMatrix[1][2] + distMatrix[2][0]) < minDist) {
+              minDist = tempsum;
+              retVal[0] = secondVehicle;
+              retVal[1] = thirdVehicle;
+              retVal[2] = firstVehicle;
+            }
+            if( (tempsum = distMatrix[0][2] + distMatrix[1][1] + distMatrix[2][0]) < minDist) {
+              minDist = tempsum;
+              retVal[0] = thirdVehicle;
+              retVal[1] = secondVehicle;
+              retVal[2] = firstVehicle;
+            }
+            if( (tempsum = distMatrix[0][2] + distMatrix[1][0] + distMatrix[2][1]) < minDist) {
+              minDist = tempsum;
+              retVal[0] = thirdVehicle;
+              retVal[1] = firstVehicle;
+              retVal[2] = secondVehicle;
+            }
+
+            inf("Triple");
+          } else {
+            debug("No optimizing allocator available, returning in order");
+            for (participant_t participant = m_participants.begin();participant != m_participants.end();participant++) {
+              retVal.push_back(participant);
+            }
+          }
+          return retVal;
         }
 
         void updateReference() {
-          DUNE::IMC::DesiredSpeed m_dsp;
-          m_dsp.value = m_last_of_msg.maxspeed;
-          m_dsp.speed_units = m_last_of_msg.speed_units;
           std::vector<std::pair<double, double>> pos = generateTrackingFormation(0,0, m_formation_radius, m_participants.size(), m_formation_rotate_rad);
           inf("Participants, rotstate %ld: %f", m_participants.size(), m_formation_rotate_rad);
+
+          if(m_allocation.empty()) {
+            m_allocation = formationAllocator(pos);
+          }
+          
           double lat,lon;
           unsigned i=0;
-          for (auto &participant : m_participants) {
+          for (auto &participant : m_allocation) {
+            inf("Vehicle: %d", participant->first);
+
             lon = m_last_rs_msg.lon;
             lat = m_last_rs_msg.lat;
 
             DUNE::Coordinates::WGS84::displace(pos[i].first, pos[i].second, &lat, &lon);
-            std::get<2>(participant.second).setDestination(participant.first);
-            std::get<2>(participant.second).lon = lon;
-            std::get<2>(participant.second).lat = lat;
-            std::get<2>(participant.second).speed.set(m_dsp);
-            std::get<2>(participant.second).flags = IMC::Reference::FlagsBits::FLAG_LOCATION | IMC::Reference::FlagsBits::FLAG_SPEED;
-
-            spew("%d - %f, %f", i, DUNE::Math::Angles::degrees(std::get<2>(participant.second).lon), DUNE::Math::Angles::degrees(std::get<2>(participant.second).lat));
-            dispatch(std::get<2>(participant.second));
-
-            inf("Participant: %d, Location: %f, %f", participant.first, std::get<0>(participant.second), std::get<1>(participant.second));
+            std::get<2>(participant->second).setDestination(participant->first);
+            std::get<2>(participant->second).lon = lon;
+            std::get<2>(participant->second).lat = lat;
+            std::get<2>(participant->second).speed.set(m_dsp);
+            std::get<2>(participant->second).flags = IMC::Reference::FlagsBits::FLAG_LOCATION | IMC::Reference::FlagsBits::FLAG_SPEED;
             i++;
+            dispatch(std::get<2>(participant->second));
           }
         }
 
@@ -392,13 +503,17 @@ namespace Control
                 if(!m_last_tag_timer.overflow())
                 {
                   if(m_formation_started) {
-                    spew("Ref Update");
                     updateReference(); 
                   }
       
                 } else {
-                  // Also threashold to keep standing still
-                  // Check if over threashold, then requestDeactivation
+                  // Keep searchers alive during timeout
+                  war("Position Estimate Too Old, re-sending previous message.");
+                  for (auto &participant : m_allocation) {
+                    dispatch(std::get<2>(participant->second));
+                  }
+                  // Alternative: Stop search on timeout
+                  //requestDeactivation();
                 }
                 m_ref_send_timer.reset();
               }
