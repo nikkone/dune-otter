@@ -298,4 +298,66 @@ namespace ENCGIS
 
         return false;
       }
+
+
+    double DBconnection::distanceToLayerUTM(double x, double y, double maxDist, std::string layer) {
+      std::string query = "select min(distance(makepoint(" + std::to_string(x) + "," + std::to_string(y) + ", 32632), geometry)) as d from ("
+		      "select * from " + layer + " where ROWID IN (SELECT ROWID FROM SpatialIndex "
+		      "WHERE f_table_name = '" + layer + "' and "
+		      "search_frame = BuildCircleMbr(" + std::to_string(x) + "," + std::to_string(y) + ", " + std::to_string(maxDist) + ",32632))"
+      ")";
+        int errors = 0;
+        sqlite3_stmt* m_handle;
+
+        if (sqlite3_prepare_v2(db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
+        {
+            errors++;
+        }
+        int m_idx = 0;
+        // Execute
+        /*int rc = */sqlite3_step(m_handle);
+        //int value = sqlite3_column_int(m_handle, m_idx++);
+        double minDist = sqlite3_column_double(m_handle, m_idx++);
+        // Teardown
+        if (m_handle) {
+          sqlite3_finalize(m_handle);
+        } else {
+          return -1.0;
+        }
+        return minDist;
+    }
+
+    bool DBconnection::distanceToLayerWithinUTM(double x, double y, double limit, std::string layer) {
+      std::string query = "select PtDistWithin(makepoint(" + std::to_string(x) + "," + std::to_string(y) + ", 32632), geometry, " + std::to_string(limit) + ") as d from ("
+	      "select * from " + layer + " where ROWID IN (SELECT ROWID FROM SpatialIndex "
+		      "WHERE f_table_name = '" + layer + "' and "
+		      "search_frame = BuildCircleMbr(" + std::to_string(x) + "," + std::to_string(y) + ", " + std::to_string(limit) + ",32632)"
+        ")"
+      ") where d=1 limit 1";
+        int errors = 0;
+        sqlite3_stmt* m_handle;
+
+        if (sqlite3_prepare_v2(db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
+        {
+            errors++;
+        }
+        int m_idx = 0;
+        // Execute
+        /*int rc = */sqlite3_step(m_handle);
+        //int value = sqlite3_column_int(m_handle, m_idx++);
+        int within = sqlite3_column_int(m_handle, m_idx++);
+
+        // Teardown
+        if (m_handle) {
+          sqlite3_finalize(m_handle);
+        } else {
+          return false;
+        }
+
+        if(within) {
+          return true;
+        }
+        return false;
+    }
+
 }

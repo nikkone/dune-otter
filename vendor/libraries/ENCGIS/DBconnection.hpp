@@ -99,10 +99,38 @@ namespace ENCGIS
     //! @return Number of land crossings, -1 if the query returns NULL .
     int checkTransectLanding(double startLat, double startLon, double endLat, double endLon, std::string table="lndaretable", bool useSpatialIndex=true);
 
+    /// @brief 
+    /// @param layer 
+    /// @param minX 
+    /// @param minY 
+    /// @param maxX 
+    /// @param maxY 
+    /// @return 
     bool getExtent(std::string layer, double &minX, double &minY, double &maxX, double &maxY);
-    //select MbrMinX(geometry), MbrMinY(geometry), MbrMaxX(geometry), MbrMaxX(geometry) from searchgridraw
 
+    /// @brief 
+    /// @param X 
+    /// @param Y 
+    /// @param shiftDistance 
+    /// @param MBROffset 
+    /// @return 
     bool findClosestSafePointUTM(double &X, double &Y, double shiftDistance = 1.0, double MBROffset = 200);
+
+    /// @brief 
+    /// @param x 
+    /// @param y 
+    /// @param maxDist 
+    /// @param layer 
+    /// @return 
+    double distanceToLayerUTM(double x, double y, double maxDist, std::string layer="innavigable");
+
+    /// @brief 
+    /// @param x 
+    /// @param y 
+    /// @param limit 
+    /// @param layer 
+    /// @return 
+    bool distanceToLayerWithinUTM(double x, double y, double limit, std::string layer="innavigable");
 
     sqlite3 *db;
     int SRID;
