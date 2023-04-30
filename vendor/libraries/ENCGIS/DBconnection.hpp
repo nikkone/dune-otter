@@ -122,7 +122,7 @@ namespace ENCGIS
     /// @param maxDist 
     /// @param layer 
     /// @return 
-    double distanceToLayerUTM(double x, double y, double maxDist, std::string layer="innavigable");
+    double distanceToLayerUTM(const double x, const double y, const double maxDist, std::string layer="innavigable");
 
     /// @brief 
     /// @param x 
@@ -130,7 +130,7 @@ namespace ENCGIS
     /// @param limit 
     /// @param layer 
     /// @return 
-    bool distanceToLayerWithinUTM(double x, double y, double limit, std::string layer="innavigable");
+    bool distanceToLayerWithinUTM(const double x, const double y, const double limit, std::string layer="innavigable");
 
     sqlite3 *db;
     int SRID;

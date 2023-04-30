@@ -300,7 +300,7 @@ namespace ENCGIS
       }
 
 
-    double DBconnection::distanceToLayerUTM(double x, double y, double maxDist, std::string layer) {
+    double DBconnection::distanceToLayerUTM(const double x, const double y, const double maxDist, std::string layer) {
       std::string query = "select min(distance(makepoint(" + std::to_string(x) + "," + std::to_string(y) + ", 32632), geometry)) as d from ("
 		      "select * from " + layer + " where ROWID IN (SELECT ROWID FROM SpatialIndex "
 		      "WHERE f_table_name = '" + layer + "' and "
@@ -327,7 +327,7 @@ namespace ENCGIS
         return minDist;
     }
 
-    bool DBconnection::distanceToLayerWithinUTM(double x, double y, double limit, std::string layer) {
+    bool DBconnection::distanceToLayerWithinUTM(const double x, const double y, const double limit, std::string layer) {
       std::string query = "select PtDistWithin(makepoint(" + std::to_string(x) + "," + std::to_string(y) + ", 32632), geometry, " + std::to_string(limit) + ") as d from ("
 	      "select * from " + layer + " where ROWID IN (SELECT ROWID FROM SpatialIndex "
 		      "WHERE f_table_name = '" + layer + "' and "
