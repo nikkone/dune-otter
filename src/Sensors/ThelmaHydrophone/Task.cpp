@@ -99,6 +99,8 @@ namespace Sensors
 
       bool usingPPS;
 
+      std::string log_folder;
+
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -189,6 +191,10 @@ namespace Sensors
           .defaultValue("");
         }
 
+        param("Rawlogfile folder", m_args.log_folder)
+        .defaultValue("log/")
+        .description("The folder to place the raw logfiles in.");
+
         bind<IMC::DevDataText>(this);
         bind<IMC::IoEvent>(this);
         bind<IMC::GpsFix>(this);
@@ -274,7 +280,7 @@ namespace Sensors
       void
       onResourceInitialization(void)
       {
-        filename = "log/tbr_ " + std::to_string(std::time(nullptr)) + ".thelma";
+        filename = m_args.log_folder + "tbr_ " + std::to_string(std::time(nullptr)) + ".thelma";
         bool configuration_mode = false;
         for (unsigned i = 0; i < c_max_init_cmds; ++i)
         {
