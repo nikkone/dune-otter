@@ -2,6 +2,7 @@
 namespace ENCGIS
 {
   isPointInLayerStatement::isPointInLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg, std::string attached_db) {
+    m_handle = nullptr;
     /*std::string query = "select sum(intersects(MakePoint(?1,?2, " + epsg + " ), geom)) as c from (SELECT geom FROM " + layer + " "
     "WHERE ROWID IN ("
       "SELECT ROWID FROM SpatialIndex "
@@ -27,8 +28,7 @@ namespace ENCGIS
   }
 
   isPointInLayerStatement::~isPointInLayerStatement() {
-    if (m_handle)
-      sqlite3_finalize(m_handle);
+    sqlite3_finalize(m_handle);
   }
 
   int isPointInLayerStatement::run(double X, double Y) {

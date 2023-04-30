@@ -164,7 +164,7 @@ namespace MotionPlanners
           lineCheck = new ENCGIS::lineIntersectLayerStatement("lndarepolygon", "geometry", m_con->db, m_args.epsg);
         } catch(std::runtime_error& e) {
           err(DTR("Problem opening charts database: %s"), e.what());
-          // Set task state to failure
+          setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
         }
       }
 

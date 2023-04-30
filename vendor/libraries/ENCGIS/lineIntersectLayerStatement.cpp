@@ -3,6 +3,7 @@ namespace ENCGIS
 {
 
   lineIntersectLayerStatement::lineIntersectLayerStatement(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg, std::string attached_db) {
+    m_handle = nullptr;
     //OLD: Does not stop after one polygon is returned
     /*std::string query = "select sum(intersects(makeline(makepoint(?1,?2, " + std::to_string(geometry_epsg) + " ), makepoint(?3,?4, " + std::to_string(geometry_epsg) + ")), " + geometry_column + ")) FROM " + layer + " "
     "WHERE ROWID IN ("
@@ -22,8 +23,7 @@ namespace ENCGIS
   }
 
   lineIntersectLayerStatement::~lineIntersectLayerStatement() {
-    if (m_handle)
-      sqlite3_finalize(m_handle);
+    sqlite3_finalize(m_handle);
   }
 
   int lineIntersectLayerStatement::run(double startX, double startY, double endX, double endY) {

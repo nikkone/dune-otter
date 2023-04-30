@@ -121,22 +121,16 @@ namespace ENCGIS {
     int SearchGridPlanner::getLocalOptimalNeighbour(int cell, std::string metric) {
         std::string query = "select gid from (select max(" + metric + ") as mw,gid from " + grid->getdbGridTable() + " where " + metric + " >= 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")))";
         //std::cout << query << std::endl;
-        int errors = 0;
-        sqlite3_stmt* m_handle;
+        sqlite3_stmt* m_handle = nullptr;
 
-        if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
+        if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) == SQLITE_OK) {
+            if(sqlite3_step(m_handle) == SQLITE_ROW) {
+              int value = sqlite3_column_int(m_handle, 0);
+              sqlite3_finalize(m_handle);
+              return value;
+            }
         }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        int value = sqlite3_column_int(m_handle, m_idx++);
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
-
-        return value;
+        return -1;
     }
 
     int SearchGridPlanner::getLocalOptimalNeighbourAzimuth(int cell, double &azimuth, std::string metric) {
@@ -146,49 +140,32 @@ namespace ENCGIS {
         " from " + grid->getdbGridTable() + " where " + metric + " > 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))"
         "))";
 
-        
         //std::string query = "select gid from (select max(" + metric + ") as mw,gid from " + grid->getdbGridTable() + " where " + metric + " > 0 and st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + ")))";
-        int errors = 0;
-        sqlite3_stmt* m_handle;
-
-        if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
+        sqlite3_stmt* m_handle = nullptr;
+        int value = 0;
+        if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) == SQLITE_OK) {
+          if(sqlite3_step(m_handle) == SQLITE_ROW) {
+            value = sqlite3_column_int(m_handle, 0);
+            azimuth = sqlite3_column_double(m_handle, 1);
+          }
         }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        int value = sqlite3_column_int(m_handle, m_idx++);
-        azimuth = sqlite3_column_double(m_handle, m_idx++);
 
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
-
+        sqlite3_finalize(m_handle);
         return value;
     }
     
     int SearchGridPlanner::getDistanceOptimalNextCell(int cell, std::string metric) {
-        double maxDistance = 1850;
-        std::string query = "select *, max(" + metric + " - " + std::to_string(distanceWeight) + "*distance(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))/" + std::to_string(maxDistance) + ") from " + grid->getdbGridTable() + " where " + metric + " > 0";
-        int errors = 0;
-        sqlite3_stmt* m_handle;
-
-        if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
+      double maxDistance = 1850;
+      std::string query = "select *, max(" + metric + " - " + std::to_string(distanceWeight) + "*distance(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))/" + std::to_string(maxDistance) + ") from " + grid->getdbGridTable() + " where " + metric + " > 0";
+      sqlite3_stmt* m_handle = nullptr;
+      int value = 0;
+      if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) == SQLITE_OK) {
+        if(sqlite3_step(m_handle) == SQLITE_ROW) {
+          value = sqlite3_column_int(m_handle, 0);
         }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        int value = sqlite3_column_int(m_handle, m_idx++);
-
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
-
-        return value;
-
+      }
+      sqlite3_finalize(m_handle);
+      return value;
     }
     std::vector<int> SearchGridPlanner::removeRedundantCells(const std::vector<int> &cells, double acceptedAzimuthDeviation) {
         std::vector<int> resultingCells;
@@ -203,13 +180,11 @@ namespace ENCGIS {
                 previousAzimuth = currentAzimuth;
             }
         }
-
         resultingCells.push_back(cells.back());
         return resultingCells;
     }
 
     int SearchGridPlanner::getLocalRandomNeighbour(int cell, std::string metric) {
-        //double maxDistance = 1850;
         //std::string query = "select *, max(" + metric + " - " + std::to_string(distanceWeight) + "*distance(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))/" + std::to_string(maxDistance) + ") from " + grid->getdbGridTable() + " where " + metric + " > 0";
         std::string query = "select gid from ("
             "	select "
@@ -218,47 +193,29 @@ namespace ENCGIS {
             "		" + metric + " >= 0 and "
             "		st_touches(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))"
             ") ORDER BY RANDOM() LIMIT 1;";
-        int errors = 0;
-        sqlite3_stmt* m_handle;
-
-        if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
+        sqlite3_stmt* m_handle = nullptr;
+        int value = 0;
+        if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) == SQLITE_OK) {
+          if(sqlite3_step(m_handle) == SQLITE_ROW) {
+            value = sqlite3_column_int(m_handle, 0);
+          }
         }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        int value = sqlite3_column_int(m_handle, m_idx++);
-
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
-
+        sqlite3_finalize(m_handle);
         return value;
-
     }
 
     int SearchGridPlanner::getGlobalRandomCell(std::string metric) {
-        //double maxDistance = 1850;
-        //std::string query = "select *, max(" + metric + " - " + std::to_string(distanceWeight) + "*distance(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))/" + std::to_string(maxDistance) + ") from " + grid->getdbGridTable() + " where " + metric + " > 0";
-        std::string query = "select gid from " + grid->getdbGridTable() + " where " + metric + " >= 0 ORDER BY RANDOM() LIMIT 1;";
-        int errors = 0;
-        sqlite3_stmt* m_handle;
-
-        if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
+      //std::string query = "select *, max(" + metric + " - " + std::to_string(distanceWeight) + "*distance(geometry, (select geometry from " + grid->getdbGridTable() + " where gid = " + std::to_string(cell) + "))/" + std::to_string(maxDistance) + ") from " + grid->getdbGridTable() + " where " + metric + " > 0";
+      std::string query = "select gid from " + grid->getdbGridTable() + " where " + metric + " >= 0 ORDER BY RANDOM() LIMIT 1;";
+      sqlite3_stmt* m_handle = nullptr;
+      int value = 0;
+      if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) == SQLITE_OK) {
+        if(sqlite3_step(m_handle) == SQLITE_ROW) {
+          value = sqlite3_column_int(m_handle, 0);
         }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        int value = sqlite3_column_int(m_handle, m_idx++);
-
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
-
-        return value;
+      }
+      sqlite3_finalize(m_handle);
+      return value;
     }
 
 
@@ -286,23 +243,16 @@ std::string query =
  	"from " + grid->getdbGridTable() + " as sg where w>0.0"
 ")";
 
-        //std::cout << query << std::endl;
-        int errors = 0;
-        sqlite3_stmt* m_handle;
-
-        if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
+      //std::cout << query << std::endl;
+      int value = 0;
+      sqlite3_stmt* m_handle = nullptr;
+      if (sqlite3_prepare_v2(grid->getDBconnection()->db, query.c_str(), query.length(), &m_handle, 0) == SQLITE_OK) {
+        if(sqlite3_step(m_handle) == SQLITE_ROW) {
+          value = sqlite3_column_int(m_handle, 0);
         }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        int value = sqlite3_column_int(m_handle, m_idx++);
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
-
-        return value;
+      }
+      sqlite3_finalize(m_handle);
+      return value;
     }
     
     std::vector<int> SearchGridPlanner::calculateSearchPathGlobal()
@@ -371,8 +321,7 @@ std::string query =
         std::vector<std::pair<double, double>> cells_pos;
         std::vector<int> cells;
         int cell = initialCell;
-        // Greedy algorithm with azimuth weights
-        double azimuth = initialAzimuth;
+        
         while(cell != 0) {
             cells.push_back(cell);
             grid->setCellMetric(cell,-1);

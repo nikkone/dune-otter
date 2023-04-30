@@ -156,11 +156,12 @@ namespace Monitors
       {
         try{
           m_con = new ENCGIS::DBconnection(m_args.gridDBpath, SQLITE_OPEN_READWRITE, 32632);
+          m_searchGridCoverage = new ENCGIS::SearchGridCoverageState(m_con, std::string("coverage"));
         } catch(std::runtime_error& e) {
-          // Set task state to failure
           err(DTR("Problem opening charts database: %s"), e.what());
+          setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
         }
-        m_searchGridCoverage = new ENCGIS::SearchGridCoverageState(m_con, std::string("coverage"));
+        
       }
 
       //! Initialize resources.

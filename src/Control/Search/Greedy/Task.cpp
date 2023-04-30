@@ -153,21 +153,21 @@ namespace Control
                     //m_con->runQuery("select * from db1.coalne limit 10");
                     } catch(std::runtime_error& e) {
                     err(DTR("Problem opening charts database: %s"), e.what());
-                    // Set task state to failure
+                    setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
                     }
                     m_searchGrid = new ENCGIS::SearchGrid(m_con);
                     try{
                     pointCheck = new ENCGIS::isPointInLayerStatement(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632, attachedDb);
                     } catch(std::runtime_error& e) {
                     err(DTR("Problem creating query for navigable layer: %s"), e.what());
-                    // Set task state to failure
+                    setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
                     }
 
                     try{
                     lineCheck = new ENCGIS::lineIntersectLayerStatement(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632, attachedDb);
                     } catch(std::runtime_error& e) {
                     err(DTR("Problem creating query for innavigable layer: %s"), e.what());
-                    // Set task state to failure
+                    setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
                     }  
 
                 }

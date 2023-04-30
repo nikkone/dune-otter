@@ -115,7 +115,7 @@ namespace Supervisors
         .description("Maximum Radius.");
 
         param("Participants", m_args.participants)
-        .defaultValue("ntnu-otter-02,ntnu-otter-01,ntnu-otter-03")
+        .defaultValue("")
         .description("Participants.");
 
         param("Custom Arguments", m_args.custom)

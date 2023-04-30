@@ -40,7 +40,6 @@ namespace ENCGIS
     /// @brief 
     ~DBconnection();
 
-
     /// @brief 
     /// @param in_x 
     /// @param in_y 

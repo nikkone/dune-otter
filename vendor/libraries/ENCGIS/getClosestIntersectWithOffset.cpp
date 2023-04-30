@@ -2,6 +2,7 @@
 namespace ENCGIS
 {
   getClosestIntersectWithOffset::getClosestIntersectWithOffset(std::string layer, std::string geometry_column, sqlite3 *db, int geometry_epsg, double offset) {
+    m_handle = nullptr;
     /*std::string query = 
     "select Line_Locate_Point(makeline(makepoint(?1,?2, " + std::to_string(geometry_epsg) + " ), makepoint(?3,?4, " + std::to_string(geometry_epsg) + ")), p), X(p), Y(p) from ("
     "select s,Line_Interpolate_Point(makeline(makepoint(?1,?2, " + std::to_string(geometry_epsg) + " ),s), 0.9) as p, distance(s, makepoint(?1,?2, " + std::to_string(geometry_epsg) + " )) as d from ("
@@ -30,8 +31,7 @@ namespace ENCGIS
   }
 
   getClosestIntersectWithOffset::~getClosestIntersectWithOffset() {
-    if (m_handle)
-      sqlite3_finalize(m_handle);
+    sqlite3_finalize(m_handle);
   }
 
   double getClosestIntersectWithOffset::run(double startX, double startY, double endX, double endY, double &bestOptionX, double &bestOptionY) {

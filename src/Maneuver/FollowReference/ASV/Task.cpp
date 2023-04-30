@@ -207,6 +207,7 @@ namespace Maneuver
           bind<IMC::Announce>(this);
           bind<IMC::EstimatedState>(this);
           bind<IMC::Reference>(this);
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         }
 
       void
@@ -233,21 +234,21 @@ namespace Maneuver
             m_con = std::make_shared<ENCGIS::DBconnection>(m_args.encDBpath, SQLITE_OPEN_READWRITE, 32632);
           } catch(std::runtime_error& e) {
             err(DTR("Problem opening charts database: %s"), e.what());
-            // Set task state to failure
+            setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
           }
 
           try{
             pointCheck = std::make_unique<ENCGIS::isPointInLayerStatement>(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632);
           } catch(std::runtime_error& e) {
             err(DTR("Problem creating query for navigable layer: %s"), e.what());
-            // Set task state to failure
+            setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
           }
 
           try{
             lineCheck = std::make_unique<ENCGIS::lineIntersectLayerStatement>(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632);
           } catch(std::runtime_error& e) {
             err(DTR("Problem creating query for innavigable layer: %s"), e.what());
-            // Set task state to failure
+            setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
           }  
         }
 
@@ -477,6 +478,8 @@ namespace Maneuver
               spew("End Pointinlayer: %d", pointCheck->run(m_last_utm_pos_end.first, m_last_utm_pos_end.second));
             } else {
               err("findClosestSafePoint failed, probably DB error.");
+              inf("Original Pos: %f, %f", desired_path.end_lat, desired_path.end_lon);
+              inf("Safe Pos: %f, %f", m_last_utm_pos_end.first, m_last_utm_pos_end.second);
               return;
             }
 
@@ -597,7 +600,7 @@ namespace Maneuver
                 inf("Safe Pos: %f, %f", utmend.first, utmend.second);
                 spew("End Pointinlayer: %d", pointCheck->run(utmend.first, utmend.second));
               } else {
-                err("findClosestSafePoint failed, probably DB error.");
+                err("findClosestSafePoint failed on endpoint, probably DB error.");
                 return false;
               }
               ////////////////////////////////////////////////////
@@ -610,7 +613,7 @@ namespace Maneuver
                   inf("Safe Pos: %f, %f", utmstart.first, utmstart.second);
                   spew("Start Pointinlayer: %d", pointCheck->run(utmstart.first, utmstart.second));
                 } else {
-                  err("findClosestSafePoint failed, probably DB error.");
+                  err("findClosestSafePoint failed on current location, probably DB error.");
                   return false;
                 }
               }

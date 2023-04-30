@@ -48,7 +48,7 @@ namespace ENCGIS
     std::string sql_stmt = "select X(geom), Y(geom) from (select geom from " + tableName + " where ID="+std::to_string(ID)+")";
   
     //Setup
-    sqlite3_stmt* m_handle;
+    sqlite3_stmt* m_handle = nullptr;
     
     if (sqlite3_prepare_v2(m_con->db, sql_stmt.c_str(), sql_stmt.length(), &m_handle, 0) != SQLITE_OK)
     {
@@ -57,20 +57,18 @@ namespace ENCGIS
     std::pair<double, double> ret;
     // Execute
     if(sqlite3_step(m_handle) == SQLITE_ROW) {
-      int m_idx = 0;
-      if (sqlite3_column_type(m_handle, m_idx) != SQLITE_FLOAT)
+      if (sqlite3_column_type(m_handle, 0) != SQLITE_FLOAT)
         throw ENCGIS::DBconnection::Error("column result is not of FLOAT type", "");
-      ret.first = sqlite3_column_double(m_handle, m_idx++);
-      if (sqlite3_column_type(m_handle, m_idx) != SQLITE_FLOAT)
+      ret.first = sqlite3_column_double(m_handle, 0);
+      if (sqlite3_column_type(m_handle, 1) != SQLITE_FLOAT)
         throw ENCGIS::DBconnection::Error("column result is not of FLOAT type", "");
-      ret.second = sqlite3_column_double(m_handle, m_idx);
+      ret.second = sqlite3_column_double(m_handle, 1);
     } else {
         throw ENCGIS::DBconnection::Error("Could not execute", sql_stmt);
     }
 
     // Teardown
-    if (m_handle)
-      sqlite3_finalize(m_handle);
+    sqlite3_finalize(m_handle);
     return ret;
   }
 

@@ -177,20 +177,20 @@ namespace MotionPlanners
           m_con = new ENCGIS::DBconnection(m_args.dbPath, SQLITE_OPEN_READONLY, 32632);
         } catch(std::runtime_error& e) {
           err(DTR("Problem opening charts database: %s"), e.what());
-          // Set task state to failure
+          setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
         }
         try{
           pointCheck = new ENCGIS::isPointInLayerStatement(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632);
         } catch(std::runtime_error& e) {
           err(DTR("Problem creating query for navigable layer: %s"), e.what());
-          // Set task state to failure
+          setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
         }
 
         try{
           lineCheck = new ENCGIS::lineIntersectLayerStatement(m_args.dbInnavigableLayerName, "geometry", m_con->db, 32632);
         } catch(std::runtime_error& e) {
           err(DTR("Problem creating query for innavigable layer: %s"), e.what());
-          // Set task state to failure
+          setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
         }  
       }
 

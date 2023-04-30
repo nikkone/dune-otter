@@ -144,125 +144,91 @@ namespace ENCGIS {
     }
 
     void SearchGrid::normalizeMetric(bool invert, std::string metric) {
-        // Find max/min weight
-        std::string maxmin = "select min(" + metric + "), max(" + metric + ") from " + dbGridTable;
-        int errors = 0;
-        sqlite3_stmt* m_handle;
+      // Find max/min weight
+      std::string maxmin = "select min(" + metric + "), max(" + metric + ") from " + dbGridTable;
+      sqlite3_stmt* m_handle = nullptr;
 
-        if (sqlite3_prepare_v2(m_con->db, maxmin.c_str(), maxmin.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
-        }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        double min = sqlite3_column_double(m_handle, m_idx++);
-        double max = sqlite3_column_double(m_handle, m_idx++);
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
+      if (sqlite3_prepare_v2(m_con->db, maxmin.c_str(), maxmin.length(), &m_handle, 0) == SQLITE_OK) {
+        if(sqlite3_step(m_handle) == SQLITE_ROW) {
+          double min = sqlite3_column_double(m_handle, 0);
+          double max = sqlite3_column_double(m_handle, 1);
+          sqlite3_finalize(m_handle);
+          // Recalculate weights
+          std::string recalculateWeights;
+          if(invert) {
+              recalculateWeights = "update " + dbGridTable + " set " + metric + " = max(0.0, 1.0 + (" + std::to_string(min) + " - " + metric + ")/" + std::to_string(max-min) + ")";
+          } else {
+              recalculateWeights = "update " + dbGridTable + " set " + metric + " = max(0.0, (" + metric + " - " + std::to_string(min) + ")/" + std::to_string(max-min) + ")";
+          }
 
-        // Recalculate weights
-        std::string recalculateWeights;
-        if(invert) {
-            recalculateWeights = "update " + dbGridTable + " set " + metric + " = max(0.0, 1.0 + (" + std::to_string(min) + " - " + metric + ")/" + std::to_string(max-min) + ")";
-        } else {
-            recalculateWeights = "update " + dbGridTable + " set " + metric + " = max(0.0, (" + metric + " - " + std::to_string(min) + ")/" + std::to_string(max-min) + ")";
+          if (sqlite3_prepare_v2(m_con->db, recalculateWeights.c_str(), recalculateWeights.length(), &m_handle, 0) == SQLITE_OK) {
+            sqlite3_step(m_handle);
+          }
         }
-
-        if (sqlite3_prepare_v2(m_con->db, recalculateWeights.c_str(), recalculateWeights.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
-        }
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
-        //std::cout << recalculateWeights << std::endl;
+      }
+      sqlite3_finalize(m_handle);
     }
 
     std::pair<double,double> SearchGrid::getCellLocation(int cell, unsigned outputSRID) {
-        //std::string query = "select X(center), Y(center) from (select transform(centroid(geometry), " + std::to_string(outputSRID) + ") as center from " + dbGridTable + " where gid = " + std::to_string(cell) + ")";
-        std::string query = "select X(center), Y(center) from (select transform(center, " + std::to_string(outputSRID) + ") as center from " + dbGridTable + " where gid = " + std::to_string(cell) + ")";
-        int errors = 0;
-        sqlite3_stmt* m_handle;
+      //std::string query = "select X(center), Y(center) from (select transform(centroid(geometry), " + std::to_string(outputSRID) + ") as center from " + dbGridTable + " where gid = " + std::to_string(cell) + ")";
+      std::string query = "select X(center), Y(center) from (select transform(center, " + std::to_string(outputSRID) + ") as center from " + dbGridTable + " where gid = " + std::to_string(cell) + ")";
 
-        if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
+      sqlite3_stmt* m_handle = nullptr;
+      double X = 0.0;
+      double Y = 0.0;
+      if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_handle, 0) == SQLITE_OK) {
+        if(sqlite3_step(m_handle) == SQLITE_ROW) {
+          X = sqlite3_column_double(m_handle, 0);
+          Y = sqlite3_column_double(m_handle, 1);
         }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        double X = sqlite3_column_double(m_handle, m_idx++);
-        double Y = sqlite3_column_double(m_handle, m_idx++);
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
-
-        return std::pair<double,double>(X, Y);
+      }
+      sqlite3_finalize(m_handle);
+      return std::pair<double,double>(X, Y);
     }
     
     int SearchGrid::getClosestCell(double X, double Y) {
-        std::string query = "select gid from ("
-                            "select gid, min(distance(geometry, makepoint(" + std::to_string(X) + "," + std::to_string(Y) + ", 32632))) from " + dbGridTable + ")";
-        int errors = 0;
-        sqlite3_stmt* m_handle;
+      std::string query = "select gid from ("
+                          "select gid, min(distance(geometry, makepoint(" + std::to_string(X) + "," + std::to_string(Y) + ", 32632))) from " + dbGridTable + ")";
+      int value = 0;
+      sqlite3_stmt* m_handle = nullptr;
 
-        if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
+      if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_handle, 0) == SQLITE_OK) {
+        if(sqlite3_step(m_handle) == SQLITE_ROW) {
+          value = sqlite3_column_int(m_handle, 0);
         }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        int value = sqlite3_column_int(m_handle, m_idx++);
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
+      }
 
-        return value;
+      sqlite3_finalize(m_handle);
+      return value;
     }
     
     int SearchGrid::getClosestUnsearchedCell(int cell, std::string metric) {
         std::string query = "select gid from ("
                             "select gid, min(distance(geometry, (select geometry from " + dbGridTable + " where gid = " + std::to_string(cell) + "))) from " + dbGridTable + " where " + metric + " > 0)";
-        int errors = 0;
-        sqlite3_stmt* m_handle;
+        int value = 0;
+        sqlite3_stmt* m_handle = nullptr;
 
-        if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
+      if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_handle, 0) == SQLITE_OK) {
+        if(sqlite3_step(m_handle) == SQLITE_ROW) {
+          value = sqlite3_column_int(m_handle, 0);
         }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        int value = sqlite3_column_int(m_handle, m_idx++);
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
-
-        return value;
+      }
+      sqlite3_finalize(m_handle);
+      return value;
     }
 
     double SearchGrid::getAzimuth(int cell1, int cell2) {
-        std::string query = " select azimuth((select center from " + dbGridTable + " where gid = " + std::to_string(cell1) + "), (select center from " + dbGridTable + " where gid = " + std::to_string(cell2) + "))";
-        int errors = 0;
-        sqlite3_stmt* m_handle;
+      std::string query = " select azimuth((select center from " + dbGridTable + " where gid = " + std::to_string(cell1) + "), (select center from " + dbGridTable + " where gid = " + std::to_string(cell2) + "))";
+      double azimuth = 0.0;
+      sqlite3_stmt* m_handle = nullptr;
 
-        if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_handle, 0) != SQLITE_OK)
-        {
-            errors++;
+      if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &m_handle, 0) == SQLITE_OK) {
+        if(sqlite3_step(m_handle) == SQLITE_ROW) {
+        azimuth = sqlite3_column_double(m_handle, 0);
         }
-        int m_idx = 0;
-        // Execute
-        /*int rc = */sqlite3_step(m_handle);
-        double azimuth = sqlite3_column_double(m_handle, m_idx++);
-        // Teardown
-        if (m_handle)
-            sqlite3_finalize(m_handle);
-        return azimuth;
+      }
+      sqlite3_finalize(m_handle);
+      return azimuth;
     }
 
     bool SearchGrid::setCellMetric(int cell, int value, std::string metric) {

@@ -152,6 +152,7 @@ namespace Control
           bind<IMC::otterFormation>(this);
           bind<IMC::RemoteSensorInfo>(this);
           //bind<IMC::TBRFishTag>(this);
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         }
         //! Update internal state with new parameter values.
         void
@@ -179,13 +180,13 @@ namespace Control
             m_con = std::make_shared<ENCGIS::DBconnection>(m_args.encDBpath, SQLITE_OPEN_READWRITE, 32632);
           } catch(std::runtime_error& e) {
             err(DTR("Problem opening charts database: %s"), e.what());
-            // Set task state to failure
+            setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
           }
           try{
             pointCheck = std::make_unique<ENCGIS::isPointInLayerStatement>(m_args.dbNavigableLayerName, "geometry", m_con->db, 32632);
           } catch(std::runtime_error& e) {
             err(DTR("Problem creating query for navigable layer: %s"), e.what());
-            // Set task state to failure
+            setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
           }
 
         }
@@ -408,7 +409,7 @@ namespace Control
               ")"
             ")";
 
-          sqlite3_stmt* db_handle;
+          sqlite3_stmt* db_handle = nullptr;
           
           if (sqlite3_prepare_v2(m_con->db, query.c_str(), query.length(), &db_handle, 0) != SQLITE_OK) {
             if (db_handle) {
@@ -416,13 +417,13 @@ namespace Control
             }
             return false; // False, could not execute sql statement
           }
-          int m_idx = 0;
+
           // Execute
           sqlite3_step(db_handle);
-          x = sqlite3_column_double(db_handle, m_idx++);
-          y = sqlite3_column_double(db_handle, m_idx++);
-          angle = sqlite3_column_double(db_handle, m_idx++);
-          int valid = sqlite3_column_int(db_handle, m_idx++);
+          x = sqlite3_column_double(db_handle, 0);
+          y = sqlite3_column_double(db_handle, 1);
+          angle = sqlite3_column_double(db_handle, 2);
+          int valid = sqlite3_column_int(db_handle, 3);
           // Teardown
           if (db_handle) {
             sqlite3_finalize(db_handle);
