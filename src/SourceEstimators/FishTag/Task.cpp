@@ -62,6 +62,10 @@ namespace SourceEstimators
 
       //! Reset toggle for buffers and estimators
       bool reset_toggle;
+
+      std::vector<std::string> singleEstimators;
+      std::vector<std::string> multiEstimators;
+
 // Kalman Filter
       //! Extended Kalman filter - Qm
       std::vector<double> ekf_Qm;      
@@ -177,6 +181,15 @@ namespace SourceEstimators
         param("SS - Extra Parameters - Value", m_args.ss_extra_param_value)
         .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
         .defaultValue("-0.5,0.01,1,0,1,7");
+
+        param("Single Receiver Estimators", m_args.singleEstimators)
+        .description("What single-receiver estimators to activate")
+        .defaultValue("EKF, UKF, SRUKF");
+        
+        param("Multi Receiver Estimators", m_args.multiEstimators)
+        .description("What multi-receiver estimators to activate")
+        .defaultValue("XKF,EKF");
+
         bind<IMC::TBRFishTag>(this);
         bind<IMC::SoundSpeed>(this);
 
@@ -206,17 +219,36 @@ namespace SourceEstimators
             m_ss_valid = false;
           }
         }
+        if(paramChanged(m_args.singleEstimators) || paramChanged(m_args.multiEstimators)) {
+          m_emap.clear();
+          SingleReceiverEstimatorTypeToUse.clear();
+          MultiReceiverEstimatorTypeToUse.clear();
+          clearDUNETagBuffers_t(&tagBuffers);
+          addEstimators();
+        }
       }
+
+      void addEstimators() {
+        if(std::find(m_args.singleEstimators.begin(), m_args.singleEstimators.end(), "EKF") != m_args.singleEstimators.end()) {
+          SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverEKF);
+        } if(std::find(m_args.singleEstimators.begin(), m_args.singleEstimators.end(), "UKF") != m_args.singleEstimators.end()) {
+          SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverUKF);
+        } if(std::find(m_args.singleEstimators.begin(), m_args.singleEstimators.end(), "SRUKF") != m_args.singleEstimators.end()) {
+          SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverSRUKF);
+        }
+        
+        if(std::find(m_args.multiEstimators.begin(), m_args.multiEstimators.end(), "XKF") != m_args.multiEstimators.end()) {
+          MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverXKF);
+        }
+        if(std::find(m_args.multiEstimators.begin(), m_args.multiEstimators.end(), "EKF") != m_args.multiEstimators.end()) {
+          MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
+        }
+      }
+
       void
       onResourceAcquisition(void)
       {
-        //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverEKF);
-        //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverUKF);
-        //SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverSRUKF);
-        
-        MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverXKF);
-        MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
-
+        addEstimators();
       }
       //! Resolve entity names.
       void
