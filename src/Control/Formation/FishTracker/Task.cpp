@@ -177,7 +177,7 @@ namespace Control
         onResourceAcquisition(void)
         {
           try{
-            m_con = std::make_shared<ENCGIS::DBconnection>(m_args.encDBpath, SQLITE_OPEN_READWRITE, 32632);
+            m_con = std::make_shared<ENCGIS::DBconnection>(m_args.encDBpath, SQLITE_OPEN_READONLY, 32632);
           } catch(std::runtime_error& e) {
             err(DTR("Problem opening charts database: %s"), e.what());
             setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
