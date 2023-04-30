@@ -747,6 +747,7 @@ Consider:
 
           m_cur_ref.lon = DUNE::Math::Angles::radians(initial_pos.first);
           m_cur_ref.lat = DUNE::Math::Angles::radians(initial_pos.second);
+          m_cur_ref.setDestination(msg->vehicle);
           DUNE::IMC::DesiredSpeed m_dsp;
           //DUNE::IMC::DesiredZ m_dz;
           m_dsp.value = msg->speed;
