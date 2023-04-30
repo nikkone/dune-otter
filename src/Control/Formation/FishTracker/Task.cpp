@@ -56,6 +56,10 @@ namespace Control
         std::string dbNavigableLayerName;
         //!
         bool useCollisionMitigation;
+
+        std::string participants;
+
+        unsigned formationAllocator;
       };
 
       struct Task : public DUNE::Tasks::Task
@@ -127,6 +131,10 @@ namespace Control
               .defaultValue("false")
               .description("Activate or deactivate the collision mitigation strategies");
 
+          param("Formation Allocator", m_args.formationAllocator)
+              .defaultValue("1")
+              .description("0 for minmax, 1 for mintot");
+
           param("ENC DB Path", m_args.encDBpath)
           .defaultValue("/home/nikolai/lststools/dune/misc/re4utmfinal.sqlite")
           .description("The path of the DB to read ENC from.");
@@ -134,6 +142,11 @@ namespace Control
           param("Navigable Layer Name", m_args.dbNavigableLayerName)
           .defaultValue("navigable")
           .description("Navigable Layer Name");
+
+          param("Participants", m_args.participants)
+              .defaultValue("ntnu-otter-01,ntnu-otter-02,ntnu-otter-03")
+              .description("Default participants if otterFormation message field is empty");
+
           bind<IMC::Abort>(this);
           bind<IMC::Announce>(this);
           bind<IMC::otterFormation>(this);
@@ -185,7 +198,7 @@ namespace Control
         void
         onResourceInitialization(void)
         {
-
+          addVehicles(m_args.participants);
         }
 
         void dispatchToVehicle(uint16_t vehicle, IMC::Message *msg)
@@ -281,24 +294,20 @@ namespace Control
           switch(msg->msg_type) {
             case IMC::otterFormation::MessageTypeEnum::T_start:
               m_last_of_msg = *msg;
-              m_formation_radius = msg->minradius;
+              m_formation_radius = msg->maxradius;
               m_dsp.value = msg->maxspeed;
               m_dsp.speed_units = msg->speed_units;
               if(!isActive()) {
 
-                // Add vehicles
-                std::vector<std::string> parts;
-                String::split(msg->participants, ",", parts);
-                m_participants.clear();
-                for (const auto &participant_name : parts) {
-                  uint16_t participant_id = resolveSystemName(participant_name);
-                  spew("Vehicle added: %d", participant_id);
-
-                  m_participants[participant_id] = std::tuple<fp64_t, fp64_t, IMC::Reference, DUNE::Time::Delta>{0.0,0.0, IMC::Reference(),DUNE::Time::Delta()};
-                  std::get<2>(m_participants[participant_id]).setDestination(participant_id);
-                  std::get<2>(m_participants[participant_id]).speed.set(m_dsp);
-                  std::get<2>(m_participants[participant_id]).flags = IMC::Reference::FlagsBits::FLAG_LOCATION | IMC::Reference::FlagsBits::FLAG_SPEED;
-
+                if(!msg->participants.empty()) {
+                  m_participants.clear();
+                }
+                addVehicles(msg->participants);
+                
+                for (auto &participant : m_participants)
+                {
+                  std::get<2>(participant.second).speed.set(m_dsp);
+                  std::get<2>(participant.second).flags = IMC::Reference::FlagsBits::FLAG_LOCATION | IMC::Reference::FlagsBits::FLAG_SPEED;
                 }
                 parseCustomParameters(msg->custom);
                 requestActivation();
@@ -314,7 +323,7 @@ namespace Control
               m_dsp.value = msg->maxspeed;
               m_dsp.speed_units = msg->speed_units;
               parseCustomParameters(msg->custom);
-              m_formation_radius = msg->minradius;
+              m_formation_radius = msg->maxradius;
               //TODO: Update speed on each participant
               break;
             default:
@@ -335,6 +344,21 @@ namespace Control
               }
             }
           }
+        }
+
+        void addVehicles(std::string participants) {
+                std::vector<std::string> parts;
+                String::split(participants, ",", parts);
+
+                for (const auto &participant_name : parts) {
+                  
+                  uint16_t participant_id = resolveSystemName(participant_name);
+                  spew("Vehicle added: %d", participant_id);
+                  if(m_participants.find(participant_id) == m_participants.end()) {
+                    m_participants[participant_id] = std::tuple<fp64_t, fp64_t, IMC::Reference, DUNE::Time::Delta>{0.0,0.0, IMC::Reference(),DUNE::Time::Delta()};
+                    std::get<2>(m_participants[participant_id]).setDestination(participant_id);
+                  }
+                }
         }
 
         void parseCustomParameters(std::string parameters) {
@@ -461,14 +485,20 @@ namespace Control
                 angle = -atan2(dx1*dy2-dx2*dy1, dx1*dx2+dy1*dy2);
                 return true;
               } else {
-                if(m_con->distanceToLayerUTM(x0, y0, radius) > m_last_of_msg.minradius) {
+                double distanceToLand = m_con->distanceToLayerUTM(x0, y0, m_last_of_msg.maxradius);
+                double minDistToLand = m_last_of_msg.minradius - m_last_of_msg.minradius*std::cos(M_PI/participants);
+                if(distanceToLand > minDistToLand) {
                   // Reducing radius to land to keep formation in place
-                  spew("Reducing radius as mitigation for formation collision");
-                  return false; // TODO: When implemented, should be true;
-                }/* else if(m_con->distanceToLayerUTM(x0, y0, radius) - m_accepted_formation_move > radius) {
+                  radius = distanceToLand; // Plus something because of rotation
+                  spew("Reducing radius as mitigation for formation collision. Distance to obstacle: %f", distanceToLand);
+                  return true; // TODO: When implemented, should be true;
+                }/* else if(distanceToLand - m_accepted_formation_move > radius) {
                   // Moving formation from land to keep formation
+                  m_con->findClosestSafePointUTM()
+
                   return true;
                 }*/ else {
+                  radius = m_last_of_msg.minradius;
                   // No collision mitigation strategy possible, falling back to closest safe spot
                   spew("No collision mitigation strategy possible/needed, falling back to closest safe spot");
                 }
@@ -515,10 +545,18 @@ namespace Control
           return retval;
         }
          
+        std::vector<participant_t> formationAllocator(const std::vector<std::pair<double, double>> pos) {
+        if(m_args.formationAllocator == 1) {
+          return formationAllocatorMinTot(pos);
+        } else {
+          return formationAllocatorMinMax(pos);
+        }
+        }
+
         /// @brief This function tries all allocation combinations, and selects the one minimizing the total length traveled
         /// Alternative approach TODO: minimize the longest distance traveled to reduce the time before formation is ready
         /// @param pos 
-        std::vector<participant_t> formationAllocator(const std::vector<std::pair<double, double>> pos) {
+        std::vector<participant_t> formationAllocatorMinTot(const std::vector<std::pair<double, double>> pos) {
           std::vector<participant_t> retVal;
 
           if(pos.size() == 2){
@@ -704,6 +742,122 @@ namespace Control
           return retVal;
         }
 
+        /// @brief This function tries all allocation combinations, and selects the one minimizing the maximum vehicle distance traveled
+        std::vector<participant_t> formationAllocatorMinMax(const std::vector<std::pair<double, double>> pos) {
+          std::vector<participant_t> retVal;
+
+          if(pos.size() == 2){
+            // Find positions in lat/lon
+            double lon[2] = {m_last_rs_msg.lon, m_last_rs_msg.lon};
+            double lat[2] = {m_last_rs_msg.lat, m_last_rs_msg.lat};
+            for(unsigned i = 0; i<2;i++) {
+              DUNE::Coordinates::WGS84::displace(pos[i].second, pos[i].first, &lat[i], &lon[i]);
+              inf("%f, %f", lat[i], lon[i]);
+            }
+            // Calculate distances betwen all vehicles and all formation positions
+            double distMatrix[2][2];
+            {
+              unsigned i=0;
+              for (auto &participant : m_participants) {
+                for(unsigned j = 0; j<2;j++) {
+                  distMatrix[i][j] = DUNE::Coordinates::WGS84::distance((double)std::get<0>(participant.second), std::get<1>(participant.second), 0.0, lat[j], lon[j], 0.0);
+                }
+                i++;
+              }
+            }
+            // Find distance sum of each solution and select best combination
+            participant_t firstVehicle  = m_participants.begin();
+            participant_t secondVehicle  = std::next(m_participants.begin());
+            double minMax = std::max(distMatrix[0][0], distMatrix[1][1]);
+            retVal.push_back(firstVehicle);
+            retVal.push_back(secondVehicle);
+
+            if( std::max(distMatrix[0][1],distMatrix[1][0]) < minMax) {
+              retVal[0] = secondVehicle;
+              retVal[1] = firstVehicle;
+            }
+
+          } else if(pos.size() == 3) {
+            // Find positions in lat/lon
+            double lon[3] = {m_last_rs_msg.lon, m_last_rs_msg.lon, m_last_rs_msg.lon};
+            double lat[3] = {m_last_rs_msg.lat, m_last_rs_msg.lat, m_last_rs_msg.lat};
+            for(unsigned i = 0; i<3;i++) {
+              DUNE::Coordinates::WGS84::displace(pos[i].second, pos[i].first, &lat[i], &lon[i]);
+              //inf("%f, %f", Math::Angles::degrees(lat[i]), Math::Angles::degrees(lon[i]));
+            }
+
+            // Calculate distances betwen all vehicles and all formation positions
+            double distMatrix[3][3];
+            {
+              unsigned i=0;
+              for (auto &participant : m_participants) {
+                for(unsigned j = 0; j<3;j++) {
+                  distMatrix[i][j] = DUNE::Coordinates::WGS84::distance((double)std::get<0>(participant.second), std::get<1>(participant.second), 0.0, lat[j], lon[j], 0.0);
+                  //war("Dist %d, %f for (%d, %d)", participant.first, distMatrix[i][j], i, j);
+                }
+                i++;
+              }
+            }
+            // Find distance sum of each solution and select best combination
+            auto firstVehicle  = m_participants.begin();
+            auto secondVehicle  = std::next(firstVehicle);
+            auto thirdVehicle  = std::next(secondVehicle) ;
+
+            
+            retVal.push_back(firstVehicle);
+            retVal.push_back(secondVehicle);
+            retVal.push_back(thirdVehicle);
+
+            double minMax = std::max({distMatrix[0][0],distMatrix[1][1],distMatrix[2][2]});
+
+            double tempmax = std::max({distMatrix[0][0], distMatrix[1][2], distMatrix[2][1]});
+            if( tempmax < minMax) {
+              minMax = tempmax;
+              retVal[0] = firstVehicle;
+              retVal[1] = thirdVehicle;
+              retVal[2] = secondVehicle;
+
+            }
+            tempmax = std::max({distMatrix[0][1], distMatrix[1][0], distMatrix[2][2]});
+            if( tempmax < minMax) {
+              minMax = tempmax;
+              retVal[0] = secondVehicle;
+              retVal[1] = firstVehicle;
+              retVal[2] = thirdVehicle;
+
+            }
+            tempmax = std::max({distMatrix[0][1], distMatrix[1][2], distMatrix[2][0]});
+            if( tempmax < minMax) {
+              minMax = tempmax;
+              retVal[0] = thirdVehicle;
+              retVal[1] = firstVehicle;
+              retVal[2] = secondVehicle;
+            }
+            tempmax = std::max({distMatrix[0][2], distMatrix[1][1], distMatrix[2][0]});
+            if( tempmax < minMax) {
+              minMax = tempmax;
+              retVal[0] = thirdVehicle;
+              retVal[1] = secondVehicle;
+              retVal[2] = firstVehicle;
+            }
+            tempmax = std::max({distMatrix[0][2], distMatrix[1][0], distMatrix[2][1]});
+            if( tempmax < minMax) {
+              minMax = tempmax;
+              retVal[0] = secondVehicle;
+              retVal[1] = thirdVehicle;
+              retVal[2] = firstVehicle;
+            }
+            inf("Triple minmax");
+          } else {
+            debug("No optimizing allocator available, returning in order");
+            for (participant_t participant = m_participants.begin();participant != m_participants.end();participant++) {
+              retVal.push_back(participant);
+            }
+          }
+          return retVal;
+        }
+
+
         void updateReference() {
           static bool m_collision = false;
         std::pair<double,double> utmpoint;
@@ -714,6 +868,7 @@ namespace Control
 
           static double angle = 0.0;
           double prevangle = angle;
+          m_formation_radius = m_last_of_msg.maxradius;
           if(m_useCollisionMitigation && formationCollisionHandler(utmpoint.first, utmpoint.second, m_formation_radius, m_participants.size(), angle)) {
             //if(angle < 0)
             //  angle = 2*M_PI-angle;
@@ -776,6 +931,19 @@ namespace Control
           {
             waitForMessages(1.0);
 
+
+/*/
+            std::pair<double,double> m_last_utm_pos_end;
+            m_con->transformSRID(Math::Angles::degrees(0.17626705), Math::Angles::degrees(1.10530141), 4326, m_last_utm_pos_end.first, m_last_utm_pos_end.second, 32632);
+
+            if(m_con->findClosestSafePointUTM(m_last_utm_pos_end.first, m_last_utm_pos_end.second)) {
+              //inf("Original Pos: %f, %f", desired_path.end_lat, desired_path.end_lon);
+              inf("Safe Pos: %f, %f", m_last_utm_pos_end.first, m_last_utm_pos_end.second);
+              spew("End Pointinlayer: %d", pointCheck->run(m_last_utm_pos_end.first, m_last_utm_pos_end.second));
+            } else {
+              err("findClosestSafePoint failed, probably DB error.");
+              return;
+            }*/
 /*/////////////////////////////////////////
 double angle, x,y;
 x=554942.21,y=7022601.52;
