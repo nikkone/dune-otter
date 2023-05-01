@@ -92,8 +92,6 @@ namespace Simulators
       uint8_t trans_freq;
       //! Receiver memory address
       uint16_t recv_mem_addr;
-      //! If GPS fix should be set as received location
-      bool use_gps;
       //! Should RemoteSensorInfo be sent as well?
       bool sendRemoteSensorInfo;
       //! SNR values under this will not be transmitted/detected
@@ -102,10 +100,21 @@ namespace Simulators
       double SNR_linear_a;
       //! Using a linear model ax+b=SNR, this is the 'b' coefficient 
       double SNR_linear_b;
+      
+
+      //! If GPS fix should be set as received location
+      bool use_gps_receiver;
       //! Source Address to use GPS information from.
-      std::string GPS_src;
+      std::string GPS_src_receiver;
       //! Source Entity to use GPS information from.
-      std::string GPS_src_ent;
+      std::string GPS_src_ent_receiver;
+
+      //! If GPS fix should be set as received location
+      bool use_gps_transmitter;
+      //! Source Address to use GPS information from.
+      std::string GPS_src_transmitter;
+      //! Source Entity to use GPS information from.
+      std::string GPS_src_ent_transmitter;
     };
     struct Task: public DUNE::Tasks::Periodic
     {
@@ -116,14 +125,20 @@ namespace Simulators
       Random::Generator* m_position_prng;
       Random::Generator* m_depth_prng;
 
-      uint16_t m_GPS_src;
+      uint16_t m_GPS_src_receiver;
       //! Source Entity to use GPS information from.
-      uint8_t m_GPS_src_ent;
+      uint8_t m_GPS_src_ent_receiver;
+
+      uint16_t m_GPS_src_transmitter;
+      //! Source Entity to use GPS information from.
+      uint8_t m_GPS_src_ent_transmitter;
 
       //! Task arguments.
       Arguments m_args;
-      //! Current Lat and Lon of vehicle.
-      fp64_t m_current_lat, m_current_lon;
+      //! Current Lat and Lon of receiver.
+      fp64_t m_receiver_lat, m_receiver_lon;
+      //! Current Lat and Lon of transmitter.
+      fp64_t m_transmitter_lat, m_transmitter_lon;
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
@@ -184,13 +199,22 @@ namespace Simulators
         .defaultValue("0.0, 0.0")
         .description("Initial tag position lat lon");
 
-        param("Use GPS Position Receiver", m_args.use_gps)
+        param("Use GPS Position Receiver", m_args.use_gps_receiver)
         .defaultValue("true");
 
-        param("GPS Source Address", m_args.GPS_src)
+        param("GPS Source Address Receiver", m_args.GPS_src_receiver)
         .defaultValue("-1");
 
-        param("GPS Source Entity", m_args.GPS_src_ent)
+        param("GPS Source Entity Receiver", m_args.GPS_src_ent_receiver)
+        .defaultValue("-1");
+
+        param("Use GPS Position Transmitter", m_args.use_gps_transmitter)
+        .defaultValue("true");
+
+        param("GPS Source Address Transmitter", m_args.GPS_src_transmitter)
+        .defaultValue("-1");
+
+        param("GPS Source Entity Transmitter", m_args.GPS_src_ent_transmitter)
         .defaultValue("-1");
 
         param("Initial Tag Position", m_args.tag_position)
@@ -264,15 +288,26 @@ namespace Simulators
       void
       onUpdateParameters(void)
       {
-        if(m_args.GPS_src == "-1") {
-          m_GPS_src = getSystemId();
+        if(m_args.GPS_src_receiver == "-1") {
+          m_GPS_src_receiver = getSystemId();
         } else {
-          m_GPS_src = resolveSystemName(m_args.GPS_src);
+          m_GPS_src_receiver = resolveSystemName(m_args.GPS_src_receiver);
         }
-        if(m_args.GPS_src_ent == "-1") {
-          m_GPS_src_ent = getEntityId();
+        if(m_args.GPS_src_ent_receiver == "-1") {
+          m_GPS_src_ent_receiver = getEntityId();
         } else {
-          m_GPS_src_ent = resolveEntity(m_args.GPS_src_ent);
+          m_GPS_src_ent_receiver = resolveEntity(m_args.GPS_src_ent_receiver);
+        }
+
+        if(m_args.GPS_src_transmitter== "-1") {
+          m_GPS_src_transmitter = getSystemId();
+        } else {
+          m_GPS_src_transmitter = resolveSystemName(m_args.GPS_src_transmitter);
+        }
+        if(m_args.GPS_src_ent_transmitter == "-1") {
+          m_GPS_src_ent_transmitter = getEntityId();
+        } else {
+          m_GPS_src_ent_transmitter = resolveEntity(m_args.GPS_src_ent_transmitter);
         }
 
       }
@@ -321,15 +356,25 @@ namespace Simulators
       void
       consume(const IMC::GpsFix* msg)
       {
-        if (msg->getSource() != m_GPS_src)
-          return;
-        if(m_args.GPS_src_ent != "-1") {
-          if (msg->getSourceEntity() != m_GPS_src_ent)
-            return;
-        }  
-        
-        m_current_lat=msg->lat;
-        m_current_lon=msg->lon;
+        //inf("Got GPSFix from %d", msg->getSource());
+        if (msg->getSource() == m_GPS_src_receiver) {
+          //if(m_args.GPS_src_ent_receiver != "-1") {
+          //  if (msg->getSourceEntity() != m_GPS_src_ent_receiver)
+          //    return;
+          //}  
+          spew("Got GPSFix from receiver at %d", m_GPS_src_receiver);
+          m_receiver_lat=msg->lat;
+          m_receiver_lon=msg->lon;
+        }
+        if (msg->getSource() == m_GPS_src_transmitter) {
+          //if(m_args.GPS_src_ent_transmitter != "-1") {
+          //  if (msg->getSourceEntity() != m_GPS_src_ent_transmitter)
+          //    return;
+          //}  
+          spew("Got GPSFix from transmitter at %d", m_GPS_src_transmitter);
+          m_transmitter_lat=msg->lat;
+          m_transmitter_lon=msg->lon;
+        }
       }
       //! Main loop.
       void
@@ -338,18 +383,30 @@ namespace Simulators
         // Calculate
         fp64_t receiver_lat, receiver_lon;
 
-        if(m_args.use_gps) {
-          receiver_lat = m_current_lat;
-          receiver_lon = m_current_lon;
+        if(m_args.use_gps_receiver) {
+          tag_msg.lat = m_receiver_lat;
+          tag_msg.lon = m_receiver_lon;
         } else {
-          receiver_lat = Math::Angles::radians(m_args.receiver_position[0]);
-          receiver_lon = Math::Angles::radians(m_args.receiver_position[1]);
+          tag_msg.lat = Math::Angles::radians(m_args.receiver_position[0]);
+          tag_msg.lon = Math::Angles::radians(m_args.receiver_position[1]);
         }
-        tag_msg.lat = Math::Angles::radians(m_args.tag_position[0]) + m_position_prng->gaussian(m_args.position_mean_value, m_args.position_std_dev);
-        tag_msg.lon = Math::Angles::radians(m_args.tag_position[1]) + m_position_prng->gaussian(m_args.position_mean_value, m_args.position_std_dev);
+
+        if(m_args.use_gps_transmitter) {
+          receiver_lat = m_transmitter_lat;
+          receiver_lon = m_transmitter_lon;
+        } else {
+          receiver_lat = Math::Angles::radians(m_args.tag_position[0]);
+          receiver_lon = Math::Angles::radians(m_args.tag_position[1]);
+        }
+
+        receiver_lat += m_position_prng->gaussian(m_args.position_mean_value, m_args.position_std_dev);
+        receiver_lon += m_position_prng->gaussian(m_args.position_mean_value, m_args.position_std_dev);
+        
 
         double tag_depth = m_args.tag_depth + m_position_prng->gaussian(m_args.depth_mean_value, m_args.depth_std_dev);
 
+        spew("Receiver (%f, %f)",receiver_lat, receiver_lon);
+        spew("Transmitter (%f, %f)",tag_msg.lat, tag_msg.lon);
         double dist = DUNE::Coordinates::WGS84::distance(receiver_lat, receiver_lon, m_args.receiver_depth, tag_msg.lat, tag_msg.lon, tag_depth);
         double SNR = dist*m_args.SNR_linear_a + m_args.SNR_linear_b;
         spew("SNR: %lf, dist %f", SNR, dist);
@@ -363,10 +420,6 @@ namespace Simulators
           int unix_timestamp = std::chrono::duration_cast<std::chrono::seconds>(newtime).count() + m_args.time_offset_s;
           int millis = newtime.count()-std::chrono::duration_cast<std::chrono::seconds>(newtime).count()*1000 + m_args.time_offset_ms;
 
-          
-
-
-          
           inf("Timestamp: %i - %i dist: %f - traveltime: %f", unix_timestamp,millis,dist, t);
           tag_msg.serial_no = m_args.serial_no;
           tag_msg.unix_timestamp = unix_timestamp;
