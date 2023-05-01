@@ -30,6 +30,9 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 
+// SQLITE3 headers.
+#include <sqlite3/sqlite3.h>
+
 namespace Supervisors
 {
   //! This task automatically starts the formation tracking for given estimators
@@ -40,10 +43,25 @@ namespace Supervisors
 
     struct Arguments
     {
+
+
       //! Sync Period;
       double timeout;
       //! Vector with the names of all estimators to consider folowing
       std::vector<std::string> monitoredEstimators;
+      //! Only used if the db is not used
+      double fishtag_min_interval;
+      //! Only used if the db is not used
+      double fishtag_max_interval;
+
+      std::string taglistDBpath;
+
+      //! 
+      double ref_send_interval;
+      //!
+      double formation_rotation_step;
+      //!
+      double ref_timeout;
 
       //! Minimum Speed.
       fp32_t minspeed;
@@ -55,13 +73,14 @@ namespace Supervisors
       fp32_t maxradius;
       //! Formation Participants.
       std::string participants;
-      //! Custom settings for formation.
-      std::string custom;
+      //! Position filter prefix
+      std::string positionFilterPrefix;
 
       bool enableToggle;
 
       bool keepFormation;
     };
+    /// @brief 
     struct Task: public DUNE::Tasks::Task
     {
       //! Task arguments.
@@ -77,22 +96,42 @@ namespace Supervisors
 
         bool m_formation_started;
 
+        std::string m_tracked_id;
+
+        sqlite3 *m_db;
+
+        bool m_db_used;
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
-        m_formation_started(false)
+        m_formation_started(false),
+        m_db_used(false)
       {
+
+        param("Enable toggle", m_args.enableToggle)
+        .defaultValue("true")
+        .description("Activate sending.");
+
+        param("Timeout Formation Keep", m_args.keepFormation)
+        .defaultValue("true")
+        .description("Keep Formation After Timeout, else formation is stopped");
+
         param("Formation Timeout", m_args.timeout)
             .units(Units::Second)
             .defaultValue("600.0")
             .minimumValue("0.0")
             .description("Period after which the tracker considers a fish tag lost");
 
-        param("SetActive", m_args.monitoredEstimators)
-        .defaultValue("MultiReceiverEKF36,Fish_position_est_1")
+        param("Taglist Path", m_args.taglistDBpath)
+        .defaultValue("")
         .description("Activate sending.");
+
+        param("Position Filter Prefix", m_args.positionFilterPrefix)
+        .defaultValue("MultiReceiverXKF")
+        .description("Position filter prefix.");
+
 
         param("Minimum Speed", m_args.minspeed)
         .units(Units::MeterPerSecond)
@@ -118,20 +157,36 @@ namespace Supervisors
         .defaultValue("")
         .description("Participants.");
 
-        param("Custom Arguments", m_args.custom)
-        .defaultValue("r=0.0;i=30.0;x=90.0;t=60.0;f=5.0;")
-        .description("Custom Arguments");
+        param("Formation Ref Interval", m_args.ref_send_interval)
+        .units(Units::Second)
+        .defaultValue("5.0")
+        .minimumValue("0.0")
+        .description("Participants.");
 
+        param("Formation Rotation Step", m_args.formation_rotation_step)
+        .defaultValue("0.0")
+        .description("Participants.");
 
-        param("Enable toggle", m_args.enableToggle)
-        .defaultValue("true")
+        param("Fotmation Ref Timeout", m_args.ref_timeout)
+        .defaultValue("60")
+        .description("Participants.");
+
+// Only used in non-db mode
+        param("Monitored Estimators", m_args.monitoredEstimators)
+        .defaultValue("MultiReceiverEKF36,Fish_position_est_1")
         .description("Activate sending.");
 
-        param("Timeout Formation Keep", m_args.keepFormation)
-        .defaultValue("true")
-        .description("Keep Formation After Timeout, else formation is stopped");
+        param("FishTag min interval", m_args.fishtag_min_interval)
+            .units(Units::Second)
+            .defaultValue("30.0")
+            .minimumValue("0.0")
+            .description("Period between sync messages");
 
-
+        param("FishTag max interval", m_args.fishtag_max_interval)
+            .units(Units::Second)
+            .defaultValue("90.0")
+            .minimumValue("0.0")
+            .description("Period between sync messages");
         // Initialize entity state.
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         bind<IMC::RemoteSensorInfo>(this);
@@ -141,34 +196,25 @@ namespace Supervisors
       void
       onUpdateParameters(void)
       {
-          if(paramChanged(m_args.timeout)) 
-            m_last_tag_timer.setTop(m_args.timeout);
+        if(paramChanged(m_args.timeout)) 
+          m_last_tag_timer.setTop(m_args.timeout);
+        if(paramChanged(m_args.minspeed))
+          m_of_msg.minspeed = m_args.minspeed; 
+        if(paramChanged(m_args.maxspeed))
+          m_of_msg.maxspeed = m_args.maxspeed; 
+        if(paramChanged(m_args.minradius))
+          m_of_msg.minradius = m_args.minradius; 
+        if(paramChanged(m_args.maxradius))
+          m_of_msg.maxradius = m_args.maxradius; 
+        if(paramChanged(m_args.participants))
+          m_of_msg.participants = m_args.participants; 
 
-      if(paramChanged(m_args.minspeed))
-        m_of_msg.minspeed = m_args.minspeed; 
-      if(paramChanged(m_args.maxspeed))
-        m_of_msg.maxspeed = m_args.maxspeed; 
-      if(paramChanged(m_args.minradius))
-        m_of_msg.minradius = m_args.minradius; 
-      if(paramChanged(m_args.maxradius))
-        m_of_msg.maxradius = m_args.maxradius; 
-      if(paramChanged(m_args.participants))
-        m_of_msg.participants = m_args.participants; 
-      if(paramChanged(m_args.custom))
-        m_of_msg.custom = m_args.custom; 
-
-
-
-          if(paramChanged(m_args.monitoredEstimators)) {
-            m_monitoredEstimators.clear();
-            for(auto &estimate : m_args.monitoredEstimators) {
-              m_monitoredEstimators.insert(estimate);
-            }
+        if(paramChanged(m_args.monitoredEstimators)) {
+          m_monitoredEstimators.clear();
+          for(auto &estimate : m_args.monitoredEstimators) {
+            m_monitoredEstimators.insert(estimate);
           }
-
-
-
-
+        }
       }
 
       //! Reserve entity identifiers.
@@ -187,7 +233,14 @@ namespace Supervisors
       void
       onResourceAcquisition(void)
       {
-
+        if(!m_args.taglistDBpath.empty()) {
+          if(sqlite3_open_v2(m_args.taglistDBpath.c_str(), &m_db,SQLITE_OPEN_READONLY,0) != SQLITE_OK){
+            err("Can't open database: %s\n", sqlite3_errmsg(m_db));
+            sqlite3_close(m_db);
+          } else {
+            m_db_used = true;
+          }
+        }
       }
 
       //! Initialize resources.
@@ -201,12 +254,14 @@ namespace Supervisors
       void
       onResourceRelease(void)
       {
-
+        sqlite3_close(m_db);
       }
 
-      void sendFormationStart() {
+      void sendFormationStart(const std::string &id) {
+        m_of_msg.target = id;
         m_of_msg.msg_type = IMC::otterFormation::MessageTypeEnum::T_start;
         m_formation_started = true;
+        m_tracked_id = m_of_msg.target;
         dispatch(m_of_msg);
       }
 
@@ -218,23 +273,89 @@ namespace Supervisors
 
       void consume(const IMC::RemoteSensorInfo *msg)
       {
-        spew("Tag found");
         if(m_args.enableToggle) {
-          spew("Enabled");
-          if(m_monitoredEstimators.find(msg->id) != m_monitoredEstimators.end()) {
-              spew("Monitored tag found");
-              if(m_args.keepFormation && m_formation_started && m_last_tag_timer.overflow()) {
-                sendFormationStop();
+          bool stopPrevious = false;
+          if(m_formation_started && m_args.keepFormation && m_last_tag_timer.overflow()) {
+            stopPrevious = true;
+            spew("StopPrevious true");
+          }
+          if(!m_formation_started || stopPrevious) {
+            if(m_db_used) {
+              size_t pos_end = msg->id.find(m_args.positionFilterPrefix);
+              if(pos_end != std::string::npos) {
+                m_of_msg.custom.clear();
+                try {
+                  if(tagInDB(std::stoi(msg->id.substr(pos_end+m_args.positionFilterPrefix.length())), m_of_msg)) {
+                    spew("Found tag");
+                    if(stopPrevious) {
+                      sendFormationStop();
+                    }
+                    sendFormationStart(msg->id);
+                  } else {
+                    spew("Did not find tag \"%s\"", msg->id.substr(pos_end+m_args.positionFilterPrefix.length()).c_str());
+                  }
+                } catch (...) {
+                  err("Could not solve tag \"%s\" in db", msg->id.substr(pos_end+m_args.positionFilterPrefix.length()).c_str());
+                }
               }
+            } else if(m_monitoredEstimators.find(msg->id) != m_monitoredEstimators.end()) {
+                spew("Monitored tag found from parameter");
+                if(stopPrevious) {
+                  sendFormationStop();
+                }
+                m_of_msg.custom = generateCustomParameters(m_args.formation_rotation_step, m_args.fishtag_min_interval, m_args.fishtag_max_interval, m_args.ref_timeout, m_args.ref_send_interval);
+                sendFormationStart(msg->id);
+            }
+          }
+          if(m_formation_started) {
+            if(m_tracked_id == msg->id) {
               m_last_rs_msg = *msg;
               m_last_tag_timer.reset();
-              if(!m_formation_started) {
-                m_of_msg.target = msg->id;
-                sendFormationStart();
-              }
+            }
           }
         }
       }
+
+
+      //! Checks if a tag is in the taglist DB and fills relevant fields in the otterformation message
+      bool tagInDB(unsigned id, IMC::otterFormation &msg) {
+        std::string query = "select t.'duty.sec' from taglist as t where t.'at.id'=" + std::to_string(id);
+        
+        sqlite3_stmt* db_handle = nullptr;
+
+        if (sqlite3_prepare_v2(m_db, query.c_str(), query.length(), &db_handle, 0) == SQLITE_OK) {
+          if(sqlite3_step(db_handle) == SQLITE_ROW) {
+            std::string dutySec = std::string(reinterpret_cast<const char*>(sqlite3_column_text(db_handle, 0)));
+            unsigned minTagInterval = 0, maxTagInterval = 0;
+            size_t pos_end = dutySec.find('-');
+            if(pos_end != std::string::npos) {
+              try{
+                minTagInterval = std::stoi(dutySec.substr(0, pos_end));
+                maxTagInterval = std::stoi(dutySec.substr(pos_end+1)); // +1 to remove the delimiting '-'
+                msg.custom = generateCustomParameters(m_args.formation_rotation_step,minTagInterval, maxTagInterval, m_args.ref_timeout, m_args.ref_send_interval);
+                sqlite3_finalize(db_handle);
+                return true;
+              } catch (...) {
+                err("Error extracting tag interval from db.");
+              }
+            }
+          }
+        }
+        sqlite3_finalize(db_handle);
+        return false;
+      }
+
+      std::string generateCustomParameters(double rotation_dist, double minTagInterval, double maxTagInterval, double timeout, double FollowRefInterval) {
+        return 
+        "r=" + std::to_string(rotation_dist) +
+        ";i=" + std::to_string(minTagInterval) +
+        ";x=" + std::to_string(maxTagInterval) +
+        ";t=" + std::to_string(timeout) +
+        ";f=" + std::to_string(FollowRefInterval) +
+        ";";
+      
+      }
+
 
       //! Main loop.
       void
@@ -242,8 +363,10 @@ namespace Supervisors
       {
         while (!stopping())
         {
+          tagInDB(73, m_of_msg);
           waitForMessages(1.0);
           if(m_formation_started && !m_args.keepFormation && m_last_tag_timer.overflow()) {
+            war("Formation stopped due to timeout");
             sendFormationStop();
           }
         }
