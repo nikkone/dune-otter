@@ -65,4 +65,10 @@ namespace FishTagEstimators
     }
     return -1;
   }
+
+  bool TagBuffer::checkTimeout(double currentTimestamp) {
+    return true;
+  }
+
+
 }

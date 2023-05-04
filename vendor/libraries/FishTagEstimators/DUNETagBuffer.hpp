@@ -13,6 +13,7 @@ namespace FishTagEstimators
       //! @param [in] buffer_size_in
       DUNETagBuffer(unsigned tag_id_in, unsigned buffer_size_in) : TagBuffer(tag_id_in, buffer_size_in) {
         latestTimestamp = 0;
+        timestampTimeoutLimit = 4000;
       };
 
       //! Adds a tag detection to the buffer.
@@ -46,16 +47,31 @@ namespace FishTagEstimators
       /// @return latestTimestamp
       uint32_t getLatestTimestamp() {
         return latestTimestamp;
-      }  
+      }
+
+      void setTimestampTimeoutLimit(uint32_t timestampTimeoutLimit_inn) {
+        timestampTimeoutLimit = timestampTimeoutLimit_inn;
+      }
+
+      uint32_t getTimestampTimeoutLimit() {
+        return timestampTimeoutLimit;
+      }
+
+      bool checkTimeout(double currentTimestamp);
+
     protected:
       //! Coordinate used as origin in local NED frame
       double refCoord[3];
 
+      //! The maximum time to consider the a transmission to be the same as last one
+      const uint32_t maxTimestampDifference = 1;
+
+      //! The maximum time to consider the a transmission to be the same as last one
+      uint32_t timestampTimeoutLimit;
+
       //! The timestamp of the first detection of the latest transmission.
       uint32_t latestTimestamp;
 
-      //! The maximum time to consider the a transmission to be the same as last one
-      const uint32_t maxTimestampDifference = 1;
   };
   //! A map of tag buffers, where the index is used for transmitter ID and the second is a pointer to a DUNETagBuffers_t
   typedef std::map<unsigned, FishTagEstimators::DUNETagBuffer*> DUNETagBuffers_t;

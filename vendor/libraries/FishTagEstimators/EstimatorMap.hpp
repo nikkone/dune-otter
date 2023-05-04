@@ -50,6 +50,19 @@ namespace FishTagEstimators
       void clear();
       //! 
       Estimator<double>* addEstimator(uint32_t trans_id, estimatorTypeEnum_t type);
+
+      void removeEstimators(uint32_t trans_id) {
+        auto it = estimatorMap.find(trans_id);
+        if (it->second != NULL)
+          {
+            for (EstimatorVector_t::iterator est = it->second->begin(); est != it->second->end(); est++) {
+              delete *est;
+            }
+            delete it->second;
+            it->second = NULL;
+          }
+        estimatorMap.erase(it);
+      }
       //! 
       void updateAll(uint32_t trans_id, TagBuffer *tagBuffer);
       //! 

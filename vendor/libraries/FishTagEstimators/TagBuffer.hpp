@@ -34,7 +34,7 @@ namespace FishTagEstimators
       TagBuffer(unsigned tag_id_in, unsigned buffer_size_in) : buffer_size(buffer_size_in), tag_id(tag_id_in) {};
 
       //! Destructor. Deletes all dynamically allocated memory the class has created
-      ~TagBuffer() {
+      virtual ~TagBuffer() {
         for (tagBufferMap_t::iterator it = tagBuffer.begin(); it != tagBuffer.end(); it++)
         {
           if (it->second != NULL)
@@ -65,6 +65,12 @@ namespace FishTagEstimators
       /// @return 
       int checkPeriod(unsigned period, unsigned tagPeriodMin, unsigned tagPeriodMax);
 
+
+      /// @brief 
+      /// @param currentTimestamp 
+      /// @return True if there has been updates within acceptable timeframe, false if not.
+      virtual bool checkTimeout(double currentTimestamp);
+      
       //!
       size_t size();
   };

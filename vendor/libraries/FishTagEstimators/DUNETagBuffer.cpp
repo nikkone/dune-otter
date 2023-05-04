@@ -48,7 +48,7 @@ namespace FishTagEstimators
       if(msg->unix_timestamp - latestTimestamp > maxTimestampDifference) {
         // TODO: Check if more than one unused, then run update of filter
         latestTimestamp = msg->getTimeStamp();
-        std::cout << std::endl << "set" << std::endl;
+        //std::cout << std::endl << "set" << std::endl;
       }
       return true;
     }
@@ -71,6 +71,16 @@ namespace FishTagEstimators
     tagOut.lon = tagIn->lon;
     return tagOut;
   }
+
+  bool DUNETagBuffer::checkTimeout(double currentTimestamp) {
+    if(timestampTimeoutLimit > currentTimestamp - latestTimestamp) {
+      return true;
+    } else {
+      return false;
+    }
+    
+  }
+  
   void clearDUNETagBuffers_t(DUNETagBuffers_t *tagBuffers) {
     for (DUNETagBuffers_t::iterator it = tagBuffers->begin(); it != tagBuffers->end(); it++)
     {

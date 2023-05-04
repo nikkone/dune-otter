@@ -85,6 +85,8 @@ namespace SourceEstimators
       std::vector<std::string> ss_extra_param_name;
       //!
       std::vector<double> ss_extra_param_value;
+
+      uint32_t timestampTimeout;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -190,6 +192,10 @@ namespace SourceEstimators
         .description("What multi-receiver estimators to activate")
         .defaultValue("XKF,EKF");
 
+        param("Timestamp Timeout [s]", m_args.timestampTimeout)
+        .description("Maximum time [s] to keep an estimator alive without any detections received.")
+        .defaultValue("500");
+
         bind<IMC::TBRFishTag>(this);
         bind<IMC::SoundSpeed>(this);
 
@@ -278,6 +284,7 @@ namespace SourceEstimators
           // Set NED frame used on specific tag to location of first tag location
           double ref[] = {msg->lat, msg->lon, 0.0};
           tagBuffers[msg->trans_id]->setReferenceCoordinateRad(ref);
+          tagBuffers[msg->trans_id]->setTimestampTimeoutLimit(m_args.timestampTimeout);
           spew("Created buffer for receiver %u", msg->serial_no);
           // Configure Single Receiver Estimators
           for(auto it = SingleReceiverEstimatorTypeToUse.begin();it !=SingleReceiverEstimatorTypeToUse.end();it++) {
@@ -438,7 +445,7 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
           if(m_filter_timer.overflow()) {
             m_filter_timer.reset();
 
-
+            std::vector<uint32_t> estimatorsToDelete;
             for (FishTagEstimators::EstimatorMap::EstimatorMap_t::iterator it = m_emap.estimatorMap.begin(); it != m_emap.estimatorMap.end(); it++)
             {
               if (it->second != NULL)
@@ -448,13 +455,33 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
                     (*est)->update(tagBuffers[it->first]);
                     //inf("Updated %s %d %f", (*est)->name.c_str(), (*est)->trans_id, Clock::getSinceEpoch() - (double)tagBuffers[it->first]->getLatestTimestamp());
                   }
-                    inf("Updated %s %d %f", (*est)->name.c_str(), (*est)->trans_id, Clock::getSinceEpoch() - (double)tagBuffers[it->first]->getLatestTimestamp());
+                  
+                    //inf("Updated %s %d %f", (*est)->name.c_str(), (*est)->trans_id, Clock::getSinceEpoch() - (double)tagBuffers[it->first]->getLatestTimestamp());
 
                   if(( *est)->isActive()) {
                     logResult((*est), m_args.log_folder_and_prefix + m_startupTimestamp + (*est)->name + std::to_string((*est)->trans_id) + ".csv", (*est)->name);
                   }
+
+
                 }
                 newData[it->first] = false;
+
+
+                //inf("Limit %d, current: %f last %d, delta %f", tagBuffers[it->first]->timestampTimeoutLimit, DUNE::Time::Clock::getSinceEpoch(), tagBuffers[it->first]->latestTimestamp, DUNE::Time::Clock::getSinceEpoch() - tagBuffers[it->first]->latestTimestamp);
+                if(!tagBuffers[it->first]->checkTimeout(DUNE::Time::Clock::getSinceEpoch())) {
+                  war("Tag %d timed out.", it->first);
+                  estimatorsToDelete.push_back(it->first);
+                }
+              }
+            }
+
+            for(auto &id : estimatorsToDelete) {
+               war("Removing tag: %d .", id);
+              m_emap.removeEstimators(id);
+              auto it = tagBuffers.find(id);
+              if(it != tagBuffers.end()) {
+                delete it->second;
+                tagBuffers.erase(id);
               }
             }
             m_emap.predictAll();
