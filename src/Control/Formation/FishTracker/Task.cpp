@@ -60,6 +60,8 @@ namespace Control
         std::string participants;
 
         unsigned formationAllocator;
+
+        std::string estimatorPrefix;
       };
 
       struct Task : public DUNE::Tasks::Task
@@ -147,16 +149,20 @@ namespace Control
               .defaultValue("ntnu-otter-01,ntnu-otter-02,ntnu-otter-03")
               .description("Default participants if otterFormation message field is empty");
 
+          param("Estimator Prefix", m_args.estimatorPrefix)
+          .defaultValue("MultiReceiverXKF")
+          .description("Estimator Prefix");
+
+
           bind<IMC::Abort>(this);
           bind<IMC::Announce>(this);
           bind<IMC::otterFormation>(this);
           bind<IMC::RemoteSensorInfo>(this);
-          //bind<IMC::TBRFishTag>(this);
+          bind<IMC::TBRFishTag>(this);
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         }
         //! Update internal state with new parameter values.
-        void
-        onUpdateParameters(void)
+        void onUpdateParameters(void)
         {
           if(paramChanged(m_args.ref_send_interval)) {
             m_ref_send_timer.setTop(m_args.ref_send_interval);
@@ -172,9 +178,7 @@ namespace Control
             m_useCollisionMitigation = m_args.useCollisionMitigation;
         }
         
-        
-        void
-        onResourceAcquisition(void)
+        void onResourceAcquisition(void)
         {
           try{
             m_con = std::make_shared<ENCGIS::DBconnection>(m_args.encDBpath, SQLITE_OPEN_READONLY, 32632);
@@ -191,13 +195,11 @@ namespace Control
 
         }
 
-        void
-        onResourceRelease(void)
+        void onResourceRelease(void)
         {
         }
 
-        void
-        onResourceInitialization(void)
+        void onResourceInitialization(void)
         {
           addVehicles(m_args.participants);
         }
@@ -239,7 +241,7 @@ namespace Control
             dispatchToVehicle(participant.first, &startPlan);
           }
           m_ref_send_timer.setTop(m_FollowRefInterval);
-          m_last_tag_timer.setTop(m_minTagInterval);
+          m_last_tag_timer.setTop(m_maxTagInterval);
           m_last_tag_timer.reset();
           m_ref_send_timer.reset();
 
@@ -338,11 +340,25 @@ namespace Control
             if(m_last_of_msg.target == msg->id) {
               m_formation_started = true;
               m_last_rs_msg = *msg;
-              m_last_tag_timer.reset();
+              //m_last_tag_timer.reset();
+              // TODO: Should rotate be her or in 
               if(m_formation_rotation_step_rad > 0.0) {
                 spew("Rotating %f", m_formation_rotate_rad);
                 m_formation_rotate_rad += m_formation_rotation_step_rad;
               }
+            }
+          }
+        }
+
+        void consume(const IMC::TBRFishTag *msg)
+        {
+          if(isActive()) {
+            if(m_last_of_msg.target == m_args.estimatorPrefix + std::to_string(msg->trans_id)) {
+              m_last_tag_timer.reset();
+              //if(m_formation_rotation_step_rad > 0.0) {
+              //  spew("Rotating %f", m_formation_rotate_rad);
+              //  m_formation_rotate_rad += m_formation_rotation_step_rad;
+              //}
             }
           }
         }
@@ -379,11 +395,11 @@ namespace Control
             war("No/Wrong 'i', using minTagInterval from task arguments");
           } else {
             m_minTagInterval = minTagInterval;
-            m_last_tag_timer.setTop(m_minTagInterval);
           } if(maxTagInterval < 0.0) {
             war("No/Wrong 'x', using maxTagInterval from task arguments");
           } else {
             m_maxTagInterval = maxTagInterval;
+            m_last_tag_timer.setTop(m_maxTagInterval);
           } if(timeout < 0.0) {
             war("No/Wrong 't', using timeout from task arguments");
           } else {
@@ -424,6 +440,7 @@ namespace Control
           y = sqlite3_column_double(db_handle, 1);
           angle = sqlite3_column_double(db_handle, 2);
           int valid = sqlite3_column_int(db_handle, 3);
+          //std::cout << std::endl<< query << std::endl;
           // Teardown
           if (db_handle) {
             sqlite3_finalize(db_handle);
@@ -440,7 +457,33 @@ namespace Control
           return false; // Angle too big, rotation not possible
         }
 
-        void rotate_point(double cx,double cy,double angle, double &px, double &py)
+        bool rotateFormation(double x0, double y0, double r, unsigned p, double &angle) {
+          double x=x0, y=y0;
+          if(rotationChecker(x, y, r, p, angle)) {
+            double px=x, py=y;
+
+            double newAng = ((2*M_PI)/p - angle)/2;
+
+            rotatePoint(x0, y0, newAng, px,py);
+            if(pointCheck->run(px,py)) {
+              inf("Rotate (%f, %f) %f around (%f, %f), got (%f, %f)", x, y, newAng, x0, y0, px, py);
+            } else {
+              px=x, py=y;
+              rotatePoint(x0, y0, -newAng, px,py);
+              inf("Rotate (%f, %f) %f around (%f, %f), got (%f, %f)", x, y, -newAng, x0, y0, px, py);
+            }
+
+            double dy2 = 0;//y0 - y0;
+            double dx2 = r;//x0+radius - x0;
+            double dy1 = py - y0;
+            double dx1 = px - x0;
+            angle = -atan2(dx1*dy2-dx2*dy1, dx1*dx2+dy1*dy2);
+            return true;
+          }
+          return false;
+        }
+
+        void rotatePoint(double cx,double cy,double angle, double &px, double &py)
         {
           float s = sin(angle);
           float c = cos(angle);
@@ -462,48 +505,42 @@ namespace Control
           if(participants > 1) {
             if(m_con->distanceToLayerWithinUTM(x0, y0, radius)) { 
               // Possibility of obstacle in formation
-              double x=x0, y=y0;
-              if(rotationChecker(x, y, radius, participants, angle)) {
-                // Rotation possible
+              //double x=x0, y=y0;
+              if(rotateFormation(x0,y0,radius,participants,angle)) {
+                // Rotation possible. TODO: Find a more smooth transition than full rotation?
                 spew("Rotation used as mitigation for formation collision");
-                double px=x, py=y;
-
-                double newAng = ((2*M_PI)/participants - angle)/2;
-
-                rotate_point(x0, y0, newAng, px,py);
-                if(pointCheck->run(px,py)) {
-                  inf("Rotate (%f, %f) %f around (%f, %f), got (%f, %f)", x, y, newAng, x0, y0, px, py);
-                } else {
-                  px=x, py=y;
-                  rotate_point(x0, y0, -newAng, px,py);
-                  inf("Rotate (%f, %f) %f around (%f, %f), got (%f, %f)", x, y, -newAng, x0, y0, px, py);
-                }
-
-                double dy2 = 0;//y0 - y0;
-                double dx2 = radius;//x0+radius - x0;
-                double dy1 = py - y0;
-                double dx1 = px - x0;
-                angle = -atan2(dx1*dy2-dx2*dy1, dx1*dx2+dy1*dy2);
                 return true;
               } else {
                 double distanceToLand = m_con->distanceToLayerUTM(x0, y0, m_last_of_msg.maxradius);
-                double minDistToLand = m_last_of_msg.minradius - m_last_of_msg.minradius*std::cos(M_PI/participants);
-                if(distanceToLand > minDistToLand) {
+                //double minDistToLand = m_last_of_msg.minradius - m_last_of_msg.minradius*std::cos(M_PI/participants);
+                double newRadius = distanceToLand/(1-std::cos(M_PI/participants)); 
+                if(newRadius > m_last_of_msg.minradius) {
                   // Reducing radius to land to keep formation in place
-                  radius = distanceToLand; // Plus something because of rotation
-                  spew("Reducing radius as mitigation for formation collision. Distance to obstacle: %f", distanceToLand);
-                  return true; // TODO: When implemented, should be true;
-                }/* else if(distanceToLand - m_accepted_formation_move > radius) {
-                  // Moving formation from land to keep formation
-                  m_con->findClosestSafePointUTM()
-
-                  return true;
-                }*/ else {
-                  radius = m_last_of_msg.minradius;
-                  // No collision mitigation strategy possible, falling back to closest safe spot
-                  spew("No collision mitigation strategy possible/needed, falling back to closest safe spot");
+                  radius = newRadius; 
+                  if(rotateFormation(x0,y0,radius,participants,angle)) {
+                    spew("Reducing radius and rotating as mitigation for formation collision. Distance to obstacle: %f", distanceToLand);
+                    return true;
+                  } else {
+                    // Causes: Too narrow areas causing two intersections in rotationChecker
+                    spew("Rotation after changing radius failed. (%f, %f,%f, %d, %f)", x0,y0,radius,participants,angle);
+                    if(distanceToLand > m_last_of_msg.minradius) {
+                      radius = distanceToLand;
+                      return true;
+                    }
+                  }
                 }
+                // Moving formation from land to keep formation
+                radius = m_last_of_msg.minradius;
+                if(m_con->findClosestSafePointUTM(x0,y0,radius*(1-std::cos(M_PI/participants)))) {// TODO: Debug this
+                // ^^^^-radius*(1-std::cos(M_PI/participants)) is the lowest distance to land that can be safely used with a rotated formation.
+                  if(rotateFormation(x0,y0,radius,participants,angle)) { 
+                    inf("Moved formation to safe point as mitigation for formation collision");
+                    return true;
+                  }
+                } 
               }
+              // No collision mitigation strategy possible, falling back to closest safe spot
+              spew("No collision mitigation strategy possible, falling back to closest safe spot");
             }
           }
           return false;
@@ -566,7 +603,7 @@ namespace Control
             double lat[2] = {m_last_rs_msg.lat, m_last_rs_msg.lat};
             for(unsigned i = 0; i<2;i++) {
               DUNE::Coordinates::WGS84::displace(pos[i].second, pos[i].first, &lat[i], &lon[i]);
-              inf("%f, %f", lat[i], lon[i]);
+              spew("%f, %f", lat[i], lon[i]);
             }
             // Calculate distances betwen all vehicles and all formation positions
             double distMatrix[2][2];
@@ -753,7 +790,7 @@ namespace Control
             double lat[2] = {m_last_rs_msg.lat, m_last_rs_msg.lat};
             for(unsigned i = 0; i<2;i++) {
               DUNE::Coordinates::WGS84::displace(pos[i].second, pos[i].first, &lat[i], &lon[i]);
-              inf("%f, %f", lat[i], lon[i]);
+              spew("%f, %f", lat[i], lon[i]);
             }
             // Calculate distances betwen all vehicles and all formation positions
             double distMatrix[2][2];
@@ -858,10 +895,39 @@ namespace Control
           return retVal;
         }
 
+        /// @brief Optimizes speed for redetection of current tag
+        /// @param participant 
+        void dynamicSpeedAssigner(participant_t participant) {
+          // if(posest timer timeout)
+          if(m_last_tag_timer.overflow()) {
+            // Set speed to minimum.
+            std::get<2>(participant->second).speed.get()->value = m_last_of_msg.minspeed;
+            // Set desired pos to most recent announce to induce HOOVER mode.
+            std::get<2>(participant->second).lat = std::get<0>(participant->second);
+            std::get<2>(participant->second).lon = std::get<1>(participant->second);
+          }
+          // else Check if within safe "unlimited" actuation period
+          if(m_last_tag_timer.getElapsed() < m_minTagInterval-5) {
+            // find distance between announce and desired pos
+            // calculate speed needed to reach there within tag deduced interval (m_minTagInterval)
+            double desiredSpeed = DUNE::Coordinates::WGS84::distance((double)std::get<0>(participant->second), std::get<1>(participant->second), 0.0, // Pos from Announce
+                                                           std::get<2>(participant->second).lat, std::get<2>(participant->second).lon, 0.0)/ // Desired pos for ref
+                                                           (m_minTagInterval-5-m_last_tag_timer.getElapsed());
+            // Trim desiredSpeed. If close to target, FollowRef will deactivate anyways, so set lower end to minspeed to allow Hoover to move back to center if drifting.
+            desiredSpeed = DUNE::Math::trimValue(desiredSpeed, m_last_of_msg.minspeed, m_last_of_msg.maxspeed);
+            std::get<2>(participant->second).speed.get()->value = desiredSpeed;
+          } else {
+            // Set speed to m_last_of_msg->minspeed
+            std::get<2>(participant->second).speed.get()->value = m_last_of_msg.minspeed;
+          }
+          spew("Vehicle %d: %f m/s", participant->first,std::get<2>(participant->second).speed.get()->value);
+          spew("Elapsed: %f, Remaining: %f, Top: %f, CompareVal: %f", m_last_tag_timer.getElapsed(), m_last_tag_timer.getRemaining(), m_last_tag_timer.getTop(), m_minTagInterval-5);
+        }
+
 
         void updateReference() {
           static bool m_collision = false;
-        std::pair<double,double> utmpoint;
+        std::pair<double,double> utmpoint, utmchanged;
         m_con->transformSRID(Math::Angles::degrees(m_last_rs_msg.lon), Math::Angles::degrees(m_last_rs_msg.lat), 4326, utmpoint.first, utmpoint.second, 32632);
 
 
@@ -870,10 +936,13 @@ namespace Control
           static double angle = 0.0;
           double prevangle = angle;
           m_formation_radius = m_last_of_msg.maxradius;
+          utmchanged = utmpoint;
           if(m_useCollisionMitigation && formationCollisionHandler(utmpoint.first, utmpoint.second, m_formation_radius, m_participants.size(), angle)) {
+            double x = utmpoint.first - utmchanged.first;
+            double y = utmpoint.second - utmchanged.second;
             //if(angle < 0)
             //  angle = 2*M_PI-angle;
-            pos = generateTrackingFormation(0,0, m_formation_radius, m_participants.size(), angle); 
+            pos = generateTrackingFormation(x,y, m_formation_radius, m_participants.size(), angle); 
             inf("Participants, colrotstate %ld: %f", m_participants.size(), angle);
             if(m_collision==false || m_allocation.empty() || std::abs(prevangle - angle) > M_PI/m_participants.size()) {
               m_allocation = formationAllocator(pos);
@@ -893,9 +962,9 @@ namespace Control
 
 
           
-          for(auto &p : pos) {
-            inf("%f, %f", p.first, p.second);
-          }
+          //for(auto &p : pos) {
+          //  inf("%f, %f", p.first, p.second);
+          //}
 
           // TODO: If angle delta too big, recalculate allocation
           //if(m_allocation.empty()) {
@@ -918,9 +987,15 @@ namespace Control
             std::get<2>(participant->second).lon = lon;
             std::get<2>(participant->second).lat = lat;
             
-            inf("Vehicle %d (%f, %f)", participant->first, std::get<2>(participant->second).lon, std::get<2>(participant->second).lat);
+            //inf("Vehicle %d (%f, %f)", participant->first, std::get<2>(participant->second).lon, std::get<2>(participant->second).lat);
             i++;
           
+            // TODO: Parameterize enable/disable
+            
+            dynamicSpeedAssigner(participant);
+            //std::get<2>(participant->second).flags = IMC::Reference::FlagsBits::FLAG_SPEED;
+            //dispatch(std::get<2>(participant->second));
+            //std::get<2>(participant->second).flags = IMC::Reference::FlagsBits::FLAG_LOCATION | IMC::Reference::FlagsBits::FLAG_SPEED;
             dispatch(std::get<2>(participant->second));
           }
         }
@@ -986,6 +1061,8 @@ if(rotationChecker(x,y, 60, 3, angle)) {
                   // Keep searchers alive during timeout
                   war("Position Estimate Too Old, re-sending previous message.");
                   for (auto &participant : m_allocation) {
+                    // TODO: Parameter enable
+                    //dynamicSpeedAssigner(participant);
                     dispatch(std::get<2>(participant->second));
                   }
                   // Alternative: Stop search on timeout
