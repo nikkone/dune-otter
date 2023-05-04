@@ -54,7 +54,13 @@ namespace FishTagEstimators
   }
 
   bool PeriodEstimator::update(TagBuffer *tagBuffer) {
-    std::cout << "Estimated period: " << tagBuffer->calculateRegularPeriod(receiver, 5) << std::endl;
+    double regularPeriod = tagBuffer->calculateRegularPeriod(receiver, 5);
+    std::cout << "Estimated period: " << regularPeriod << std::endl;
+    if(regularPeriod < 0) {
+      return false;
+    } else {
+      return true;
+    }
   }
   
   //void PeriodEstimator::predict() {
