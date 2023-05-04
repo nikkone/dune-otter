@@ -362,7 +362,7 @@ namespace Simulators
           //  if (msg->getSourceEntity() != m_GPS_src_ent_receiver)
           //    return;
           //}  
-          spew("Got GPSFix from receiver at %d", m_GPS_src_receiver);
+          //spew("Got GPSFix from receiver at %d", m_GPS_src_receiver);
           m_receiver_lat=msg->lat;
           m_receiver_lon=msg->lon;
         }
@@ -371,7 +371,7 @@ namespace Simulators
           //  if (msg->getSourceEntity() != m_GPS_src_ent_transmitter)
           //    return;
           //}  
-          spew("Got GPSFix from transmitter at %d", m_GPS_src_transmitter);
+          //spew("Got GPSFix from transmitter at %d", m_GPS_src_transmitter);
           m_transmitter_lat=msg->lat;
           m_transmitter_lon=msg->lon;
         }
@@ -405,8 +405,8 @@ namespace Simulators
 
         double tag_depth = m_args.tag_depth + m_position_prng->gaussian(m_args.depth_mean_value, m_args.depth_std_dev);
 
-        spew("Receiver (%f, %f)",receiver_lat, receiver_lon);
-        spew("Transmitter (%f, %f)",tag_msg.lat, tag_msg.lon);
+        //spew("Receiver (%f, %f)",receiver_lat, receiver_lon);
+        //spew("Transmitter (%f, %f)",tag_msg.lat, tag_msg.lon);
         double dist = DUNE::Coordinates::WGS84::distance(receiver_lat, receiver_lon, m_args.receiver_depth, tag_msg.lat, tag_msg.lon, tag_depth);
         double SNR = dist*m_args.SNR_linear_a + m_args.SNR_linear_b;
         spew("SNR: %lf, dist %f", SNR, dist);
@@ -420,7 +420,7 @@ namespace Simulators
           int unix_timestamp = std::chrono::duration_cast<std::chrono::seconds>(newtime).count() + m_args.time_offset_s;
           int millis = newtime.count()-std::chrono::duration_cast<std::chrono::seconds>(newtime).count()*1000 + m_args.time_offset_ms;
 
-          inf("Timestamp: %i - %i dist: %f - traveltime: %f", unix_timestamp,millis,dist, t);
+          debug("Timestamp: %i - %i dist: %f - traveltime: %f", unix_timestamp,millis,dist, t);
           tag_msg.serial_no = m_args.serial_no;
           tag_msg.unix_timestamp = unix_timestamp;
           tag_msg.millis = millis;
