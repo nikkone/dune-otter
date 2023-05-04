@@ -596,7 +596,7 @@ namespace Maneuver
           m_OMPLsetup = std::make_unique<og::SimpleSetup>(OMPLintegrationENCGIS::createSetup(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], pointCheck.get(), lineCheck.get()));
           inf("OMPL init sucess 1");
 
-          std::cout << std::setprecision(12) << "Increase printpres to 12 from bitstars setprecision(5) call" << std::endl;
+          //std::cout << std::setprecision(12) << "Increase printpres to 12 from bitstars setprecision(5) call" << std::endl;
           OMPLintegrationENCGIS::setStartAndGoalStates(*m_OMPLsetup, startX, startY, endX, endY);
 
           og::PathGeometric states = OMPLintegrationENCGIS::findPath(*m_OMPLsetup, m_args.OMPLmaxPlanningTime, OMPLintegrationENCGIS::configurations_t::C_KBIT);
