@@ -291,6 +291,7 @@ namespace Maneuver
           m_has_estimated_state = false;
           m_path_to_target.clear();
           //m_has_pcs = false;
+          m_path_sent = false;
         }
 
         void
@@ -496,6 +497,18 @@ namespace Maneuver
           bool still_same_reference = (ref->flags & IMC::Reference::FLAG_START_POINT) ||
                                       sameReference(ref, &m_last_ref);
 
+          if(!at_xy_target) {
+            bool changedSpeed = sameSpeed(ref, &m_last_ref);
+            still_same_reference = still_same_reference && changedSpeed;
+            if (changedSpeed && m_path_sent) {
+              IMC::DesiredSpeed desSpeed;
+              desSpeed.value = desired_path.speed;
+              desSpeed.speed_units = desired_path.speed_units;
+              inf(DTR("Speed reference changed to %f"), desSpeed.value);
+              dispatch(desSpeed);
+            }
+          }
+
           updateRadius(ref, desired_path);
           int prev_mode = m_fref_state.state;
 
@@ -554,7 +567,7 @@ namespace Maneuver
           if ( (!ref->speed.isNull() && ref->speed.get()->value == 0))
             enableMovement(false);
           else {
-            updateDesiredPath(desired_path);
+            updateDesiredPath(desired_path, at_xy_target);
           } 
         }
 
@@ -573,7 +586,7 @@ namespace Maneuver
             if (!was_moving)
             {
               m_path_sent = false;
-              updateDesiredPath(m_path);
+              updateDesiredPath(m_path, false);
             }
           }
           else
@@ -655,7 +668,7 @@ namespace Maneuver
           m_OMPLsetup = std::make_unique<og::SimpleSetup>(OMPLintegrationENCGIS::createSetup(planningBounds[0], planningBounds[1], planningBounds[2], planningBounds[3], pointCheck.get(), lineCheck.get()));
           inf("OMPL init sucess 1");
 
-          std::cout << std::setprecision(12) << "Increase printpres to 12 from bitstars setprecision(5) call" << std::endl;
+          //std::cout << std::setprecision(12) << "Increase printpres to 12 from bitstars setprecision(5) call" << std::endl;
           OMPLintegrationENCGIS::setStartAndGoalStates(*m_OMPLsetup, startX, startY, endX, endY);
 
           og::PathGeometric states = OMPLintegrationENCGIS::findPath(*m_OMPLsetup, m_args.OMPLmaxPlanningTime, OMPLintegrationENCGIS::configurations_t::C_KBIT);
@@ -724,6 +737,10 @@ namespace Maneuver
               return false;
           }
 
+          return true;
+        }
+        
+        bool sameSpeed(const IMC::Reference *msg1, const IMC::Reference *msg2) {
           if (msg1->speed.isNull() != msg2->speed.isNull())
           {
             return false;
@@ -736,10 +753,9 @@ namespace Maneuver
             if (!s1->fieldsEqual(*s2))
               return false;
           }
-
           return true;
         }
-        
+
         IMC::SpeedUnits
         parseSpeedUnitsStr(std::string sunits_str)
         {
@@ -906,7 +922,7 @@ namespace Maneuver
         }
 
         void
-        updateDesiredPath(IMC::DesiredPath desired_path)
+        updateDesiredPath(IMC::DesiredPath desired_path, bool at_xy_target)
         {
 
           int diff = pathDifferences(&m_path, &desired_path);
@@ -919,21 +935,12 @@ namespace Maneuver
           bool changedSpeed = (diff & SPEED_CHANGED) != 0;
           bool changedRadius = (diff & RADIUS_CHANGED) != 0;
 
-          if (changedSpeed || !m_path_sent)
-          {
-            IMC::DesiredSpeed desSpeed;
-            desSpeed.value = desired_path.speed;
-            desSpeed.speed_units = desired_path.speed_units;
-            inf(DTR("Speed reference changed to %f"), desSpeed.value);
-            dispatch(desSpeed);
-          }
-
           if (changedRadius)
           {
             inf(DTR("Loiter radius reference changed to %f"), desired_path.lradius);
           }
 
-          bool send_desired_path = changedSpeed || changedRadius || changedLoc || !m_path_sent;
+          bool send_desired_path = (changedSpeed && !at_xy_target) || changedRadius || changedLoc || !m_path_sent;
 
           // dispatch new desired path
           switch (m_fref_state.state)
@@ -988,7 +995,8 @@ namespace Maneuver
               err("Unknown FollowRefState");
               return;
           }
-          m_path_sent = true;
+          if(send_desired_path)
+            m_path_sent = true;
         }
 
         bool checkDistanceToMonitoredVehicles() {
