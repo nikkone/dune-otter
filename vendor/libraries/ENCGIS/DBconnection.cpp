@@ -54,8 +54,23 @@ namespace ENCGIS
   void DBconnection::loadSpatialite() {
 
     sqlite3_enable_load_extension(db, 1);
-    std::string c_stmt = "SELECT load_extension('mod_spatialite');";
-    runQuery(c_stmt);
+    std::string c_stmt = "SELECT load_extension('/usr/local/lib/mod_spatialite.so');";
+    std::string c_stmt2 = "SELECT load_extension('mod_spatialite');";
+    try{
+      if(runQuery(c_stmt)) {
+        std::cout << "Started Sqlite" << std::endl;
+      }
+
+    } catch(...) {
+      try {
+        if(runQuery(c_stmt2)) {
+          std::cout << "Started Sqlite on retry" << std::endl;
+
+        }
+      } catch(...) {
+        // TODO: Dosomething
+      }
+    }
     sqlite3_enable_load_extension(db, 0);
     runQuery("select spatialite_version();");
   }
@@ -94,7 +109,7 @@ namespace ENCGIS
 
   }
 
-  void DBconnection::runQuery(const std::string &sql_stmt) {
+  bool DBconnection::runQuery(const std::string &sql_stmt) {
       char *zErrMsg = 0;
       if(sqlite3_exec(db, sql_stmt.c_str(), callback, 0, &zErrMsg)!=SQLITE_OK ){
         if(zErrMsg == NULL) {
@@ -103,7 +118,9 @@ namespace ENCGIS
           Error("SQL error: %s\n", zErrMsg);
         }
         sqlite3_free(zErrMsg);
+        return false;
       }
+      return true;
   }
 
   int DBconnection::callback(void *NotUsed, int argc, char **argv, char **azColName){

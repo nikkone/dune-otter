@@ -58,7 +58,7 @@ namespace ENCGIS
 
     /// @brief 
     /// @param sql_stmt 
-    void runQuery(const std::string &sql_stmt);
+    bool runQuery(const std::string &sql_stmt);
 
     bool checkSpatialIndex(const std::string &table, const std::string &column);
 
