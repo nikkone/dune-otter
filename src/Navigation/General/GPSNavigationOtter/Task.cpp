@@ -229,7 +229,7 @@ namespace Navigation
           // Decompose velocity vector.
           m_estate.vx = std::cos(msg->cog) * msg->sog;
           m_estate.vy = std::sin(msg->cog) * msg->sog;
-          m_estate.u = msg->sog;
+          
 
           if (!m_args.gpsHasImu && msg->getSourceEntity() == m_imu_eid)
           {
@@ -237,8 +237,14 @@ namespace Navigation
             m_estate.theta = 0.0;
           }
 
-          if (!m_args.gpsHasYaw && msg->getSourceEntity() == m_yaw_eid)
+          if (!m_args.gpsHasYaw && msg->getSourceEntity() == m_yaw_eid) {
             m_estate.psi = msg->cog;
+            m_estate.u = msg->sog;
+          } else {
+            m_estate.u = std::cos(m_estate.psi-msg->cog) * msg->sog;
+            m_estate.v = std::sin(m_estate.psi-msg->cog) * msg->sog;
+          }
+            
 
           dispatch(m_estate);
         }
