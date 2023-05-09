@@ -62,6 +62,8 @@ namespace Control
         unsigned formationAllocator;
 
         std::string estimatorPrefix;
+
+        bool dynamicSpeed;
       };
 
       struct Task : public DUNE::Tasks::Task
@@ -103,6 +105,9 @@ namespace Control
         std::map<uint16_t, std::tuple<fp64_t, fp64_t, IMC::Reference, DUNE::Time::Delta>> m_participants; 
         typedef std::map<uint16_t, std::tuple<fp64_t, fp64_t, IMC::Reference, DUNE::Time::Delta>>::iterator participant_t;
 
+        //! Average SNR for current transmission across all receivers.
+        float m_avg_snr;
+
         std::vector<participant_t> m_allocation;
         Task(const std::string &name, Tasks::Context &ctx) : 
         DUNE::Tasks::Task(name, ctx),
@@ -132,6 +137,10 @@ namespace Control
           param("Use anti-collision strategies", m_args.useCollisionMitigation)
               .defaultValue("false")
               .description("Activate or deactivate the collision mitigation strategies");
+
+          param("Use DynamicSpeed", m_args.dynamicSpeed)
+              .defaultValue("true")
+              .description("Activate or deactivate the dynamic speed assigner");
 
           param("Formation Allocator", m_args.formationAllocator)
               .defaultValue("1")
@@ -352,13 +361,21 @@ namespace Control
 
         void consume(const IMC::TBRFishTag *msg)
         {
+          static unsigned snrCount= 0;
+          static uint16_t cumSNR = 0;
           if(isActive()) {
             if(m_last_of_msg.target == m_args.estimatorPrefix + std::to_string(msg->trans_id)) {
+              if(m_last_tag_timer.getElapsed() > 3) { // 3sec to allow for slow communication
+                m_avg_snr = msg->snr;
+                snrCount = 1;
+                cumSNR = msg->snr;
+              } else {
+                ++snrCount;
+                cumSNR += msg->snr;
+                m_avg_snr = cumSNR/snrCount;
+              }
               m_last_tag_timer.reset();
-              //if(m_formation_rotation_step_rad > 0.0) {
-              //  spew("Rotating %f", m_formation_rotate_rad);
-              //  m_formation_rotate_rad += m_formation_rotation_step_rad;
-              //}
+              inf("Avg SNR: %f", m_avg_snr);
             }
           }
         }
@@ -991,8 +1008,10 @@ namespace Control
             i++;
           
             // TODO: Parameterize enable/disable
+            if(m_args.dynamicSpeed) {
+              dynamicSpeedAssigner(participant);
+            }
             
-            dynamicSpeedAssigner(participant);
             //std::get<2>(participant->second).flags = IMC::Reference::FlagsBits::FLAG_SPEED;
             //dispatch(std::get<2>(participant->second));
             //std::get<2>(participant->second).flags = IMC::Reference::FlagsBits::FLAG_LOCATION | IMC::Reference::FlagsBits::FLAG_SPEED;
