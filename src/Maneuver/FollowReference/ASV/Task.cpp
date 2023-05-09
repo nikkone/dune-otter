@@ -498,9 +498,9 @@ namespace Maneuver
                                       sameReference(ref, &m_last_ref);
 
           if(!at_xy_target) {
-            bool changedSpeed = sameSpeed(ref, &m_last_ref);
-            still_same_reference = still_same_reference && changedSpeed;
-            if (changedSpeed && m_path_sent) {
+            bool unchangedSpeed = sameSpeed(ref, &m_last_ref);
+            still_same_reference = still_same_reference && unchangedSpeed;
+            if (!unchangedSpeed && m_path_sent) {
               IMC::DesiredSpeed desSpeed;
               desSpeed.value = desired_path.speed;
               desSpeed.speed_units = desired_path.speed_units;
