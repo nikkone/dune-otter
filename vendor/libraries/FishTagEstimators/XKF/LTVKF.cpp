@@ -59,7 +59,7 @@ bool LTVKF<T>::constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dyna
 //std::cout << "rr_cov: " << rr_cov << std::endl;
         OFP::KalmanFilterDynamic<T, 3>::R = OFP::KalmanFilterDynamic<T, 3>::R.Zero(RDOA.rows()+1,RDOA.rows()+1);
         OFP::KalmanFilterDynamic<T, 3>::R(0, 0) = (1/2)*pow(2*rr_cov,2) + (d(0) + m_dr)*(d(0) + m_dr)*2*rr_cov;
-        OFP::KalmanFilterDynamic<T, 3>::R(1, 1) = (1/2)*pow(2*rr_cov,2) + (d(0) + m_dr)*(d(1) + m_dr)*2*rr_cov;
+        OFP::KalmanFilterDynamic<T, 3>::R(1, 1) = (1/2)*pow(2*rr_cov,2) + (d(1) + m_dr)*(d(1) + m_dr)*2*rr_cov;
         OFP::KalmanFilterDynamic<T, 3>::R(0,1) = 0.5*pow(rr_cov,2) + (d(0)*d(1) + m_dr*(d(0)+ d(1)) + m_dr*m_dr)*rr_cov;
         OFP::KalmanFilterDynamic<T, 3>::R(1,0) = 0.5*pow(rr_cov,2) + (d(0)*d(1) + m_dr*(d(0)+ d(1)) + m_dr*m_dr)*rr_cov;
         OFP::KalmanFilterDynamic<T, 3>::R(2,2) = rz_cov;

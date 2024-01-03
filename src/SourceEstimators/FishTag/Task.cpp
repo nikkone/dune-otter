@@ -320,7 +320,7 @@ namespace SourceEstimators
             std::ofstream logOutStream;
             logOutStream.open(m_args.log_folder_and_prefix + m_startupTimestamp + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
             if (logOutStream.good()) {
-                logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
+                logOutStream << "t0,timestamp,N,E,D,Lat,Lon" << std::endl;
                 logOutStream.close();
             }
           }
@@ -350,7 +350,7 @@ namespace SourceEstimators
               std::ofstream logOutStream;
               logOutStream.open(m_args.log_folder_and_prefix + m_startupTimestamp + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
               if (logOutStream.good()) {
-                  logOutStream << "timestamp,N,E,D,Lat,Lon" << std::endl;
+                  logOutStream << "t0,timestamp,N,E,D,Lat,Lon" << std::endl;
                   logOutStream.close();
               }
               // Add all receivers to UnprocessedData in current Estimator
@@ -372,7 +372,7 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
           //}
           //m_emap.updateAll(msg->trans_id, tagBuffers[msg->trans_id]);
           spew("Detection from receiver %u added to buffer storing tag ID %u.", msg->serial_no, msg->trans_id);
-          spew("Latest timestamp: %d", tagBuffers[msg->trans_id]->getLatestTimestamp());
+          spew("Latest timestamp: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp());
         }
       }
 
@@ -413,6 +413,8 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
           tagBuffers[est->trans_id]->fromNEDframe(result, latLon);
           lati=latLon[0], longi=latLon[1];
 
+
+
           // Send output to Neptus/DUNE log
           IMC::RemoteSensorInfo tagPosition;
           tagPosition.lat = lati;
@@ -422,15 +424,26 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
           tagPosition.id = logname + std::to_string(est->trans_id);
           dispatch(tagPosition);
 
+
+
           // External Logfile
           #if LOGFTOILE
           std::ofstream logOutStream;
           logOutStream.open(in_logfilename, std::fstream::app);
+
           if (logOutStream.good()) {
             logOutStream.precision(15);
-              logOutStream << Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi) << std::endl;
-              logOutStream.close();
-          }   
+              logOutStream << est->getLatestTimestamp()<< ","<< Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi);
+            for(auto it : est->getUsedPositions()) {
+              logOutStream << ","<< it.first << ","<< it.second;
+              //inf("Receiver Position (North,East): (%f,%f)", it.first, it.second);
+            }
+            logOutStream << std::endl;
+            logOutStream.close();
+              //spew("Logstream good.");
+          }/* else {
+            war("Logstream not good: %s", in_logfilename.c_str());
+          }*/  
           #endif
           spew("%s :New Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", logname.c_str(), result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
         } else {
@@ -468,10 +481,10 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
 
 
                 //inf("Limit %d, current: %f last %d, delta %f", tagBuffers[it->first]->timestampTimeoutLimit, DUNE::Time::Clock::getSinceEpoch(), tagBuffers[it->first]->latestTimestamp, DUNE::Time::Clock::getSinceEpoch() - tagBuffers[it->first]->latestTimestamp);
-                if(!tagBuffers[it->first]->checkTimeout(DUNE::Time::Clock::getSinceEpoch())) {
-                  war("Tag %d timed out.", it->first);
-                  estimatorsToDelete.push_back(it->first);
-                }
+                //if(!tagBuffers[it->first]->checkTimeout(DUNE::Time::Clock::getSinceEpoch())) {
+                //  war("Tag %d timed out.", it->first);
+                //  estimatorsToDelete.push_back(it->first);
+                //}
               }
             }
 

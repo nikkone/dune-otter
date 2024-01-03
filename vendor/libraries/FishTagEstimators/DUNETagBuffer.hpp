@@ -45,7 +45,7 @@ namespace FishTagEstimators
 
       /// @brief Get function for latestTimestamp
       /// @return latestTimestamp
-      uint32_t getLatestTimestamp() {
+      uint64_t getLatestTimestamp() {
         return latestTimestamp;
       }
 
@@ -70,7 +70,7 @@ namespace FishTagEstimators
       uint32_t timestampTimeoutLimit;
 
       //! The timestamp of the first detection of the latest transmission.
-      uint32_t latestTimestamp;
+      uint64_t latestTimestamp;
 
   };
   //! A map of tag buffers, where the index is used for transmitter ID and the second is a pointer to a DUNETagBuffers_t

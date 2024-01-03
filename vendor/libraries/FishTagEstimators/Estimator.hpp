@@ -1,5 +1,6 @@
 #ifndef FishTag_Estimator
 #define FishTag_Estimator
+#include <vector>
 #include <Eigen/Core>
 
 #include "TagBuffer.hpp"
@@ -99,6 +100,25 @@ namespace FishTagEstimators
       //! @return True if parameter found
       bool setParameter(std::string parameterName, T value);
 
+      /// @brief Get function for latestTimestamp
+      /// @return latestTimestamp
+      uint64_t getLatestTimestamp() {
+        return latestTimestamp;
+      }
+
+      /// @brief Get function for the Geometric dillution of position of previous estimate
+      /// @return GDOP
+      uint64_t getGDOP() {
+        return GDOP;
+      }
+
+      /// @brief Get function for the receiver positions used in the previous estimate (North-East pairs) in the NED frame (relative to origin used in tagBuffer).
+      /// @return GDOP
+      const std::vector<std::pair<T,T>> getUsedPositions() {
+        return latestReceiverPositionsUsed;
+      }
+
+
     protected:
       //! Internal command to activate estimator
       //! @return True id activation successfull.
@@ -140,6 +160,15 @@ namespace FishTagEstimators
       
       //! A datastructure to keep track of which tag detections have been used.
       tagBool_t unprocessedData;
+
+      //! The timestamp of the first detection of the latest transmission.
+      uint64_t latestTimestamp;
+
+      //! Geometric dillution of position of previous estimate
+      uint32_t GDOP;
+
+      //! Positions used in the estimate currently provided by getEstimate
+      std::vector<std::pair<T,T>> latestReceiverPositionsUsed;
   };
   template class Estimator<double>;
 }

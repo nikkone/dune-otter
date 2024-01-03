@@ -47,7 +47,8 @@ namespace FishTagEstimators
       tagBuffer[msg->serial_no]->push_back(tag);
       if(msg->unix_timestamp - latestTimestamp > maxTimestampDifference) {
         // TODO: Check if more than one unused, then run update of filter
-        latestTimestamp = msg->getTimeStamp();
+        //latestTimestamp = msg->getTimeStamp();
+        latestTimestamp = ((uint64_t)msg->unix_timestamp)*1000 + msg->millis;
         //std::cout << std::endl << "set" << std::endl;
       }
       return true;

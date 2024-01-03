@@ -316,7 +316,6 @@ namespace Supervisors
         }
       }
 
-
       //! Checks if a tag is in the taglist DB and fills relevant fields in the otterformation message
       bool tagInDB(unsigned id, IMC::otterFormation &msg) {
         std::string query = "select t.'duty.sec' from taglist as t where t.'at.id'=" + std::to_string(id);

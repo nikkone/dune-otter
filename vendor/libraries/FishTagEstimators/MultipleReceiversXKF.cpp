@@ -94,9 +94,13 @@ namespace FishTagEstimators
 
     // Run filter update, and if sucessfull, set unprocessedData to false for used data receivers
     if(xkf.update(tagBuffer, RDOA, RDOAcombinations)) {
+      latestReceiverPositionsUsed.clear();
       for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
         unprocessedData[it->first] = false;
+        latestReceiverPositionsUsed.push_back(std::pair<T,T>((tagBuffer->tagBuffer[it->first]->rbegin())->N, (tagBuffer->tagBuffer[it->first]->rbegin())->E));
       }
+      latestTimestamp = ((uint64_t)tagBuffer->tagBuffer.begin()->second->rbegin()->unix_timestamp)*1000 + tagBuffer->tagBuffer.begin()->second->rbegin()->millis;
+      
       return true;
     }
     return false;
