@@ -62,6 +62,7 @@ namespace FishTagEstimators
     std::cout << "P0_inn" << std::endl << P0_inn << std::endl;
     std::cout << "x0_inn" << std::endl << x0_inn << std::endl;
     //registerParameter("trans_id");
+    depthConversion = 0.392;
   }
 
   template <class T>
@@ -144,4 +145,16 @@ namespace FishTagEstimators
   bool Estimator<T>::checkTime(T transmissionFirstTime, T currentTime) const {
     return true;
   }
+
+  template <class T>
+  void Estimator<T>::setDepthConversionCoefficient(T depthConversion_inn) {
+    depthConversion = depthConversion_inn;
+  }
+
+  template <class T>
+  T Estimator<T>::getDepthConversionCoefficient() {
+    return depthConversion;
+  }
+
+
 }

@@ -41,6 +41,16 @@ namespace FishTagEstimators
       //! @param [in] AllowedTimeShift
       void setAllowedTimeShift(T AllowedTimeShift);
 
+      /// @brief Set the coefficient used to convert the data field of a tag to depth in meters
+      /// @note If set to zero, estimator should not use depth measurement.
+      /// @param depthConversion_inn The coefficient
+      void setDepthConversionCoefficient(T depthConversion_inn);
+
+
+      /// @brief Get the coefficient used to convert the data field of a tag to depth in meters
+      /// @return The coefficient
+      T getDepthConversionCoefficient();
+
       //! Covariance used for TDOA measurements/calculations
       //! @param [in] TDOACovariance Covariance to use
       virtual void setTDOACovariance(T TDOACovariance);
@@ -76,7 +86,6 @@ namespace FishTagEstimators
       /// @brief Tell the estimator new data is available to be processed at next update
       /// @param serial_no 
       void updateUnprocessedData(uint32_t serial_no);
-
 
       /// @brief Checks we have waited long enough to allow all receivers to report tag detection.
       /// @param currentTime Time since UNIX Epoch (Midnight UTC of January 1, 1970).
@@ -169,6 +178,9 @@ namespace FishTagEstimators
 
       //! Positions used in the estimate currently provided by getEstimate
       std::vector<std::pair<T,T>> latestReceiverPositionsUsed;
+
+      //! The coefficient used to convert the data field of a tag to depth in meters
+      T depthConversion;
   };
   template class Estimator<double>;
 }
