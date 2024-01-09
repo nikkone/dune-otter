@@ -5,12 +5,13 @@
 
 namespace OFP
 {
-  template <typename T, int states, int measurements, int neededMeasurements>  AlgebraicSolver<T, states, measurements, neededMeasurements>::AlgebraicSolver() {
-    depth=0.0;
-    posi = Eigen::Matrix<T, states, neededMeasurements>::Zero();
-    ToA = Eigen::Matrix<T, neededMeasurements, 1>::Zero();
-    receivedMeasurements = 0;
-  }
+  template <typename T, int states, int measurements, int neededMeasurements>  AlgebraicSolver<T, states, measurements, neededMeasurements>::AlgebraicSolver() : 
+    posi(Eigen::Matrix<T, states, neededMeasurements>::Zero()),
+    ToA(Eigen::Matrix<T, neededMeasurements, 1>::Zero()),
+    depth(0.0),
+    receivedMeasurements(0),
+    x(Eigen::Matrix<T, states, 1>::Zero())
+  {}
 
     template <typename T, int states, int measurements, int neededMeasurements>  
     bool AlgebraicSolver<T, states, measurements, neededMeasurements>::addMeasurement(Eigen::Matrix<T, measurements, 1> z) {
