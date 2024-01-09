@@ -67,15 +67,7 @@ namespace FishTagEstimators
   //  ukf.predict();
   //}
   void PeriodEstimator::print(std::ostream& os) const {
-    //os << "A" << std::endl << ukf.A << std::endl;
-    //os << "C" << std::endl << ukf.C << std::endl;
-    //os << "PHat" << std::endl << ukf.PHat << std::endl;
-    //os << "xHat" << std::endl << ukf.xHat << std::endl;
-    //os << "R" << std::endl << ukf.R << std::endl;
-    //os << "Q" << std::endl << ukf.Q << std::endl;
-    //os << "K" << std::endl << ukf.K << std::endl;
-    //os << "ykest" << std::endl << ukf.ykest << std::endl;
-    //os << "yk" << std::endl << ukf.yk << std::endl;
-    //os << "innov" << std::endl << ukf.innov << std::endl;
+    os << "Tag Period: " << tag_period << std::endl;
+
   }
 }
