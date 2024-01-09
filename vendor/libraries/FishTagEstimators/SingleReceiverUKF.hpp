@@ -12,9 +12,23 @@ namespace FishTagEstimators
   class SingleReceiverUKF : public SingleReceiverBase
   {
     public:
+      typedef enum {
+        param_receiver,
+        param_receiver_depth,
+        param_tag_period,
+        param_max_jitter,
+        param_max_updates_per_new_measurement,
+        param_max_correction_attempts,
+        param_interval_mode,
+        param_unscented_alpha,
+        param_unscented_beta,
+        param_unscented_kappa
+      } t_param_base;
+      //! State transition matrix.
+      Eigen::Matrix<double, c_states, c_states> A;
       bool update(TagBuffer *tagBuffer);
       void predict();
-
+      void parseParameter(unsigned parameterID, double value);
       OFP::UnscentedKalmanFilter<double,c_states,2> ukf;
       OFP::AlgebraicSolver<double, 3, 9, 5> aslv;
       void initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,

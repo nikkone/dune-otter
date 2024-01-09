@@ -93,8 +93,7 @@ namespace FishTagEstimators
     }
 
     // Add depth measurement
-    double avgDepth = 0.392*depth.block(0,0,baselines,1).mean(); // Only valid for S256 tags with depth
-    //inf("Depth: %lf, baselines: %u, alternative depth: %lf", avgDepth, baselines, 0.392*depth.block(0,0,baselines,1).sum()/baselines);
+    double avgDepth = depthConversion*depth.block(0,0,baselines,1).mean(); 
     ekf.ykest(ekf.ykest.rows()-1,0) = ekf.xHat(2,0);
     ekf.C.row(ekf.C.rows()-1) << 0, 0, 1;
 

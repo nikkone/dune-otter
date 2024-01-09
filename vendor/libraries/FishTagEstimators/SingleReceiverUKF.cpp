@@ -2,6 +2,7 @@
 namespace FishTagEstimators
 {
   std::tuple<double, double, double> SingleReceiverUKF::getEstimate() {
+    //std::cout << "P_Hat" << std::endl <<  ukf.PHat << std::endl;
     return {ukf.xHat(0),ukf.xHat(1),ukf.xHat(2)};
   }
 
@@ -10,6 +11,12 @@ namespace FishTagEstimators
                                         const Eigen::Matrix<double, c_states, c_states> &P0_inn,
                                         const Eigen::Matrix<double, c_states, 1> &x0_inn)
   {
+       A        = A_inn;
+       ukf.Q    = Q_inn;
+       ukf.PHat = P0_inn;
+       ukf.xHat = x0_inn;
+       ukf.R = Eigen::Matrix<double, 2, 2>::Identity();
+       ukf.R << rr_cov,0,0,rz_cov;
        ukf.h = [this](Eigen::Matrix<double, 3, 1> x) {
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
           Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
@@ -25,19 +32,19 @@ namespace FishTagEstimators
           return ykest;
         };
 
-        ukf.f = [A_inn](Eigen::Matrix<double, 3, 1> x) {
-
-          return A_inn*x;
+        ukf.f = [this](Eigen::Matrix<double, c_states, 1> x) {
+          return Eigen::Matrix<double, c_states, 1>(A*x);
         };
 
-        ukf.Q = Q_inn;
-        ukf.R = Eigen::Matrix<double, 2, 2>::Identity();
-        ukf.R << rr_cov,0,0,rz_cov;
-        ukf.PHat = P0_inn;
-        ukf.xHat = x0_inn;
+
+
+
         //ukf.dt = m_args.filter_timestep;
 
     SingleReceiverBase::initialize(A_inn, Q_inn, P0_inn, x0_inn);
+    registerParameter("unscented_alpha", param_unscented_alpha);
+    registerParameter("unscented_beta", param_unscented_beta);
+    registerParameter("unscented_kappa", param_unscented_kappa);
     name = "SingleReceiverUKF";
   }
     
@@ -45,6 +52,23 @@ namespace FishTagEstimators
     ukf.xHat = x0_inn;
   }
 
+
+  void SingleReceiverUKF::parseParameter(unsigned parameterID, double value) {
+    switch(parameterID) {
+      case param_unscented_alpha:
+        ukf.setAlpha(value);
+        break;
+      case param_unscented_beta:
+        ukf.setBeta(value);
+        break;
+      case param_unscented_kappa:
+        ukf.setKappa(value);
+        break;
+      default:
+        SingleReceiverBase::parseParameter(parameterID, value);
+        break;
+    }
+  }
 
   bool SingleReceiverUKF::update(TagBuffer *tagBuffer) {
     SingleReceiverBase::update(tagBuffer);
@@ -99,8 +123,12 @@ namespace FishTagEstimators
         double rdoa = c_speed*tdoa;
 
         // Depth reading from the current tag
-        double depth = i->trans_data*0.392;
-
+        double depth;
+        if(depthConversion > 0.01) {
+          depth = i->trans_data*depthConversion;
+        } else {
+          depth = receiver_depth;
+        }
         // Compile all mesurements for convenience
         Eigen::Matrix<double, 9, 1> allMeasurements;
         

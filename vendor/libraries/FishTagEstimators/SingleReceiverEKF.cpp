@@ -14,12 +14,20 @@ namespace FishTagEstimators
     ekf.Q =     Q_inn;
     ekf.PHat = P0_inn;
     ekf.xHat = x0_inn;
+    
     ekf.C.resize(2,c_states);
     ekf.ykest.resize(2,1);
     ekf.yk.resize(2,1);
     ekf.R = Eigen::Matrix<double, 2, 2>::Identity();
     ekf.R << rr_cov,0,0,rz_cov;
 
+/*
+    ekf.C.resize(1,c_states);
+    ekf.ykest.resize(1,1);
+    ekf.yk.resize(1,1);
+    ekf.R = Eigen::Matrix<double, 1, 1>::Identity();
+    ekf.R << rr_cov;
+*/
     SingleReceiverBase::initialize(A_inn, Q_inn, P0_inn, x0_inn);
     name = "SingleReceiverEKF";
   }
@@ -82,8 +90,12 @@ namespace FishTagEstimators
         double rdoa = c_speed*tdoa;
 
         // Depth reading from the current tag
-        double depth = i->trans_data*0.392;
-
+        double depth;
+        if(depthConversion > 0.01) {
+          depth = i->trans_data*depthConversion;
+        } else {
+          depth = receiver_depth;
+        }
         // Compile all mesurements for convenience
         Eigen::Matrix<double, 9, 1> allMeasurements;
         
@@ -113,29 +125,43 @@ namespace FishTagEstimators
           double r1 = distance1.norm();//  ||X_e-X_rx0||
           double r2 = distance2.norm();// ||X_e-X_rx1||
 
-          // Calculate Jacobian with RDOA only
+          if(depthConversion>0.1) { //Use Depth
+
+          // Calculate Jacobian with RDOA and depth
           ekf.C.row(0) = (distance2/r2) - (distance1/r1); // Eq (2.18)
           ekf.C.row(1) << 0, 0, 1;
           
           // Calculate estimated measurements
           ekf.ykest(0) = r2 - r1; // h is eq (2.16) in masters
           ekf.ykest(1) = ekf.xHat(2,0);
-    ////std::cout << "r1" << std::endl << r1 << std::endl;
-    ////std::cout << "r2" << std::endl << r2 << std::endl;
-    ////std::cout << "ykest" << std::endl << ekf.ykest << std::endl;
-    ////std::cout << "r1" << std::endl << receiverBuffer->rbegin()->recv_mem_addr << std::endl;
-    ////std::cout << "r2" << std::endl << i->recv_mem_addr << std::endl;
 
           Eigen::Matrix<double, 2, 1> measurements;
           measurements << rdoa ,depth;
           ekf.update(measurements);
+          } else {
+          // Calculate Jacobian with RDOA only
+          ekf.C.row(0) = (distance2/r2) - (distance1/r1); // Eq (2.18)
+          
+          // Calculate estimated measurements
+          ekf.ykest(0) = r2 - r1; // h is eq (2.16) in masters
+
+          Eigen::Matrix<double, 1, 1> measurements;
+          measurements << rdoa;
+          ekf.update(measurements);
+          }
+
+          
 
           updates++;
           // Stop the loop after using the new measurement a given number of times.
           if(updates >= max_updates_per_new_measurement) {
             return true; 
           }
-          
+    ////std::cout << "r1" << std::endl << r1 << std::endl;
+    ////std::cout << "r2" << std::endl << r2 << std::endl;
+    ////std::cout << "ykest" << std::endl << ekf.ykest << std::endl;
+    ////std::cout << "r1" << std::endl << receiverBuffer->rbegin()->recv_mem_addr << std::endl;
+    ////std::cout << "r2" << std::endl << i->recv_mem_addr << std::endl; 
         }
         // Stop after a number of predetermined attempts
         if(attempt >= m_max_correction_attempts) {
