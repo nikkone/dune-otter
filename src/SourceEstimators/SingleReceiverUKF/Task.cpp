@@ -117,7 +117,7 @@ namespace SourceEstimators
       int m_salinity_eid;
 
       OFP::UnscentedKalmanFilter<double,3,3> m_ukf;
-      OFP::UnscentedKalmanFilter<double,3,1> m_ukf2;
+      OFP::UnscentedKalmanFilter<double,3,1> m_ukf2; // Only using tdoa
       OFP::AlgebraicSolver<double, 3, 9, 5> m_aslv;
       Eigen::Matrix<double, 3, 1> pos_current;
       Eigen::Matrix<double, 3, 1> pos_previous;
@@ -131,7 +131,10 @@ namespace SourceEstimators
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
         m_ukf(0.001, 2.0, 0.0),
-        m_ukf2(0.001, 2.0, 0.0)
+        m_ukf2(0.001, 2.0, 0.0),
+        m_aslv(),
+        pos_current(Eigen::Matrix<double, 3, 1>::Zero()),
+        pos_previous(Eigen::Matrix<double, 3, 1>::Zero())
       {
         param("Ranging - SNR Fit", m_args.ranging_snr_fit)
         .size(2)
@@ -341,9 +344,9 @@ namespace SourceEstimators
           A << 1.0, 0.0, 0.0,
           0.0, 1.0, 0.0,
           0.0, 0.0, 1.0;
-        m_ukf.f = [A](Eigen::Matrix<double, 3, 1> x) {
+        m_ukf.f = [](Eigen::Matrix<double, 3, 1> x) {
 
-          return A*x;
+          return Eigen::Matrix<double, 3, 1>(Eigen::Matrix<double, 3, 3>::Identity()*x);
         };
         m_ukf.dt = m_args.filter_timestep;
 
@@ -369,9 +372,9 @@ namespace SourceEstimators
           return ykest;
         };
 
-        m_ukf2.f = [A](Eigen::Matrix<double, 3, 1> x) {
+        m_ukf2.f = [](Eigen::Matrix<double, 3, 1> x) {
 
-          return A*x;
+          return Eigen::Matrix<double, 3, 1>(Eigen::Matrix<double, 3, 3>::Identity()*x);
         };
         m_ukf2.dt = m_args.filter_timestep;
 
