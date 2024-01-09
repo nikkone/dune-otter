@@ -29,6 +29,7 @@
 #define SingleReceiverSRUKFLog 1
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+#include <Eigen/Core>
 #include <boost/circular_buffer.hpp>
 #include <OpenFilterPack/AlgebraicSolution.hpp>
 #include <OpenFilterPack/SquareRootUnscentedKalmanFilter.hpp>
@@ -115,11 +116,11 @@ namespace SourceEstimators
       int m_salinity_eid;
 
       OFP::SquareRootUnscentedKalmanFilter<double,3,3> m_srukf;
-      OFP::SquareRootUnscentedKalmanFilter<double,3,1> m_srukf2;
+      OFP::SquareRootUnscentedKalmanFilter<double,3,1> m_srukf2; // Only TOA   
+      OFP::AlgebraicSolver<double, 3, 9, 5> m_aslv;
+
       Eigen::Matrix<double, 3, 1> pos_current;
       Eigen::Matrix<double, 3, 1> pos_previous;
-      
-      OFP::AlgebraicSolver<double, 3, 9, 5> m_aslv;
       //! How far back into the buffer to attempt period matching.
       int m_max_correction_attempts;
       //! Reference coordinate used to calculate NED frame
@@ -130,7 +131,10 @@ namespace SourceEstimators
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
         m_srukf(0.001, 2.0, 0.0),
-        m_srukf2(0.001, 2.0, 0.0)
+        m_srukf2(0.001, 2.0, 0.0),
+        m_aslv(),
+        pos_current(Eigen::Matrix<double, 3, 1>::Zero()),
+        pos_previous(Eigen::Matrix<double, 3, 1>::Zero())
       {
         param("Ranging - SNR Fit", m_args.ranging_snr_fit)
         .size(2)
@@ -301,6 +305,7 @@ namespace SourceEstimators
           }
           // Ignore other tags
         }
+        
       }
 
       void
@@ -332,15 +337,15 @@ namespace SourceEstimators
           ykest(2) = x(2); // Depth estimate
           return ykest;
         };
-        Eigen::Matrix<double, 3, 3> A;
-        A << 1.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 0.0, 1.0;
+        //Eigen::Matrix<double, 3, 3> A =Eigen::Matrix<double, 3, 3>::Identity();
+        //A << 1.0, 0.0, 0.0,
+        //0.0, 1.0, 0.0,
+        //0.0, 0.0, 1.0;
         // Square Root Unscented KF
 
-        m_srukf.f = [A](Eigen::Matrix<double, 3, 1> x) {
+        m_srukf.f = [this](Eigen::Matrix<double, 3, 1> x) {
 
-          return A*x;
+          return Eigen::Matrix<double, 3, 1>(Eigen::Matrix<double, 3, 3>::Identity()*x);
         };
 
 
@@ -441,9 +446,12 @@ namespace SourceEstimators
 
               Eigen::Matrix<double, 9, 1> allMeasurements;
               allMeasurements << NED2[0] ,NED2[1] ,m_args.receiver_depth, NED1[0] ,NED1[1] ,m_args.receiver_depth, rdoa, rangeSNR, depth;
+              //std::cout << allMeasurements;
 
               Eigen::Matrix<double, 3, 1> allMeasurements2;
               allMeasurements2 << rdoa, rangeSNR, depth;
+              std::cout << allMeasurements2;
+              
               if (m_aslv.addMeasurement(allMeasurements)) {
               
 
@@ -476,7 +484,7 @@ namespace SourceEstimators
               pos_current <<  NED1[0], NED1[1], m_args.receiver_depth;
               pos_previous << NED2[0], NED2[1], m_args.receiver_depth;
               m_srukf.update(allMeasurements.block(6,0,3,1));
-              m_srukf2.update(allMeasurements.block(6,0,1,1));
+              //m_srukf2.update(allMeasurements.block(6,0,1,1)); //TODO: Problem in calculation of Sy if only one measurement, may still work, but giver warning
               return;
               
           }
@@ -490,6 +498,7 @@ namespace SourceEstimators
       {
         while (!stopping())
         {
+          
           if(m_filter_timer.overflow()) {
             m_filter_timer.reset();
             

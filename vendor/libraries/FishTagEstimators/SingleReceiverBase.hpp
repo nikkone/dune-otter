@@ -18,7 +18,10 @@ namespace FishTagEstimators
         param_max_jitter,
         param_max_updates_per_new_measurement,
         param_max_correction_attempts,
-        param_interval_mode
+        param_interval_mode,
+        param_unscented_alpha,
+        param_unscented_beta,
+        param_unscented_kappa
       } t_param_base;
       bool update(TagBuffer *tagBuffer);
 

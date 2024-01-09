@@ -87,6 +87,8 @@ namespace SourceEstimators
       std::vector<double> ss_extra_param_value;
 
       uint32_t timestampTimeout;
+
+      float depthConversion;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -196,6 +198,10 @@ namespace SourceEstimators
         .description("Maximum time [s] to keep an estimator alive without any detections received.")
         .defaultValue("500");
 
+        param("Depth Coefficient", m_args.depthConversion)
+        .description("The coefficient used to convert the data field of a tag to depth in meters")
+        .defaultValue("0.392");
+
         bind<IMC::TBRFishTag>(this);
         bind<IMC::SoundSpeed>(this);
 
@@ -300,6 +306,7 @@ namespace SourceEstimators
               Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
               Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
             );
+            est->setDepthConversionCoefficient(m_args.depthConversion);
             if(m_args.ss_serial_no == 0) {
               est->setParameter("receiver", msg->serial_no);
             } else {
@@ -346,6 +353,7 @@ namespace SourceEstimators
                 Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
                 Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
               );
+              est->setDepthConversionCoefficient(m_args.depthConversion);
               // Create/clear csv logfile for estimator with header
               std::ofstream logOutStream;
               logOutStream.open(m_args.log_folder_and_prefix + m_startupTimestamp + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
