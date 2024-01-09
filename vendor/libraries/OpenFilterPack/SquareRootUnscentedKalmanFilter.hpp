@@ -20,8 +20,7 @@ namespace OFP
       const int nx = states;
       //! Number of measurements
       const int ny = measurements;
-      //! The size of sigma points for use in code
-      const int size_sigmaPoints = 2*states+1;
+
       //! Kalman Gain
       Eigen::Matrix<T, states, measurements> K;
       //! Square-Root of Covariance estimate matrix
@@ -32,6 +31,8 @@ namespace OFP
       Eigen::Matrix<T, measurements, measurements> R_sqrt;
       //! State estimate vector
       Eigen::Matrix<T, states, 1> xHat;
+      //! The size of sigma points for use in code
+      const int size_sigmaPoints = 2*states+1;
       //! Sigma points for the Unscented transform.
       Eigen::Matrix<T, states, 2*states+1> sigmaPoints;
       //! Sigma points for the Unscented transform.
@@ -42,6 +43,7 @@ namespace OFP
       Eigen::Matrix<T, 1, 2*states+1> Wc;
       //! Sigma point weights for the Unscented transform mean.
       Eigen::Matrix<T, 1, 2*states+1> Wm;
+
       //! Holder for state transition function
       std::function<Eigen::Matrix<T, states, 1>(Eigen::Matrix<T, states, 1> x)> f;
       //! Holder for measurment function
@@ -51,13 +53,15 @@ namespace OFP
       //! @param[in] alpha_in.
       //! @param[in] beta_in.
       //! @param[in] kappa_in.
-      SquareRootUnscentedKalmanFilter(T alpha_in, T beta_in, T kappa_in) {
-        alpha = alpha_in;
+      SquareRootUnscentedKalmanFilter(T alpha_in, T beta_in, T kappa_in) :
+       active(false) {
+        setUnscentedParameters(alpha_in, beta_in, kappa_in);
+        /*alpha = alpha_in;
         beta = beta_in;
         kappa = kappa_in;
         lambda = alpha*alpha * (nx +kappa) - nx;
         gamma = std::sqrt(nx+lambda);
-        computeWeights();
+        computeWeights();*/
       }
 
       //! Function for changing the parameters used in the unscented transform.
@@ -90,6 +94,8 @@ namespace OFP
       //! @return True if active and end reached, false if filter not active.
       bool update(Eigen::Matrix<T, measurements, 1> yk_inn) {
         if(active) {
+          std::cout << yk_inn;
+          
           // Update sigma points to reflect the prediction
           sigmaPoints = generateSigmaPoints(xHat, S);
           // Propagate the sigma points through the measurment model. 
@@ -97,8 +103,8 @@ namespace OFP
             sigmaPoints_h.col(s) =  h(sigmaPoints.col(s));
           }
           
-          Eigen::Matrix<T, measurements, 1> yk_est;
           // Unscented transform - Calculate the a priori estimate mean
+          Eigen::Matrix<T, measurements, 1> yk_est;
           yk_est = sigmaPoints_h*Wm.transpose();
           
           //yk_est = (sigmaPoints_h*Wm.transpose()).colwise().sum();
@@ -108,8 +114,8 @@ namespace OFP
 
           Eigen::Matrix<T, measurements, 2*states+measurements> QR;
           QR << (std::sqrt(Wc(0,1))*sigmaDelta.block(0,1,measurements, 2*states)), R_sqrt;
-
-          Eigen::Matrix<T, measurements, measurements> Sy = QR.transpose().householderQr().matrixQR().topLeftCorner(measurements, measurements).template triangularView<Eigen::Upper>();
+          Eigen::Matrix<T, measurements, measurements> Sy;
+          Sy = QR.transpose().householderQr().matrixQR().topLeftCorner(measurements, measurements).template triangularView<Eigen::Upper>();
           Eigen::internal::llt_inplace<T, Eigen::Upper>::rankUpdate(Sy, sigmaDelta.col(0), Wc(0,0));
           Sy.transposeInPlace();
           Eigen::Matrix<T, states, measurements> Pxy = calculate_cross_variance(xHat, yk_est, sigmaPoints, sigmaPoints_h, Wc);
@@ -173,6 +179,25 @@ namespace OFP
         return false;
       }
 */
+      T getAlpha() {
+        return alpha;
+      }
+      T getBeta() {
+        return beta;
+      }
+      T getKappa() {
+        return kappa;
+      }
+
+      void setAlpha(T alpha_in) {
+        setUnscentedParameters(alpha_in, beta, kappa);
+      }
+      void setBeta(T beta_in) {
+        setUnscentedParameters(alpha, beta_in, kappa);
+      }
+      void setKappa(T kappa_in) {
+        setUnscentedParameters(alpha, beta, kappa_in);
+      }
     private:
       //! 
       T alpha;

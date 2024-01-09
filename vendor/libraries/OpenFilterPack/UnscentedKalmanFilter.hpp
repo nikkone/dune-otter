@@ -28,8 +28,6 @@ namespace OFP
       Eigen::Matrix<T, states, states> Q;
       //! Measurement noise covariance matrix
       Eigen::Matrix<T, measurements, measurements> R;
-      //! Time varying innovation vector
-      //Eigen::Matrix<T, measurements, 1> innovation;
       //! State estimate vector
       Eigen::Matrix<T, states, 1> xHat;
       //! The size of sigma points for use in code
@@ -54,13 +52,14 @@ namespace OFP
       //! @param[in] alpha_in.
       //! @param[in] beta_in.
       //! @param[in] kappa_in.
-      UnscentedKalmanFilter(T alpha_in, T beta_in, T kappa_in) {
-        alpha = alpha_in;
+      UnscentedKalmanFilter(T alpha_in, T beta_in, T kappa_in) :
+      active(false) {
+        setUnscentedParameters(alpha_in, beta_in, kappa_in);
+/*        alpha = alpha_in;
         beta = beta_in;
         kappa = kappa_in;
         lambda = alpha*alpha * (nx +kappa) - nx;
-        computeWeights(); 
-        active = false;
+        computeWeights(); */
       }
 
       //! Function for changing the parameters used in the unscented transform.
@@ -109,9 +108,12 @@ namespace OFP
         if(active) {
           // Compute process sigma points
           sigmaPoints = generateSigmaPoints(xHat, PHat);
+          //std::cout << "sigmaPoints" << std::endl <<  sigmaPoints << std::endl;
           for(int s = 0;s<size_sigmaPoints; s++) {
             sigmaPoints_f.col(s) =  f(sigmaPoints.col(s));
+            //std::cout << "f(sigmaPoints.col(s))" << std::endl <<  f(sigmaPoints.col(s)) << std::endl;
           }
+          //std::cout << "sigmaPoints_f" << std::endl <<  sigmaPoints_f << std::endl;
           // Unscented transform
           PHat = unscented_transform<states>(sigmaPoints_f, Wm, Wc, xHat) + Q;
           return true;
@@ -119,6 +121,26 @@ namespace OFP
         return false;
       }
 
+
+      T getAlpha() {
+        return alpha;
+      }
+      T getBeta() {
+        return beta;
+      }
+      T getKappa() {
+        return kappa;
+      }
+
+      void setAlpha(T alpha_in) {
+        setUnscentedParameters(alpha_in, beta, kappa);
+      }
+      void setBeta(T beta_in) {
+        setUnscentedParameters(alpha, beta_in, kappa);
+      }
+      void setKappa(T kappa_in) {
+        setUnscentedParameters(alpha, beta, kappa_in);
+      }
     private:
       //! 
       T alpha;
