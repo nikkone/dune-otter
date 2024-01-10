@@ -102,18 +102,17 @@ namespace FishTagEstimators
         allMeasurements << i->N, i->E ,receiver_depth, receiverBuffer->rbegin()->N,receiverBuffer->rbegin()->E ,receiver_depth, rdoa, rangeSNR, depth;
 
 
-        // Update the algebraic solver
-        if (aslv.addMeasurement(allMeasurements)) {
-        //std::cout << "Steg2"<< std::endl;
-          // Initialize kalman filters with position found with the algebraic solver
+        if(useAslv) {
           if(!isActive()) {
-            setPositionEstimate(aslv.x);
-            activateEstimator();
+          // Update the algebraic solver
+            if (aslv.addMeasurement(allMeasurements)) {
+              // Initialize kalman filters with position found with the algebraic solver
+              setPositionEstimate(aslv.x);
+              activateEstimator();
+            }
           }
-          
-          // Log results from algebraic solver
-          //double result[3] = {aslv.x(0), aslv.x(1), aslv.x(2)};
-          //logResult(result, aslvlogfilename, "OFPASLV");
+        } else {
+          activateEstimator();
         }
 
         // Update kalman filters with current measurement and inputs

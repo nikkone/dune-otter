@@ -15,6 +15,9 @@ namespace FishTagEstimators
     registerParameter("max_updates_per_new_measurement", param_max_updates_per_new_measurement);
     registerParameter("max_correction_attempts", param_max_correction_attempts);
     registerParameter("interval_mode", param_interval_mode);
+    registerParameter("param_use_aslv", param_use_aslv);
+
+    useAslv = true;
 
     Estimator::initialize(A_inn, Q_inn, P0_inn, x0_inn);
   }
@@ -41,6 +44,9 @@ namespace FishTagEstimators
         break;
       case param_interval_mode:
         interval_mode = value;
+        break;
+      case param_use_aslv:
+        useAslv = (value) ? true : false;
         break;
       default:
         Estimator::parseParameter(parameterID, value);

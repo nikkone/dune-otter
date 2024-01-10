@@ -23,6 +23,7 @@ namespace FishTagEstimators
         estimatorType_SingleReceiverEKF,
         estimatorType_SingleReceiverUKF,
         estimatorType_SingleReceiverSRUKF,
+        estimatorType_SingleReceiverASLV,
         estimatorType_MultipleReceiverEKF,
         estimatorType_MultipleReceiverXKF
       } estimatorTypeEnum_t;

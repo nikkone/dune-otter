@@ -20,17 +20,24 @@ namespace FishTagEstimators
         param_max_updates_per_new_measurement,
         param_max_correction_attempts,
         param_interval_mode,
+        param_use_aslv,
         param_unscented_alpha,
         param_unscented_beta,
         param_unscented_kappa
       } t_param_base;
+      
+      OFP::UnscentedKalmanFilter<double,c_states,2> ukf;
+      OFP::AlgebraicSolver<double, 3, 9, 5> aslv;
       //! State transition matrix.
       Eigen::Matrix<double, c_states, c_states> A;
+
+      SingleReceiverUKF() : ukf(0.001, 2.0, 0.0){};
+      ~SingleReceiverUKF() {};
+
       bool update(TagBuffer *tagBuffer);
       void predict();
       void parseParameter(unsigned parameterID, double value);
-      OFP::UnscentedKalmanFilter<double,c_states,2> ukf;
-      OFP::AlgebraicSolver<double, 3, 9, 5> aslv;
+
       void initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &Q_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &P0_inn,
@@ -45,8 +52,6 @@ namespace FishTagEstimators
         return ukf.active;
       };
       void setPositionEstimate(const Eigen::Matrix<double, c_states, 1> &x0_inn);
-      SingleReceiverUKF() : ukf(0.001, 2.0, 0.0) {};
-      ~SingleReceiverUKF() {};
   };
 }
 #endif // FishTagEstimators_SingleReceiverEKF

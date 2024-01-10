@@ -9,7 +9,7 @@ namespace FishTagEstimators
   void SingleReceiverUKF::initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &Q_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &P0_inn,
-                                        const Eigen::Matrix<double, c_states, 1> &x0_inn)
+                                        const Eigen::Matrix<double, c_states, 1> &x0_inn)     
   {
        A        = A_inn;
        ukf.Q    = Q_inn;
@@ -134,26 +134,25 @@ namespace FishTagEstimators
         
         allMeasurements << i->N, i->E ,receiver_depth, receiverBuffer->rbegin()->N,receiverBuffer->rbegin()->E ,receiver_depth, rdoa, rangeSNR, depth;
 
-
-        // Update the algebraic solver
-        if (aslv.addMeasurement(allMeasurements)) {
-        //std::cout << "Steg2"<< std::endl;
-          // Initialize kalman filters with position found with the algebraic solver
+        if(useAslv) {
           if(!isActive()) {
-            setPositionEstimate(aslv.x);
-            activateEstimator();
+          // Update the algebraic solver
+            if (aslv.addMeasurement(allMeasurements)) {
+              // Initialize kalman filters with position found with the algebraic solver
+              setPositionEstimate(aslv.x);
+              activateEstimator();
+            }
           }
-          
-          // Log results from algebraic solver
-          //double result[3] = {aslv.x(0), aslv.x(1), aslv.x(2)};
-          //logResult(result, aslvlogfilename, "OFPASLV");
+        } else {
+          activateEstimator();
         }
+
 
         // Update kalman filters with current measurement and inputs
         if(isActive()) {
           //std::cout << "Steg3"<< std::endl;
-            pos_previous = allMeasurements.block(0,0,3,1); // X_e-X_rx0
-            pos_current = allMeasurements.block(3,0,3,1); // X_e-X_rx1
+          pos_previous = allMeasurements.block(0,0,3,1); // X_e-X_rx0
+          pos_current = allMeasurements.block(3,0,3,1); // X_e-X_rx1
 
           Eigen::Matrix<double, 2, 1> measurements;
           measurements << rdoa ,depth;
