@@ -176,7 +176,9 @@ namespace FishTagEstimators
   }
   
   void SingleReceiverUKF::predict() {
-    ukf.predict();
+    if(!isActive()) {
+      ukf.predict();
+    }
   }
   void SingleReceiverUKF::print(std::ostream& os) const {
     //os << "A" << std::endl << ukf.A << std::endl;

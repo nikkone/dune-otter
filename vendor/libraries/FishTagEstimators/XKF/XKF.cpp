@@ -27,11 +27,17 @@ namespace FishTagEstimators
       {
         if(stage1.update(tagBuffer, RDOA, RDOAcombinations)) {
           if(!stage2.active) {
+            stage2.xHat(0) = stage1.xHat(0);
+            stage2.xHat(1) = stage1.xHat(1);
+            stage2.xHat(2) = stage1.xHat(2);
             stage2.active = true;
           }
           if(stage2.constructCandR(tagBuffer, RDOA, RDOAcombinations, stage1.getDm())) {
             stage2.update(stage2.yk);
             if(!stage3.active) {
+              stage3.xHat(0) = stage2.xHat(0);
+              stage3.xHat(1) = stage2.xHat(1);
+              stage3.xHat(2) = stage2.xHat(2);
               stage3.active = true;
             }
           }

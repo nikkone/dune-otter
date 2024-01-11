@@ -173,7 +173,9 @@ namespace FishTagEstimators
   }
   
   void SingleReceiverEKF::predict() {
-    ekf.predict();
+    if(!isActive()) {
+      ekf.predict();
+    }
   }
   void SingleReceiverEKF::print(std::ostream& os) const {
     os << "A" << std::endl << ekf.A << std::endl;

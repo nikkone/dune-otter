@@ -71,7 +71,7 @@ namespace FishTagEstimators
           return false; // Exit if not in these modes
       }
       //std::cout << "interval_mode: " << interval_mode << std::endl;
-      std::cout << "tag_period: " << tag_period << std::endl;
+      //std::cout << "tag_period: " << tag_period << std::endl;
       return true;
     }
     return false;

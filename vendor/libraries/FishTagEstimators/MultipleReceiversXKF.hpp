@@ -1,7 +1,6 @@
 #ifndef FishTagEstimator_MultipleReceiverXKF
 #define FishTagEstimator_MultipleReceiverXKF
 #include <Eigen/Core>
-#include <OpenFilterPack/KalmanFilterDynamic.hpp>
 #include "Estimator.hpp"
 #include "XKF/XKF.hpp"
 
@@ -18,8 +17,8 @@ namespace FishTagEstimators
     public:
       MultipleReceiverXKF() {};
       ~MultipleReceiverXKF() {};
-      bool update(TagBuffer *tagBuffer);
 
+      bool update(TagBuffer *tagBuffer);
       void predict();
 
       XKF::XKF<T> xkf;
@@ -31,7 +30,6 @@ namespace FishTagEstimators
       void print(std::ostream& os) const;
       bool isActive() const {
         return xkf.isInitialized();
-        return true;
       }
   void setTDOACovariance(T TDOACovariance);
   void setDepthCovariance(T depthCovariance);

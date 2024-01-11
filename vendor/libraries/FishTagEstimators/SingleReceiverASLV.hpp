@@ -2,7 +2,6 @@
 #define FishTagEstimators_SingleReceiverASLV
 //#include <unistd.h>
 #include <Eigen/Core>
-#include <OpenFilterPack/KalmanFilterDynamic.hpp>
 #include <OpenFilterPack/AlgebraicSolution.hpp>
 #include "SingleReceiverBase.hpp"
 //! Task that runs source position estimation algorithms for IMC::TBRFishTag

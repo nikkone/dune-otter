@@ -59,6 +59,12 @@ namespace FishTagEstimators
 
       bool checkTimeout(double currentTimestamp);
 
+      void getReferenceCoordinateRad(double (&reference)[3]) {
+        reference[0] = refCoord[0];
+        reference[1] = refCoord[1];
+        reference[2] = refCoord[2];
+      }
+
     protected:
       //! Coordinate used as origin in local NED frame
       double refCoord[3];
