@@ -3,6 +3,7 @@
 #include "SingleReceiverUKF.hpp"
 #include "SingleReceiverSRUKF.hpp"
 #include "SingleReceiverASLV.hpp"
+#include "SingleReceiverXKF.hpp"
 #include "MultipleReceiverEKF.hpp"
 #include "MultipleReceiversXKF.hpp"
 namespace FishTagEstimators
@@ -25,6 +26,9 @@ namespace FishTagEstimators
           break;
         case estimatorType_SingleReceiverASLV:
           est = new SingleReceiverASLV();
+          break;
+        case estimatorType_SingleReceiverXKF:
+          est = new SingleReceiverXKF();
           break;
         case estimatorType_MultipleReceiverEKF:
           est = new MultipleReceiverEKF();

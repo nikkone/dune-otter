@@ -249,6 +249,8 @@ namespace SourceEstimators
           SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverSRUKF);
         } if(std::find(m_args.singleEstimators.begin(), m_args.singleEstimators.end(), "ASLV") != m_args.singleEstimators.end()) {
           SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverASLV);
+        } if(std::find(m_args.singleEstimators.begin(), m_args.singleEstimators.end(), "XKF") != m_args.singleEstimators.end()) {
+          SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverXKF);
         }
         
         if(std::find(m_args.multiEstimators.begin(), m_args.multiEstimators.end(), "XKF") != m_args.multiEstimators.end()) {
