@@ -1,6 +1,6 @@
 //***************************************************************************
-// Copyright 2007-2021 Norwegian University of Science and Technology (NTNU)*
-// Department of Engineering Cybernetics (ITK)                              *
+// Copyright 2007-2023 Universidade do Porto - Faculdade de Engenharia      *
+// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -8,41 +8,37 @@
 // Licencees holding valid commercial DUNE licences may use this file in    *
 // accordance with the commercial licence agreement provided with the       *
 // Software or, alternatively, in accordance with the terms contained in a  *
-// written agreement between you and Universidade do Porto. For licensing   *
-// terms, conditions, and further information contact lsts@fe.up.pt.        *
+// written agreement between you and Faculdade de Engenharia da             *
+// Universidade do Porto. For licensing terms, conditions, and further      *
+// information contact lsts@fe.up.pt.                                       *
 //                                                                          *
-// European Union Public Licence - EUPL v.1.1 Usage                         *
-// Alternatively, this file may be used under the terms of the EUPL,        *
-// Version 1.1 only (the "Licence"), appearing in the file LICENCE.md       *
+// Modified European Union Public Licence - EUPL v.1.1 Usage                *
+// Alternatively, this file may be used under the terms of the Modified     *
+// EUPL, Version 1.1 only (the "Licence"), appearing in the file LICENCE.md *
 // included in the packaging of this file. You may not use this work        *
 // except in compliance with the Licence. Unless required by applicable     *
 // law or agreed to in writing, software distributed under the Licence is   *
 // distributed on an "AS IS" basis, WITHOUT WARRANTIES OR CONDITIONS OF     *
 // ANY KIND, either express or implied. See the Licence for the specific    *
 // language governing permissions and limitations at                        *
+// https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Nikolai Lauvås                                                   *
+// Author: José Braga                                                       *
 //***************************************************************************
 
-#ifndef USER_DUNE_HPP_INCLUDED_
-#define USER_DUNE_HPP_INCLUDED_
+#ifndef DUNE_NAVIGATION_HPP_INCLUDED_
+#define DUNE_NAVIGATION_HPP_INCLUDED_
 
-// USER module headers.
-#include <USER/Hardware.hpp>
-#include <USER/Control.hpp>
-#include <USER/Navigation.hpp>
-
-
-//! DUNE: Uniform Navigational Environment.
 namespace DUNE
-{ }
+{
+  //! %Navigation related routines and classes.
+  namespace Navigation
+  { }
+}
 
-//! Convenience macro to import DUNE's most commonly used namespaces
-//! into global scope. Use it like this: 'using USER_NAMESPACES;'
-#define USER_NAMESPACES
-  //namespace DUNE;
-  using namespace DUNE::Hardware; 
-  using namespace DUNE::Control;
-  using namespace DUNE::Navigation;
+#include <USER/Navigation/autonaut.hpp>
+#include <USER/Navigation/obstacle.hpp>
+#include <USER/Navigation/sb_mpc.hpp>
+
 #endif
