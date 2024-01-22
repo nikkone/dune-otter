@@ -67,6 +67,7 @@ namespace FishTagEstimators
     Eigen::Matrix<T, Eigen::Dynamic, 1> depth(tagBuffer->tagBuffer.size(),1);
     tagBool_t used; // Could have been made standard vector, only need receiver address. But if we move toestimator?
 
+  //! TODO: Ensure that the reference receiver is kept constant for all calculations
     unsigned baselines = 0;
     std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations;
     for (tagBufferMap_t::const_iterator outerreceiver = tagBuffer->tagBuffer.begin(); outerreceiver != tagBuffer->tagBuffer.end(); outerreceiver++) {
