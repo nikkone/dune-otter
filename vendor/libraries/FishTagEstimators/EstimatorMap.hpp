@@ -24,6 +24,7 @@ namespace FishTagEstimators
         estimatorType_SingleReceiverUKF,
         estimatorType_SingleReceiverSRUKF,
         estimatorType_SingleReceiverASLV,
+        estimatorType_SingleReceiverASLV2,
         estimatorType_SingleReceiverXKF,
         estimatorType_MultipleReceiverEKF,
         estimatorType_MultipleReceiverXKF
