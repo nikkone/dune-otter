@@ -4,9 +4,9 @@ namespace FishTagEstimators
 {
   namespace XKF
   {
-    template <class T>
+/*    template <class T>
     LTVKF<T>::LTVKF() {
-    }
+    }*/
 template <class T>
 bool LTVKF<T>::constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, T m_dr)
     {

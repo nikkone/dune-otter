@@ -33,20 +33,22 @@ namespace FishTagEstimators
             stage2.active = true;
           }
           if(stage2.constructCandR(tagBuffer, RDOA, RDOAcombinations, stage1.getDm())) {
-            stage2.update(stage2.yk);
-            if(!stage3.active) {
-              stage3.xHat(0) = stage2.xHat(0);
-              stage3.xHat(1) = stage2.xHat(1);
-              stage3.xHat(2) = stage2.xHat(2);
-              stage3.active = true;
+            if(stage2.update(stage2.yk)) {
+              if(!stage3.active) {
+                stage3.xHat(0) = stage2.xHat(0);
+                stage3.xHat(1) = stage2.xHat(1);
+                stage3.xHat(2) = stage2.xHat(2);
+                stage3.active = true;
+              }
             }
           }
         }
 
         if(stage2.active && stage3.active) {
           if(stage3.constructCandR(tagBuffer, RDOA, RDOAcombinations, stage2.xHat)) {
-            stage3.update(stage3.yk);
-            return true;
+            if(stage3.update(stage3.yk)) {
+              return true;
+            }
           }
         }
       }

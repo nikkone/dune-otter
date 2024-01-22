@@ -5,10 +5,10 @@ namespace FishTagEstimators
 {
   namespace XKF
   {
-    template <class T>
+    /*template <class T>
     EKF<T>::EKF() {
 
-    }
+    }*/
 template <class T>
 bool EKF<T>::constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, Eigen::Matrix<T, 3, 1> xHatInn)
     {

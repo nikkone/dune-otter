@@ -43,7 +43,7 @@ namespace FishTagEstimators
           used++;
         }
         if(used == 2) {
-          Czq.row(used) << 0, 0, 0.5;
+          Czq.row(used) << 0, 0, 1;
           z.row(used) << (tagBuffer->tagBuffer[referenceReceiver]->rbegin())->getS256Depth(); // Tag depth
           break;
         }
