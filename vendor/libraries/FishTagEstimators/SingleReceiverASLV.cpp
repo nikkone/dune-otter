@@ -35,7 +35,7 @@ namespace FishTagEstimators
     // Create unix timestamp in milliseconds for the most recent measurement
     
     //tagBuffer_t::const_reverse_iterator it = tagBuffer.find(receiver)->second->rbegin();
-    double measurement_millis = receiverBuffer->rbegin()->unix_timestamp + (double)receiverBuffer->rbegin()->millis/1000;
+    long int measurement_ms = (long int)receiverBuffer->rbegin()->unix_timestamp*1000 + receiverBuffer->rbegin()->millis;
 
     unsigned int updates = 0;
     unsigned int attempt = 0;
@@ -44,29 +44,21 @@ namespace FishTagEstimators
     //std::cout << "Steg0"<< std::endl;
     for(tagBuffer_t::const_reverse_iterator i=receiverBuffer->rbegin()+1; i != receiverBuffer->rend();i++) {
       attempt++;
-      //inf("%d - %d", receiverBuffer->rbegin()->unix_timestamp, i->unix_timestamp);
+       // Time difference of arrival without correcting for period
+      long int rawTDOA_ms = measurement_ms - (long int)i->unix_timestamp*1000 - i->millis;
 
-      // Time difference of arrival without correcting for period
-      double td = measurement_millis - i->unix_timestamp - (double)i->millis/1000;
-
-      // Calculate closest multiple of period between the new measurement and the buffered detection
-      double closestMultipleOfPeriod = tag_period*std::round(td/tag_period);
-
-      // Period corrigated time difference of arrival
-      double tdoa = td - closestMultipleOfPeriod;
-
-      //inf("delta %f %f", td, closestMultipleOfPeriod);
-
+      long int tempTDOA_ms;
+      if(interval_mode == interval_mode_fixed_unknown) {
+        tempTDOA_ms = rawTDOA_ms - std::round((double)rawTDOA_ms/1000)*1000;
+      } else { // Fixed period corrigated time difference of arrival
+        long int closestMultipleOfPeriod_ms = tag_period*1000*std::round(rawTDOA_ms/(tag_period*1000));
+        tempTDOA_ms = rawTDOA_ms - closestMultipleOfPeriod_ms;
+      }
       // Check if buffered detection satisfies conditions for use in estimator
-      if(abs(tdoa) < max_jitter || td > 60.0) {
-        //std::cout << "Steg1"<< std::endl;
-        // Linear fit of SNR to range
-        //double P[2] = {m_args.ranging_snr_fit[0], m_args.ranging_snr_fit[1]};
-        //double rangeSNR = (receiverBuffer->rbegin()->snr - P[1])/P[0];
+      if(std::abs(tempTDOA_ms) < max_jitter*1000 && std::abs(tempTDOA_ms) > 0) {
         double rangeSNR = 50; //(DELETE)
         // Range difference of arrival calculation
-        double rdoa = c_speed*tdoa;
-
+        double rdoa = c_speed*tempTDOA_ms/1000;
         // Depth reading from the current tag
         double depth;
         if(depthConversion > 0.01) {

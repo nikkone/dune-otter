@@ -25,7 +25,7 @@ namespace FishTagEstimators
       std::tuple<double, double, double> getEstimate();
       void print(std::ostream& os) const;
       bool isActive() const {
-        return xkf.isInitialized();
+        return xkf.stage3.active;
       }
 
       void setTDOACovariance(double TDOACovariance);

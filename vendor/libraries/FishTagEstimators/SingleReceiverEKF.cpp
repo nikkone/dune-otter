@@ -16,18 +16,15 @@ namespace FishTagEstimators
     ekf.xHat = x0_inn;
     
     ekf.C.resize(2,c_states);
-    ekf.ykest.resize(2,1);
+    ekf.K.resize(c_states,2);
+    ekf.R.resize(2,2);
+    ekf.innov.resize(2,1);
     ekf.yk.resize(2,1);
+    ekf.ykest.resize(2,1);
     ekf.R = Eigen::Matrix<double, 2, 2>::Identity();
     ekf.R << rr_cov,0,0,rz_cov;
 
-/*
-    ekf.C.resize(1,c_states);
-    ekf.ykest.resize(1,1);
-    ekf.yk.resize(1,1);
-    ekf.R = Eigen::Matrix<double, 1, 1>::Identity();
-    ekf.R << rr_cov;
-*/
+
     SingleReceiverBase::initialize(A_inn, Q_inn, P0_inn, x0_inn);
     name = "SingleReceiverEKF";
   }
@@ -47,17 +44,14 @@ namespace FishTagEstimators
     }
     
     const tagBuffer_t *receiverBuffer = tagBuffer->tagBuffer.find(receiver)->second;
-        unsigned int m_max_correction_attempts;
+    unsigned int m_max_correction_attempts;
     if(max_correction_attempts == 0)
       m_max_correction_attempts = receiverBuffer->max_size()-2;
     else {
       m_max_correction_attempts = max_correction_attempts;
     }
-    //inf("Update %ld", c_buffer_size - receiverBuffer->size());
     // Create unix timestamp in milliseconds for the most recent measurement
-    
-    //tagBuffer_t::const_reverse_iterator it = tagBuffer.find(receiver)->second->rbegin();
-    double measurement_millis = receiverBuffer->rbegin()->unix_timestamp + (double)receiverBuffer->rbegin()->millis/1000;
+    long int measurement_ms = (long int)receiverBuffer->rbegin()->unix_timestamp*1000 + receiverBuffer->rbegin()->millis;
 
     unsigned int updates = 0;
     unsigned int attempt = 0;
@@ -66,28 +60,27 @@ namespace FishTagEstimators
     //std::cout << "Steg0"<< std::endl;
     for(tagBuffer_t::const_reverse_iterator i=receiverBuffer->rbegin()+1; i != receiverBuffer->rend();i++) {
       attempt++;
-      //inf("%d - %d", receiverBuffer->rbegin()->unix_timestamp, i->unix_timestamp);
 
       // Time difference of arrival without correcting for period
-      double td = measurement_millis - i->unix_timestamp - (double)i->millis/1000;
+      long int rawTDOA_ms = measurement_ms - (long int)i->unix_timestamp*1000 - i->millis;
 
-      // Calculate closest multiple of period between the new measurement and the buffered detection
-      double closestMultipleOfPeriod = tag_period*std::round(td/tag_period);
-
-      // Period corrigated time difference of arrival
-      double tdoa = td - closestMultipleOfPeriod;
-
-      //inf("delta %f %f", td, closestMultipleOfPeriod);
+      long int tempTDOA_ms;
+      if(interval_mode == interval_mode_fixed_unknown) {
+        tempTDOA_ms = rawTDOA_ms - std::round((double)rawTDOA_ms/1000)*1000;
+      } else { // Fixed period corrigated time difference of arrival
+        long int closestMultipleOfPeriod_ms = tag_period*1000*std::round(rawTDOA_ms/(tag_period*1000));
+        tempTDOA_ms = rawTDOA_ms - closestMultipleOfPeriod_ms;
+      }
 
       // Check if buffered detection satisfies conditions for use in estimator
-      if(abs(tdoa) < max_jitter || td > 60.0) {
+      if(std::abs(tempTDOA_ms) < max_jitter*1000 && std::abs(tempTDOA_ms) > 0) {
         //std::cout << "Steg1"<< std::endl;
         // Linear fit of SNR to range
         //double P[2] = {m_args.ranging_snr_fit[0], m_args.ranging_snr_fit[1]};
         //double rangeSNR = (receiverBuffer->rbegin()->snr - P[1])/P[0];
         double rangeSNR = 50; //(DELETE)
         // Range difference of arrival calculation
-        double rdoa = c_speed*tdoa;
+        double rdoa = c_speed*tempTDOA_ms/1000;
 
         // Depth reading from the current tag
         double depth;
@@ -100,7 +93,6 @@ namespace FishTagEstimators
         Eigen::Matrix<double, 9, 1> allMeasurements;
         
         allMeasurements << i->N, i->E ,receiver_depth, receiverBuffer->rbegin()->N,receiverBuffer->rbegin()->E ,receiver_depth, rdoa, rangeSNR, depth;
-
 
         if(useAslv) {
           if(!isActive()) {
@@ -117,50 +109,41 @@ namespace FishTagEstimators
 
         // Update kalman filters with current measurement and inputs
         if(isActive()) {
-          //std::cout << "Steg3"<< std::endl;
           // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
           Eigen::Matrix<double, 3, 1> distance1 = ekf.xHat-allMeasurements.block(0,0,3,1); // X_e-X_rx0
           Eigen::Matrix<double, 3, 1> distance2 = ekf.xHat-allMeasurements.block(3,0,3,1); // X_e-X_rx1
           double r1 = distance1.norm();//  ||X_e-X_rx0||
           double r2 = distance2.norm();// ||X_e-X_rx1||
 
-          if(depthConversion>0.1) { //Use Depth
+          // Ensure correct matrix sizes
+          ekf.C.resize(2,c_states);
+          ekf.K.resize(c_states,2);
+          ekf.R.resize(2,2);
+          ekf.innov.resize(2,1);
+          ekf.yk.resize(2,1);
+          ekf.ykest.resize(2,1);
 
           // Calculate Jacobian with RDOA and depth
           ekf.C.row(0) = (distance2/r2) - (distance1/r1); // Eq (2.18)
           ekf.C.row(1) << 0, 0, 1;
           
           // Calculate estimated measurements
-          ekf.ykest(0) = r2 - r1; // h is eq (2.16) in masters
+          ekf.ykest(0) = r2 - r1; 
           ekf.ykest(1) = ekf.xHat(2,0);
+          
+          // Update measurement variance calculation
+          ekf.R = Eigen::Matrix<double, 2, 2>::Identity();
+          ekf.R << rr_cov,0,0,rz_cov;
 
           Eigen::Matrix<double, 2, 1> measurements;
           measurements << rdoa ,depth;
           ekf.update(measurements);
-          } else {
-          // Calculate Jacobian with RDOA only
-          ekf.C.row(0) = (distance2/r2) - (distance1/r1); // Eq (2.18)
-          
-          // Calculate estimated measurements
-          ekf.ykest(0) = r2 - r1; // h is eq (2.16) in masters
-
-          Eigen::Matrix<double, 1, 1> measurements;
-          measurements << rdoa;
-          ekf.update(measurements);
-          }
-
-          
 
           updates++;
           // Stop the loop after using the new measurement a given number of times.
           if(updates >= max_updates_per_new_measurement) {
             return true; 
           }
-    ////std::cout << "r1" << std::endl << r1 << std::endl;
-    ////std::cout << "r2" << std::endl << r2 << std::endl;
-    ////std::cout << "ykest" << std::endl << ekf.ykest << std::endl;
-    ////std::cout << "r1" << std::endl << receiverBuffer->rbegin()->recv_mem_addr << std::endl;
-    ////std::cout << "r2" << std::endl << i->recv_mem_addr << std::endl; 
         }
         // Stop after a number of predetermined attempts
         if(attempt >= m_max_correction_attempts) {

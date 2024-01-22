@@ -10,34 +10,33 @@ namespace FishTagEstimators
                                         const Eigen::Matrix<double, c_states, c_states> &P0_inn,
                                         const Eigen::Matrix<double, c_states, 1> &x0_inn)
   {
-       A        = A_inn;
-       srukf.xHat = x0_inn;
-       srukf.h = [this](Eigen::Matrix<double, 3, 1> x) {
-          // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
-          Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
-          Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
-          double r1 = distance1.norm();//  ||X_e-X_rx0||
-          double r2 = distance2.norm();// ||X_e-X_rx1||
-          
-          // Calculate estimated measurements
-          Eigen::Matrix<double, 2, 1> ykest;
-          ykest(0) = r2 - r1; // h is eq (2.16) in masters
-          ykest(1) = x(2); // Depth estimate
-          //std::cout << this->pos_current << std::endl;
-          return ykest;
-        };
+    A        = A_inn;
+    srukf.xHat = x0_inn;
+    srukf.h = [this](Eigen::Matrix<double, 3, 1> x) {
+      // Find euclidean norm (p-norm, p=2) between measurements and estimated tag position
+      Eigen::Matrix<double, 3, 1> distance1 = x-this->pos_previous;//z.block(0,0,3,1); // X_e-X_rx0
+      Eigen::Matrix<double, 3, 1> distance2 = x-this->pos_current;//z.block(3,0,3,1);  // X_e-X_rx1
+      double r1 = distance1.norm();//  ||X_e-X_rx0||
+      double r2 = distance2.norm();// ||X_e-X_rx1||
+      
+      // Calculate estimated measurements
+      Eigen::Matrix<double, 2, 1> ykest;
+      ykest(0) = r2 - r1; // h is eq (2.16) in masters
+      ykest(1) = x(2); // Depth estimate
+      //std::cout << this->pos_current << std::endl;
+      return ykest;
+    };
 
-        srukf.f = [this](Eigen::Matrix<double, c_states, 1> x) {
-          return Eigen::Matrix<double, c_states, 1>(A*x);
-        };
+    srukf.f = [this](Eigen::Matrix<double, c_states, 1> x) {
+      return Eigen::Matrix<double, c_states, 1>(A*x);
+    };
 
-        Eigen::Matrix<double, 2, 2> R = Eigen::Matrix<double, 2, 2>::Identity();
-        R << rr_cov,0,0,rz_cov;
-        srukf.setInitialCovariance(P0_inn);
+    Eigen::Matrix<double, 2, 2> R = Eigen::Matrix<double, 2, 2>::Identity();
+    R << rr_cov,0,0,rz_cov;
+    srukf.setMeasurmentCovariance(R);
+    srukf.setInitialCovariance(P0_inn);
+    srukf.setProcessCovariance(Q_inn);
 
-        srukf.setProcessCovariance(Q_inn);
-        srukf.setMeasurmentCovariance(R);
-        //srukf.dt = m_args.filter_timestep;
     SingleReceiverBase::initialize(A_inn, Q_inn, P0_inn, x0_inn);
     registerParameter("unscented_alpha", param_unscented_alpha);
     registerParameter("unscented_beta", param_unscented_beta);
@@ -76,6 +75,7 @@ namespace FishTagEstimators
       std::cout << "Did not find receiver: " << receiver << std::endl;
       return false;
     }
+
     const tagBuffer_t *receiverBuffer = tagBuffer->tagBuffer.find(receiver)->second;
         unsigned int m_max_correction_attempts;
     if(max_correction_attempts == 0)
@@ -83,11 +83,8 @@ namespace FishTagEstimators
     else {
       m_max_correction_attempts = max_correction_attempts;
     }
-    //inf("Update %ld", c_buffer_size - receiverBuffer->size());
     // Create unix timestamp in milliseconds for the most recent measurement
-    
-    //tagBuffer_t::const_reverse_iterator it = tagBuffer.find(receiver)->second->rbegin();
-    double measurement_millis = receiverBuffer->rbegin()->unix_timestamp + (double)receiverBuffer->rbegin()->millis/1000;
+    long int measurement_ms = (long int)receiverBuffer->rbegin()->unix_timestamp*1000 + receiverBuffer->rbegin()->millis;
 
     unsigned int updates = 0;
     unsigned int attempt = 0;
@@ -96,28 +93,27 @@ namespace FishTagEstimators
     //std::cout << "Steg0"<< std::endl;
     for(tagBuffer_t::const_reverse_iterator i=receiverBuffer->rbegin()+1; i != receiverBuffer->rend();i++) {
       attempt++;
-      //inf("%d - %d", receiverBuffer->rbegin()->unix_timestamp, i->unix_timestamp);
 
       // Time difference of arrival without correcting for period
-      double td = measurement_millis - i->unix_timestamp - (double)i->millis/1000;
+      long int rawTDOA_ms = measurement_ms - (long int)i->unix_timestamp*1000 - i->millis;
 
-      // Calculate closest multiple of period between the new measurement and the buffered detection
-      double closestMultipleOfPeriod = tag_period*std::round(td/tag_period);
-
-      // Period corrigated time difference of arrival
-      double tdoa = td - closestMultipleOfPeriod;
-
-      //inf("delta %f %f", td, closestMultipleOfPeriod);
+      long int tempTDOA_ms;
+      if(interval_mode == interval_mode_fixed_unknown) {
+        tempTDOA_ms = rawTDOA_ms - std::round((double)rawTDOA_ms/1000)*1000;
+      } else { // Fixed period corrigated time difference of arrival
+      long int closestMultipleOfPeriod_ms = tag_period*1000*std::round(rawTDOA_ms/(tag_period*1000));
+        tempTDOA_ms = rawTDOA_ms - closestMultipleOfPeriod_ms;
+      }
 
       // Check if buffered detection satisfies conditions for use in estimator
-      if(abs(tdoa) < max_jitter || td > 60.0) {
+      if(std::abs(tempTDOA_ms) < max_jitter*1000 && std::abs(tempTDOA_ms) > 0) {
         //std::cout << "Steg1"<< std::endl;
         // Linear fit of SNR to range
         //double P[2] = {m_args.ranging_snr_fit[0], m_args.ranging_snr_fit[1]};
         //double rangeSNR = (receiverBuffer->rbegin()->snr - P[1])/P[0];
         double rangeSNR = 50; //(DELETE)
         // Range difference of arrival calculation
-        double rdoa = c_speed*tdoa;
+        double rdoa = c_speed*tempTDOA_ms/1000;
 
         // Depth reading from the current tag
         double depth;
@@ -130,7 +126,6 @@ namespace FishTagEstimators
         Eigen::Matrix<double, 9, 1> allMeasurements;
         
         allMeasurements << i->N, i->E ,receiver_depth, receiverBuffer->rbegin()->N,receiverBuffer->rbegin()->E ,receiver_depth, rdoa, rangeSNR, depth;
-
 
         if(useAslv) {
           if(!isActive()) {
@@ -158,8 +153,7 @@ namespace FishTagEstimators
           // Stop the loop after using the new measurement a given number of times.
           if(updates >= max_updates_per_new_measurement) {
              return true; 
-          }
-          
+          }       
         }
         // Stop after a number of predetermined attempts
         if(attempt >= m_max_correction_attempts) {
@@ -172,7 +166,9 @@ namespace FishTagEstimators
   }
   
   void SingleReceiverSRUKF::predict() {
-    srukf.predict();
+    if(!isActive()) {
+      srukf.predict();
+    }
   }
   void SingleReceiverSRUKF::print(std::ostream& os) const {
     //os << "A" << std::endl << srukf.A << std::endl;

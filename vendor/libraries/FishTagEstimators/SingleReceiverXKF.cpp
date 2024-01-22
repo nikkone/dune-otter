@@ -66,14 +66,6 @@ namespace FishTagEstimators
     Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA(0 ,1);
     std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations;
     tagBool_t used; // Could have been made standard vector, only need receiver address. But if we move toestimator?
-    /* //Only for debug
-    for(auto it : *receiverBuffer) {
-      std::cout << "test:" <<  it.unix_timestamp << std::endl;
-      tempTagBuffer.tagBuffer[it.serial_no+i] = new tagBuffer_t(2);
-      tempTagBuffer.tagBuffer[it.serial_no+i]->push_back(it);
-      i++;
-    }*/
-
 
     // Create unix timestamp in milliseconds for the most recent measurement
     long int measurement_ms = (long int)receiverBuffer->rbegin()->unix_timestamp*1000 + receiverBuffer->rbegin()->millis;
@@ -91,20 +83,15 @@ namespace FishTagEstimators
     for(tagBuffer_t::const_reverse_iterator i=receiverBuffer->rbegin()+1; i != receiverBuffer->rend();i++) {
 
       // Time difference of arrival without correcting for period
-      long int td = measurement_ms - (long int)i->unix_timestamp*1000 - i->millis;
+      long int rawTDOA_ms = measurement_ms - (long int)i->unix_timestamp*1000 - i->millis;
 
-      // Calculate closest multiple of period between the new measurement and the buffered detection
-      //! TODO: For non-regular tag_period, will not work. Need to find period for each delta. 
-      long int closestMultipleOfPeriod_ms = tag_period*1000*std::round(td/(tag_period*1000));
-
-      // Period corrigated time difference of arrival
-      long int tempTDOA_ms = td - closestMultipleOfPeriod_ms;
-      std::cout << "measurement_ms1: " << measurement_ms << std::endl;
-      std::cout << "measurement_ms2: " << (long int)i->unix_timestamp*1000 - i->millis << std::endl;
-      std::cout << "td: " << td << std::endl;
-      std::cout << "closestMultipleOfPeriod_ms: " << closestMultipleOfPeriod_ms << std::endl;
-      std::cout << "tempTDOA_ms: " << tempTDOA_ms << std::endl;
-      //std::cout << ": " << << std::endl;
+      long int tempTDOA_ms;
+      if(interval_mode == interval_mode_fixed_unknown) {
+        tempTDOA_ms = rawTDOA_ms - std::round((double)rawTDOA_ms/1000)*1000;
+      } else { // Fixed period corrigated time difference of arrival
+        long int closestMultipleOfPeriod_ms = tag_period*1000*std::round(rawTDOA_ms/(tag_period*1000));
+        tempTDOA_ms = rawTDOA_ms - closestMultipleOfPeriod_ms;
+      }
       // Check if buffered detection satisfies conditions for use in estimator
       if(std::abs(tempTDOA_ms) < max_jitter*1000 && std::abs(tempTDOA_ms) > 0) {   
         // Add to temporary tagBuffer
@@ -135,11 +122,11 @@ namespace FishTagEstimators
       return false; // Do not process data/update filter if no baselines available
     }
 
-    std::cout << "RDOA" << std::endl << RDOA << std::endl;
-    std::cout << "RDOAcombinations" << std::endl;
-    for(auto const &it : RDOAcombinations) {
-      std::cout << it.first << " - " << it.second << std::endl;
-    }
+    //std::cout << "RDOA" << std::endl << RDOA << std::endl;
+    //std::cout << "RDOAcombinations" << std::endl;
+    //for(auto const &it : RDOAcombinations) {
+    //  std::cout << it.first << " - " << it.second << std::endl;
+    //}
     // Run filter update, and if sucessfull, set unprocessedData to false for used data receivers
     if(xkf.update(&tempTagBuffer, RDOA, RDOAcombinations)) {
       latestTimestamp = ((uint64_t)tagBuffer->tagBuffer.begin()->second->rbegin()->unix_timestamp)*1000 + tagBuffer->tagBuffer.begin()->second->rbegin()->millis;
