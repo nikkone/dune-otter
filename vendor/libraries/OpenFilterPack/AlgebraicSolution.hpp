@@ -8,7 +8,7 @@ namespace OFP
   template <typename T, int states, int measurements, int neededMeasurements>
   class AlgebraicSolver {
     Eigen::Matrix<T, states, neededMeasurements> posi;
-    Eigen::Matrix<T, neededMeasurements, 1> ToA;
+    Eigen::Matrix<T, neededMeasurements, 1> RDoA;
     T depth;
     int receivedMeasurements;
   public:

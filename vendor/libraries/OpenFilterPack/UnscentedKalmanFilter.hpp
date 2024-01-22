@@ -53,13 +53,8 @@ namespace OFP
       //! @param[in] beta_in.
       //! @param[in] kappa_in.
       UnscentedKalmanFilter(T alpha_in, T beta_in, T kappa_in) :
-      active(false) {
+        active(false) {
         setUnscentedParameters(alpha_in, beta_in, kappa_in);
-/*        alpha = alpha_in;
-        beta = beta_in;
-        kappa = kappa_in;
-        lambda = alpha*alpha * (nx +kappa) - nx;
-        computeWeights(); */
       }
 
       //! Function for changing the parameters used in the unscented transform.

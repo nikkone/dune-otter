@@ -56,12 +56,6 @@ namespace OFP
       SquareRootUnscentedKalmanFilter(T alpha_in, T beta_in, T kappa_in) :
        active(false) {
         setUnscentedParameters(alpha_in, beta_in, kappa_in);
-        /*alpha = alpha_in;
-        beta = beta_in;
-        kappa = kappa_in;
-        lambda = alpha*alpha * (nx +kappa) - nx;
-        gamma = std::sqrt(nx+lambda);
-        computeWeights();*/
       }
 
       //! Function for changing the parameters used in the unscented transform.
@@ -98,6 +92,7 @@ namespace OFP
           
           // Update sigma points to reflect the prediction
           sigmaPoints = generateSigmaPoints(xHat, S);
+          
           // Propagate the sigma points through the measurment model. 
           for(int s = 0;s<size_sigmaPoints; s++) {
             sigmaPoints_h.col(s) =  h(sigmaPoints.col(s));

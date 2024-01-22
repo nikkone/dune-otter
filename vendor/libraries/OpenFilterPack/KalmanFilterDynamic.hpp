@@ -2,6 +2,7 @@
 #define OFP_KALMANFILTERDYNAMIC
 #include <Eigen/Core>
 #include <Eigen/Dense>
+#include <iostream>
 namespace OFP
 {
   template <class T, int states>
@@ -44,10 +45,8 @@ namespace OFP
       Eigen::Matrix<T, states, 1> xHat;
 
       //! Filter constructor.
-      KalmanFilterDynamic() {
-        active = false;
-        //ykest = Eigen::Matrix<T, Eigen::Dynamic, 1>::Zero(1,1);
-        //C.resize(1,states);
+      KalmanFilterDynamic() : active(false){
+        //std::cout << std::endl<< std::endl<< "KAlman initializws" << std::endl << std::endl;
       }
 
       //! Initializer for the filter
