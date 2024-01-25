@@ -87,7 +87,8 @@ namespace SourceEstimators
       double beta;
       //! Unscented Kalman filter - Kappa
       double kappa;
-
+      //! Factor to multiply tag data with to get depth in meters
+      float depthConversion;
 // Location settings
       //! Reference coordinate position (degrees)
       std::vector<double> reference;
@@ -228,6 +229,10 @@ namespace SourceEstimators
         .units(Units::Degree)
         .size(2)
         .description("Origin of the reference coordinate system");
+
+        param("Depth Coefficient", m_args.depthConversion)
+        .description("The coefficient used to convert the data field of a tag to depth in meters")
+        .defaultValue("0.2");
 
         bind<IMC::TBRFishTag>(this);
         bind<IMC::SoundSpeed>(this);
@@ -436,7 +441,7 @@ namespace SourceEstimators
               double rangeSNR = (tagBuffer->rbegin()->snr - P[1])/P[0];
 
               double rdoa = m_c_speed*tdoa; // Range difference
-              double depth = i->trans_data*0.392;
+              double depth = i->trans_data*m_args.depthConversion;
 
               double NED1[3];
               double NED2[3];

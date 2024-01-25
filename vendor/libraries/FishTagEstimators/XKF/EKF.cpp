@@ -26,7 +26,7 @@ bool EKF<T>::constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dynami
       OFP::KalmanFilterDynamic<T, 3>::innov.resize(RDOA.rows()+1,1);
 
 
-      OFP::KalmanFilterDynamic<T, 3>::yk << RDOA, (tagBuffer->tagBuffer[RDOAcombinations.front().first]->rbegin())->getS256Depth();
+      OFP::KalmanFilterDynamic<T, 3>::yk << RDOA, (tagBuffer->tagBuffer[RDOAcombinations.front().first]->rbegin())->trans_data*tagBuffer->getDepthConversionCoefficient();
       // Create R matrix
       OFP::KalmanFilterDynamic<T, 3>::R=OFP::KalmanFilterDynamic<T, 3>::R.Constant(RDOA.rows()+1,RDOA.rows()+1,rr_cov);
       OFP::KalmanFilterDynamic<T, 3>::R.topLeftCorner(RDOA.rows(),RDOA.rows()) += Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>::Identity(RDOA.rows(),RDOA.rows())*rr_cov;

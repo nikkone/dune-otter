@@ -67,7 +67,8 @@
           double speed_of_sound_in_water;
           //! Maximum allowed time [ms] shift between receivers' messages
           double max_time_shift_ms;
-
+          //! Factor to multiply tag data with to get depth in meters
+          float depthConversion;
 // Kalman Filter
           //! Extended Kalman filter - Qm
           std::vector<double> ekf_Qm;      
@@ -120,6 +121,10 @@
             param("Speed of sound in water [m/s]", m_args.speed_of_sound_in_water)
             .description("Speed of sound in water [m/s]")
             .defaultValue("1485");
+
+            param("Depth Coefficient", m_args.depthConversion)
+            .description("The coefficient used to convert the data field of a tag to depth in meters")
+            .defaultValue("0.2");
 
             param("FishPos Cov", m_args.qq_cov)
             .description("Fish Position Covariance")
@@ -390,7 +395,7 @@ Done Fiks separer predict og update kjøring.
                 NED2.row(it - used.begin()) << std::get<0>(tempNED), std::get<1>(tempNED),std::get<2>(tempNED);
 
                 m_newDetection[it - used.begin()] = false;
-                depth.push_back(tagData[it - used.begin()].trans_data*0.392); //0.392 from S256 data spec?
+                depth.push_back(tagData[it - used.begin()].trans_data*m_args.depthConversion);
               }
             }
             //spew("NED2 made");

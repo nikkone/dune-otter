@@ -11,7 +11,7 @@ namespace FishTagEstimators
       //! Constructor
       //! @param [in] tag_id_in
       //! @param [in] buffer_size_in
-      DUNETagBuffer(unsigned tag_id_in, unsigned buffer_size_in) : TagBuffer(tag_id_in, buffer_size_in) {
+      DUNETagBuffer(unsigned tag_id_in, unsigned buffer_size_in, float depthConversion_in) : TagBuffer(tag_id_in, buffer_size_in, depthConversion_in) {
         latestTimestamp = 0;
         timestampTimeoutLimit = 4000;
       };

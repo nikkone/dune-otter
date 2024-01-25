@@ -27,7 +27,7 @@ namespace FishTagEstimators
     
     const tagBuffer_t *receiverBuffer = tagBuffer->tagBuffer.find(receiver)->second;
 
-    FishTagEstimators::TagBuffer tempTagBuffer(tagBuffer->tag_id, 1);
+    FishTagEstimators::TagBuffer tempTagBuffer(tagBuffer->tag_id, 1, tagBuffer->getDepthConversionCoefficient());
     Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA(0 ,1);
     std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations;
     tagBool_t used; // Could have been made standard vector, only need receiver address. But if we move toestimator?
@@ -38,8 +38,8 @@ namespace FishTagEstimators
     tempTagBuffer.tagBuffer[receiver] = new tagBuffer_t(1);
     tempTagBuffer.tagBuffer[receiver]->push_back(*(receiverBuffer->rbegin()));
     // Depth reading from the current tag
-    if(depthConversion < 0.01) {
-      tempTagBuffer.tagBuffer[receiver]->begin()->trans_data = std::abs(std::round(receiver_depth/0.392));
+    if(tagBuffer->getDepthConversionCoefficient() < 0.01) {
+      tempTagBuffer.tagBuffer[receiver]->begin()->trans_data = std::abs(std::round(receiver_depth/tagBuffer->getDepthConversionCoefficient()));
     }
     int receiverAdder=1;
 
@@ -67,8 +67,8 @@ namespace FishTagEstimators
         RDOA.conservativeResize(RDOA.rows()+1,1);
         RDOA(RDOA.rows()-1,0) = -1*c_speed*tempTDOA_ms/1000;
         // Depth reading from the current tag
-        if(depthConversion < 0.01) {
-          tempTagBuffer.tagBuffer[receiver+receiverAdder]->begin()->trans_data = std::abs(std::round(receiver_depth/0.392));
+        if(tagBuffer->getDepthConversionCoefficient() < 0.01) {
+          tempTagBuffer.tagBuffer[receiver+receiverAdder]->begin()->trans_data = std::abs(std::round(receiver_depth/tagBuffer->getDepthConversionCoefficient()));
           //std::cout << "Depth" << tempTagBuffer.tagBuffer[receiver+receiverAdder]->begin()->trans_data << std::endl;
         }
         receiverAdder++;

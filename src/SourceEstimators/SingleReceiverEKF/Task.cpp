@@ -62,10 +62,12 @@ namespace SourceEstimators
       float message_wait_time;
       //! How deep the receiver is mounted in altitude
       float receiver_depth;
-
+      //! Factor to multiply tag data with to get depth in meters
+      float depthConversion;
 // Initial Parameters for calculating Speed of Sound
       //! Initial Speed of Sound in water
       float init_c_sound;
+
 // Parameters for updating Speed of Sound
 
       //! Should the Speed of Sound in water be updated from measurement
@@ -224,6 +226,10 @@ namespace SourceEstimators
         .units(Units::Degree)
         .size(2)
         .description("Origin of the reference coordinate system");
+
+        param("Depth Coefficient", m_args.depthConversion)
+        .description("The coefficient used to convert the data field of a tag to depth in meters")
+        .defaultValue("0.2");
 
         bind<IMC::TBRFishTag>(this);
         bind<IMC::SoundSpeed>(this);
@@ -528,7 +534,7 @@ namespace SourceEstimators
             double rdoa = m_c_speed*tdoa;
 
             // Depth reading from the current tag
-            double depth = i->trans_data*0.392;
+            double depth = i->trans_data*m_args.depthConversion;
 
             // Convert the WGS84 to a local NED frame
             double NED1[3];

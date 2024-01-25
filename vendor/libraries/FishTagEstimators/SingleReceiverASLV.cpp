@@ -61,8 +61,8 @@ namespace FishTagEstimators
         double rdoa = c_speed*tempTDOA_ms/1000;
         // Depth reading from the current tag
         double depth;
-        if(depthConversion > 0.01) {
-          depth = i->trans_data*depthConversion;
+        if(tagBuffer->getDepthConversionCoefficient() > 0.01) {
+          depth = i->trans_data*tagBuffer->getDepthConversionCoefficient();
         } else {
           depth = receiver_depth;
         }

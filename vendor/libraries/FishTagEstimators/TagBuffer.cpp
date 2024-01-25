@@ -70,5 +70,12 @@ namespace FishTagEstimators
     return true;
   }
 
+  void TagBuffer::setDepthConversionCoefficient(float depthConversion_inn) {
+    depthConversion = depthConversion_inn;
+  }
+
+  float TagBuffer::getDepthConversionCoefficient() {
+    return depthConversion;
+  }
 
 }

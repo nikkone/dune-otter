@@ -27,11 +27,12 @@ namespace FishTagEstimators
       
       //! Tag ID
       unsigned tag_id;
-
+      //! The coefficient used to convert the data field of a tag to depth in meters
+      float depthConversion;
       //! Constructor
       //! @param [in] tag_id_in The transmitter ID this buffer holds detections for.
       //! @param [in] buffer_size_in How many detections should the circular buffer hold for each receiver
-      TagBuffer(unsigned tag_id_in, unsigned buffer_size_in) : buffer_size(buffer_size_in), tag_id(tag_id_in) {};
+      TagBuffer(unsigned tag_id_in, unsigned buffer_size_in, float depthConversion_in) : buffer_size(buffer_size_in), tag_id(tag_id_in), depthConversion(depthConversion_in) {};
 
       //! Destructor. Deletes all dynamically allocated memory the class has created
       virtual ~TagBuffer() {
@@ -45,6 +46,17 @@ namespace FishTagEstimators
         }
         tagBuffer.clear();
       }
+
+      /// @brief Set the coefficient used to convert the data field of a tag to depth in meters
+      /// @note If set to zero, estimator should not use depth measurement.
+      /// @param depthConversion_inn The coefficient
+      void setDepthConversionCoefficient(float depthConversion_inn);
+
+
+      /// @brief Get the coefficient used to convert the data field of a tag to depth in meters
+      /// @return The coefficient
+      float getDepthConversionCoefficient();
+
 
       //! Finds the most frequent period in the last numUsedDetections detections, which is assumed to be the regular intervall.
       //! @param [in] receiver serial number

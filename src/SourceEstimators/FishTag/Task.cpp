@@ -87,7 +87,7 @@ namespace SourceEstimators
       std::vector<double> ss_extra_param_value;
 
       uint32_t timestampTimeout;
-
+      //! Factor to multiply tag data with to get depth in meters
       float depthConversion;
     };
 
@@ -200,7 +200,7 @@ namespace SourceEstimators
 
         param("Depth Coefficient", m_args.depthConversion)
         .description("The coefficient used to convert the data field of a tag to depth in meters")
-        .defaultValue("0.392");
+        .defaultValue("0.2");
 
         bind<IMC::TBRFishTag>(this);
         bind<IMC::SoundSpeed>(this);
@@ -292,7 +292,7 @@ namespace SourceEstimators
         // Action taken on first reception of a transmitter ID: Add estimators, configure and initialize logfile
         if(tagBuffers.find(msg->trans_id) == tagBuffers.end()) {
           // New transmitter found, create buffer
-          tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 5);
+          tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 5, m_args.depthConversion);
           // Set NED frame used on specific tag to location of first tag location
           double ref[] = {msg->lat, msg->lon, 0.0};
           tagBuffers[msg->trans_id]->setReferenceCoordinateRad(ref);
@@ -312,7 +312,6 @@ namespace SourceEstimators
               Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
               Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
             );
-            est->setDepthConversionCoefficient(m_args.depthConversion);
             if(m_args.ss_serial_no == 0) {
               est->setParameter("receiver", msg->serial_no);
             } else {
@@ -359,7 +358,6 @@ namespace SourceEstimators
                 Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
                 Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
               );
-              est->setDepthConversionCoefficient(m_args.depthConversion);
               // Create/clear csv logfile for estimator with header
               std::ofstream logOutStream;
               logOutStream.open(m_args.log_folder_and_prefix + m_startupTimestamp + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);

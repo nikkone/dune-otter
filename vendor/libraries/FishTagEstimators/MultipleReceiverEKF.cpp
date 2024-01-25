@@ -93,7 +93,7 @@ namespace FishTagEstimators
     }
 
     // Add depth measurement
-    double avgDepth = depthConversion*depth.block(0,0,baselines,1).mean(); 
+    double avgDepth = tagBuffer->getDepthConversionCoefficient()*depth.block(0,0,baselines,1).mean(); 
     ekf.ykest(ekf.ykest.rows()-1,0) = ekf.xHat(2,0);
     ekf.C.row(ekf.C.rows()-1) << 0, 0, 1;
 

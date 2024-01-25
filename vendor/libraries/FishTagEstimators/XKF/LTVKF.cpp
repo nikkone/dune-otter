@@ -24,7 +24,7 @@ bool LTVKF<T>::constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dyna
 
      uint32_t referenceReceiver = RDOAcombinations.front().first;
      Eigen::Matrix<T, 3, 1> referenceReceiverNED = Eigen::Matrix<T, 3, 1>((tagBuffer->tagBuffer[referenceReceiver]->rbegin())->N, (tagBuffer->tagBuffer[referenceReceiver]->rbegin())->E,(tagBuffer->tagBuffer[referenceReceiver]->rbegin())->D);
-     T tagDepth = (tagBuffer->tagBuffer[referenceReceiver]->rbegin())->getS256Depth();
+     T tagDepth = (tagBuffer->tagBuffer[referenceReceiver]->rbegin())->trans_data*tagBuffer->getDepthConversionCoefficient();
 
       
       // Compute C and R matrices

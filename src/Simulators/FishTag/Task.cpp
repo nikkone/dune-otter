@@ -101,7 +101,8 @@ namespace Simulators
       //! Using a linear model ax+b=SNR, this is the 'b' coefficient 
       double SNR_linear_b;
       
-
+      //! Factor to multiply tag data with to get depth in meters
+      float depthConversion;
       //! If GPS fix should be set as received location
       bool use_gps_receiver;
       //! Source Address to use GPS information from.
@@ -268,6 +269,11 @@ namespace Simulators
         .description("Standard deviation of produced temperature")
         .units(Units::Second)
         .defaultValue("0.0");
+
+        param("Depth Coefficient", m_args.depthConversion)
+        .description("The coefficient used to convert the data field of a tag to depth in meters")
+        .defaultValue("0.2");
+
 // SNR
         param("Minimum SNR", m_args.SNR_detection_limit)
         .description("Mean value of disturbance")
@@ -425,7 +431,7 @@ namespace Simulators
           tag_msg.unix_timestamp = unix_timestamp;
           tag_msg.millis = millis;
           tag_msg.trans_id = m_args.trans_id;
-          tag_msg.trans_data = tag_depth/0.392;
+          tag_msg.trans_data = tag_depth/m_args.depthConversion;
           tag_msg.snr = SNR;
           tag_msg.trans_freq = m_args.trans_freq;
           tag_msg.recv_mem_addr = m_args.recv_mem_addr;

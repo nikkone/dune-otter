@@ -44,7 +44,7 @@ namespace FishTagEstimators
         }
         if(used == 2) {
           Czq.row(used) << 0, 0, 1;
-          z.row(used) << (tagBuffer->tagBuffer[referenceReceiver]->rbegin())->getS256Depth(); // Tag depth
+          z.row(used) << (tagBuffer->tagBuffer[referenceReceiver]->rbegin())->trans_data*tagBuffer->getDepthConversionCoefficient(); // Tag depth
           break;
         }
         combination++;
