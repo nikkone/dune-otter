@@ -22,10 +22,11 @@ namespace FishTagEstimators
     }
     template <class T>
     bool XKF<T>::update(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations) {
-
+      std::cout << std::endl << "RDOA.rows(): " << RDOA.rows() << std::endl;
       if(RDOA.rows()>0)
       {
         if(stage1.update(tagBuffer, RDOA, RDOAcombinations)) {
+          std::cout << std::endl << "Stage1 update" << std::endl;
           if(!stage2.active) {
             stage2.xHat(0) = stage1.xHat(0);
             stage2.xHat(1) = stage1.xHat(1);
@@ -34,6 +35,7 @@ namespace FishTagEstimators
           }
           if(stage2.constructCandR(tagBuffer, RDOA, RDOAcombinations, stage1.getDm())) {
             if(stage2.update(stage2.yk)) {
+              std::cout << std::endl << "Stage2 update" << std::endl;
               if(!stage3.active) {
                 stage3.xHat(0) = stage2.xHat(0);
                 stage3.xHat(1) = stage2.xHat(1);
@@ -47,6 +49,7 @@ namespace FishTagEstimators
         if(stage2.active && stage3.active) {
           if(stage3.constructCandR(tagBuffer, RDOA, RDOAcombinations, stage2.xHat)) {
             if(stage3.update(stage3.yk)) {
+              std::cout << std::endl << "Stage3 update" << std::endl;
               return true;
             }
           }

@@ -1,5 +1,6 @@
 #include "MultipleReceiversXKF.hpp"
 #include <iostream>
+#include <iomanip>      // std::setprecision
 #include <vector>
 namespace FishTagEstimators
 {
@@ -64,37 +65,41 @@ namespace FishTagEstimators
       return false;
 
     Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA(0 ,1);
-    Eigen::Matrix<T, Eigen::Dynamic, 1> depth(tagBuffer->tagBuffer.size(),1);
+    std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations;
     tagBool_t used; // Could have been made standard vector, only need receiver address. But if we move toestimator?
 
   //! TODO: Ensure that the reference receiver is kept constant for all calculations
     unsigned baselines = 0;
-    std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations;
-    for (tagBufferMap_t::const_iterator outerreceiver = tagBuffer->tagBuffer.begin(); outerreceiver != tagBuffer->tagBuffer.end(); outerreceiver++) {
-      for (tagBufferMap_t::const_iterator receiver = std::next(outerreceiver); receiver != tagBuffer->tagBuffer.end(); receiver++) {
-        if( unprocessedData[outerreceiver->first] || unprocessedData[receiver->first] ) {
-          if( used.find(outerreceiver->first) == used.end() || used.find(receiver->first) == used.end()) {
-            long int tempTDOA_ms = ((long int)receiver->second->rbegin()->unix_timestamp - outerreceiver->second->rbegin()->unix_timestamp)*1000 + ((int)receiver->second->rbegin()->millis - outerreceiver->second->rbegin()->millis);
-            if(timeShiftCorrect(tempTDOA_ms)) {
-              RDOAcombinations .push_back(std::pair<uint32_t, uint32_t>(outerreceiver->first, receiver->first));
-              RDOA.conservativeResize(RDOA.rows()+1,1);
-              RDOA(RDOA.rows()-1,0) = c_speed*tempTDOA_ms/1000;
-              depth.row(baselines) << (outerreceiver->second->rbegin()->trans_data + receiver->second->rbegin()->trans_data)/2;
-              used[outerreceiver->first] = false;
-              used[receiver->first] = false;
-              baselines++;
-            }
+    uint32_t referenceReceiver = 0;
+    long int referenceReceiverToA = 0;
+
+    for(tagBufferMap_t::const_iterator receiver = tagBuffer->tagBuffer.begin(); receiver != tagBuffer->tagBuffer.end(); receiver++) {
+      if(unprocessedData[receiver->first]) {
+        if(referenceReceiver > 0) {
+          long int tempTDOA_ms = (long int)receiver->second->rbegin()->unix_timestamp*1000 + (long int)receiver->second->rbegin()->millis - referenceReceiverToA;
+          if(timeShiftCorrect(tempTDOA_ms)) {
+            RDOAcombinations.push_back(std::pair<uint32_t, uint32_t>(receiver->first, referenceReceiver));
+            RDOA.conservativeResize(RDOA.rows()+1,1);
+            RDOA(RDOA.rows()-1,0) = c_speed*tempTDOA_ms/1000;
+            used[referenceReceiver] = true;
+            used[receiver->first] = true;
+            baselines++;
           }
+        } else {
+          referenceReceiverToA = (long int)receiver->second->rbegin()->unix_timestamp*1000 + (long int)receiver->second->rbegin()->millis;
+          referenceReceiver = receiver->first;
         }
       }
     }
 
-    if(baselines <2) { // Todo: Make change to one possible
+    if(baselines <2) {
       return false; // Do not process data/update filter if no baselines available
     }
 
+    std::cout << std::endl << "Baselines: " << baselines << std::endl;
     // Run filter update, and if sucessfull, set unprocessedData to false for used data receivers
     if(xkf.update(tagBuffer, RDOA, RDOAcombinations)) {
+      std::cout << std::endl << "Filter updated" << std::endl;
       latestReceiverPositionsUsed.clear();
       for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
         unprocessedData[it->first] = false;
@@ -109,6 +114,7 @@ namespace FishTagEstimators
 
 template <class T>
   bool MultipleReceiverXKF<T>::checkTime(T transmissionFirstTime, T currentTime) const {
+    std::cout << std::setprecision(11) << std::endl << "Current, first: "<< transmissionFirstTime << ", " << currentTime << std::endl;
     if(currentTime - transmissionFirstTime > 1.5) {
       return true;
     } else {
