@@ -44,7 +44,7 @@ namespace SourceEstimators
     using DUNE_NAMESPACES;
 
     static const unsigned c_states = 3;
-
+    static const float communicationWaitSec = 1.5;
     struct Arguments
     {
       //! Time to wait in while. In practice, this controls how regular the filter timing is
@@ -109,6 +109,8 @@ namespace SourceEstimators
       float m_c_sound;
       //! Timer responsible for running filter timestep
       Time::Counter<float> m_filter_timer;
+
+      std::map<uint32_t, Time::Counter<float>> updateWaitTimer;
 
       std::string m_startupTimestamp;
       Task(const std::string& name, Tasks::Context& ctx):
@@ -322,6 +324,7 @@ namespace SourceEstimators
                 est->setParameter(m_args.ss_extra_param_name[i].c_str(), m_args.ss_extra_param_value[i]);
               }
             }
+            updateWaitTimer[msg->trans_id].setTop(communicationWaitSec);
             //est->setParameter("receiver_depth", -0.5);
             //est->setParameter("max_jitter", 0.01);
             //est->setParameter("max_updates_per_new_measurement", 1);
@@ -358,6 +361,7 @@ namespace SourceEstimators
                 Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
                 Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
               );
+              updateWaitTimer[msg->trans_id].setTop(communicationWaitSec);
               // Create/clear csv logfile for estimator with header
               std::ofstream logOutStream;
               logOutStream.open(m_args.log_folder_and_prefix + m_startupTimestamp + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
@@ -457,7 +461,7 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
             war("Logstream not good: %s", in_logfilename.c_str());
           }*/  
           #endif
-          spew("%s :New Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", logname.c_str(), result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
+          spew("%s%d :New Estimate: (N,E,D,La,Lo)= %.15f,%.15f,%.15f,%.15f, %.15f", logname.c_str(), est->trans_id, result[0], result[1], result[2],DUNE::Math::Angles::degrees(lati),DUNE::Math::Angles::degrees(longi));
         } else {
           err("Transmitter ID: %u not in buffer for estimator %s.", est->trans_id, est->name.c_str());
         }
@@ -476,27 +480,30 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
               if (it->second != NULL)
               {
                 for(FishTagEstimators::EstimatorMap::EstimatorVector_t::iterator est = it->second->begin();est != it->second->end();est++) {
-                  if(newData[it->first]) {// && (*est)->checkTime((double)tagBuffers[it->first]->getLatestTimestamp(), Clock::getSinceEpoch())) {
-                    (*est)->update(tagBuffers[it->first]);
-                    //inf("Updated %s %d %f", (*est)->name.c_str(), (*est)->trans_id, Clock::getSinceEpoch() - (double)tagBuffers[it->first]->getLatestTimestamp());
+                  if(newData[it->first] && updateWaitTimer[it->first].overflow()) {
+                    if((*est)->update(tagBuffers[it->first])) {
+                      updateWaitTimer[it->first].reset();
+                      newData[it->first] = false;
+                    }
                   }
                   
                     //inf("Updated %s %d %f", (*est)->name.c_str(), (*est)->trans_id, Clock::getSinceEpoch() - (double)tagBuffers[it->first]->getLatestTimestamp());
 
                   if(( *est)->isActive()) {
+                    //spew("LogRes");
                     logResult((*est), m_args.log_folder_and_prefix + m_startupTimestamp + (*est)->name + std::to_string((*est)->trans_id) + ".csv", (*est)->name);
                   }
 
 
                 }
-                newData[it->first] = false;
+                
 
 
                 //inf("Limit %d, current: %f last %d, delta %f", tagBuffers[it->first]->timestampTimeoutLimit, DUNE::Time::Clock::getSinceEpoch(), tagBuffers[it->first]->latestTimestamp, DUNE::Time::Clock::getSinceEpoch() - tagBuffers[it->first]->latestTimestamp);
-                //if(!tagBuffers[it->first]->checkTimeout(DUNE::Time::Clock::getSinceEpoch())) {
-                //  war("Tag %d timed out.", it->first);
-                //  estimatorsToDelete.push_back(it->first);
-                //}
+                if(!tagBuffers[it->first]->checkTimeout(DUNE::Time::Clock::getSinceEpoch())) {
+                  war("Tag %d timed out.", it->first);
+                  estimatorsToDelete.push_back(it->first);
+                }
               }
             }
 
