@@ -39,7 +39,7 @@ namespace FishTagEstimators
         /// @param RDOA Pre-calculated range difference of arrival vector
         /// @param RDOAcombinations Vector containing the pairs of receivers that were used in calculating RDOA
         /// @return returns True when stage3 filter updated
-        bool update(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations);
+        uint8_t update(const TagBuffer *tagBuffer, const Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, const std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations);
 
         /// @brief Check if filter matrices has been initialized
         /// @return returns initialized boolean

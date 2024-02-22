@@ -32,7 +32,7 @@ namespace FishTagEstimators
 
       //! Common interface to get interface.
       //! @return Tuple with estimated position in a NED frame (relative to origin used in tagBuffer).
-      virtual std::tuple<T, T, T> getEstimate();
+      virtual std::tuple<T, T, T> getEstimate() const;
 
       //! The current sound speed used for TDOA calculations
       void setSoundSpeed(T soundSpeed);
@@ -51,7 +51,7 @@ namespace FishTagEstimators
 
       //! Prepares the NED data of a tag detection for use in Eigen
       //! @param [in] tagIn Tag with NED of interest
-      Eigen::Matrix<T, c_states, 1> getNED(const TBRFishTag &tagIn);
+      Eigen::Matrix<T, c_states, 1> getNED(const TBRFishTag &tagIn) const;
 
       //! Initializer for the estimator
       //! @param [in] A_inn State transition matrix
@@ -71,11 +71,20 @@ namespace FishTagEstimators
       virtual bool isActive() const;
 
       //! Debugging function to show which receiver has unprocessed data
-      void printNewBool(void);
+      void printNewBool(void) const;
 
       /// @brief Tell the estimator new data is available to be processed at next update
       /// @param serial_no 
       void updateUnprocessedData(uint32_t serial_no);
+
+      bool hasUnprocessedData() const {
+        for(auto receiver : unprocessedData) {
+          if(receiver.second) {
+            return true;
+          }
+        }
+        return false;
+      }
 
       /// @brief Checks we have waited long enough to allow all receivers to report tag detection.
       /// @param currentTime Time since UNIX Epoch (Midnight UTC of January 1, 1970).
@@ -101,19 +110,19 @@ namespace FishTagEstimators
 
       /// @brief Get function for latestTimestamp
       /// @return latestTimestamp
-      uint64_t getLatestTimestamp() {
+      uint64_t getLatestTimestamp() const{
         return latestTimestamp;
       }
 
       /// @brief Get function for the Geometric dillution of position of previous estimate
       /// @return GDOP
-      uint64_t getGDOP() {
+      uint64_t getGDOP() const {
         return GDOP;
       }
 
       /// @brief Get function for the receiver positions used in the previous estimate (North-East pairs) in the NED frame (relative to origin used in tagBuffer).
       /// @return GDOP
-      const std::vector<std::pair<T,T>> getUsedPositions() {
+      std::vector<std::pair<T,T>> getUsedPositions() const{
         return latestReceiverPositionsUsed;
       }
 
@@ -126,7 +135,7 @@ namespace FishTagEstimators
       //! Check if the TDOA indicates a time shift larger than accepted
       //! @param [in] TDOA Time Difference of Arrival 
       //! @return Boolean representing accepted/not accepted
-      bool timeShiftCorrect(const long int TDOA);
+      bool timeShiftCorrect(const long int TDOA) const;
 
       //! General and common interface for registering parameters in subclasses
       //! @param [in] parameterName Desired parameter name

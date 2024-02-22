@@ -26,10 +26,10 @@ namespace FishTagEstimators
                                         const Eigen::Matrix<T, c_states, c_states> &Q_inn,
                                         const Eigen::Matrix<T, c_states, c_states> &P0_inn,
                                         const Eigen::Matrix<T, c_states, 1> &x0_inn);
-      std::tuple<T, T, T> getEstimate();
+      std::tuple<T, T, T> getEstimate() const;
       void print(std::ostream& os) const;
       bool isActive() const {
-        return xkf.isInitialized();
+        return xkf.stage3.active;
       }
   void setTDOACovariance(T TDOACovariance);
   void setDepthCovariance(T depthCovariance);

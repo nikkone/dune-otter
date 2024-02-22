@@ -15,7 +15,7 @@ namespace FishTagEstimators
         //EKF();
           T rr_cov;  // Measurement noise Covariance - range
           T rz_cov;  // Measurement noise Covariance - depth
-        bool constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, Eigen::Matrix<T, 3, 1> xHatInn);
+        bool constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, const std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, Eigen::Matrix<T, 3, 1> xHatInn);
     };
     template class EKF<float>;
     template class EKF<double>;

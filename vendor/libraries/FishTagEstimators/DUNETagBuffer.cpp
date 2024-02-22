@@ -45,11 +45,14 @@ namespace FishTagEstimators
       TBRFishTag tag = toEstimatorTag(msg);
       toNEDframe(tag);
       tagBuffer[msg->serial_no]->push_back(tag);
-      if(msg->unix_timestamp - latestTimestamp > maxTimestampDifference) {
+      if(((uint64_t)msg->unix_timestamp)*1000 + msg->millis - latestTimestamp_ms > maxTimestampDifference_ms) {
         // TODO: Check if more than one unused, then run update of filter
-        //latestTimestamp = msg->getTimeStamp();
-        latestTimestamp = ((uint64_t)msg->unix_timestamp)*1000 + msg->millis;
+        //latestTimestamp_ms = msg->getTimeStamp();
+        latestTimestamp_ms = ((uint64_t)msg->unix_timestamp)*1000 + msg->millis;
+        detectionsMostRecentTs = 1;
         //std::cout << std::endl << "set" << std::endl;
+      } else {
+        detectionsMostRecentTs++;
       }
       return true;
     }
@@ -73,8 +76,10 @@ namespace FishTagEstimators
     return tagOut;
   }
 
-  bool DUNETagBuffer::checkTimeout(double currentTimestamp) {
-    if(timestampTimeoutLimit > currentTimestamp - latestTimestamp) {
+  bool DUNETagBuffer::checkTimeout(double currentTimestamp_s) {
+    //std::cout << std::endl << "currentTimestamp_s : " << currentTimestamp_s << std::endl;
+    //std::cout << std::endl << "latestTimestamp_ms/1000"<< latestTimestamp_ms/1000 << std::endl;
+    if(timestampTimeoutLimit_s > (currentTimestamp_s - latestTimestamp_ms/1000) ) {
       return true;
     } else {
       return false;

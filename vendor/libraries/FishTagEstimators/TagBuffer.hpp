@@ -21,6 +21,8 @@ namespace FishTagEstimators
     protected:
       //! How many detections should the circular buffers hold for each receiver
       unsigned buffer_size;
+      //! How many detections are available for the most recent timestamp
+      unsigned detectionsMostRecentTs;
     public:
       //! The data structure where tags are buffered
       tagBufferMap_t tagBuffer;
@@ -32,7 +34,7 @@ namespace FishTagEstimators
       //! Constructor
       //! @param [in] tag_id_in The transmitter ID this buffer holds detections for.
       //! @param [in] buffer_size_in How many detections should the circular buffer hold for each receiver
-      TagBuffer(unsigned tag_id_in, unsigned buffer_size_in, float depthConversion_in) : buffer_size(buffer_size_in), tag_id(tag_id_in), depthConversion(depthConversion_in) {};
+      TagBuffer(unsigned tag_id_in, unsigned buffer_size_in, float depthConversion_in) : buffer_size(buffer_size_in), detectionsMostRecentTs(0), tag_id(tag_id_in), depthConversion(depthConversion_in) {};
 
       //! Destructor. Deletes all dynamically allocated memory the class has created
       virtual ~TagBuffer() {
@@ -55,7 +57,7 @@ namespace FishTagEstimators
 
       /// @brief Get the coefficient used to convert the data field of a tag to depth in meters
       /// @return The coefficient
-      float getDepthConversionCoefficient();
+     float getDepthConversionCoefficient() const ;
 
 
       //! Finds the most frequent period in the last numUsedDetections detections, which is assumed to be the regular intervall.
@@ -63,19 +65,19 @@ namespace FishTagEstimators
       //! @param [in] numUsedDetections
       //! @return calculated regular period given in seconds [s].
 
-      double calculateRegularPeriod(unsigned receiver, unsigned numUsedDetections = 3, unsigned minCount = 2);
+      double calculateRegularPeriod(unsigned receiver, unsigned numUsedDetections = 3, unsigned minCount = 2) const;
 
       //! TBD
       //! @param [in] receiver serial number
       //! @return calculated current irregular period given in seconds [s].
-      double calculateIrregularPeriod(unsigned receiver);
+      double calculateIrregularPeriod(unsigned receiver) const;
 
       /// @brief 
       /// @param period 
       /// @param tagPeriodMin 
       /// @param tagPeriodMax 
       /// @return 
-      int checkPeriod(unsigned period, unsigned tagPeriodMin, unsigned tagPeriodMax);
+      int checkPeriod(unsigned period, unsigned tagPeriodMin, unsigned tagPeriodMax) const;
 
 
       /// @brief 
@@ -84,7 +86,11 @@ namespace FishTagEstimators
       virtual bool checkTimeout(double currentTimestamp);
       
       //!
-      size_t size();
+      size_t size() const;
+
+      unsigned getNoOfMostRecentdetections() {
+        return detectionsMostRecentTs;
+      }
   };
 
   //! A map of tag buffers, where the index is used for transmitter ID and the second is a pointer to a tagBuffers_t

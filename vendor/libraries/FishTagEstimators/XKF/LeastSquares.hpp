@@ -27,7 +27,7 @@ namespace FishTagEstimators
         /// @param RDOA 
         /// @param RDOAcombinations 
         /// @return 
-        bool update(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations);
+        bool update(const TagBuffer *tagBuffer, const Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, const std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations);
 
         /// @brief Get function for most recent dm
         /// @return The most recent estimate of dm

@@ -5,8 +5,8 @@
 #include <cmath>  
 namespace FishTagEstimators
 {    
-  double TagBuffer::calculateRegularPeriod(unsigned receiver, unsigned numUsedDetections, unsigned minCount) {
-    tagBufferMap_t::iterator receiverBuffer = tagBuffer.find(receiver);
+  double TagBuffer::calculateRegularPeriod(unsigned receiver, unsigned numUsedDetections, unsigned minCount) const{
+    tagBufferMap_t::const_iterator receiverBuffer = tagBuffer.find(receiver);
     if(receiverBuffer != tagBuffer.end()) {
       unsigned usedDetections = 0;
       std::map<double,unsigned> periodCount;//period as index, count as value. Overflow not handled, will only occur at extremely many tag detections before restarting (10^9 if 4 added each run)
@@ -43,18 +43,18 @@ namespace FishTagEstimators
     return -1;
   }
 
-  size_t TagBuffer::size() {
+  size_t TagBuffer::size() const{
     return tagBuffer.size();
   }
-  int TagBuffer::checkPeriod(unsigned period, unsigned tagPeriodMin, unsigned tagPeriodMax) {
+  int TagBuffer::checkPeriod(unsigned period, unsigned tagPeriodMin, unsigned tagPeriodMax) const {
     if(period >= tagPeriodMin && period <= tagPeriodMax) {
       return period;
     }
     return -1;
   }
 
-  double TagBuffer::calculateIrregularPeriod(unsigned receiver) {
-    tagBufferMap_t::iterator receiverBuffer = tagBuffer.find(receiver);
+  double TagBuffer::calculateIrregularPeriod(unsigned receiver) const {
+    tagBufferMap_t::const_iterator receiverBuffer = tagBuffer.find(receiver);
     if(receiverBuffer != tagBuffer.end()) {
       if(receiverBuffer->second->size() >1) {
         double measurement_millis = receiverBuffer->second->rbegin()->unix_timestamp + (double)receiverBuffer->second->rbegin()->millis/1000;
@@ -74,7 +74,7 @@ namespace FishTagEstimators
     depthConversion = depthConversion_inn;
   }
 
-  float TagBuffer::getDepthConversionCoefficient() {
+  float TagBuffer::getDepthConversionCoefficient() const {
     return depthConversion;
   }
 

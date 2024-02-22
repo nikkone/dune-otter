@@ -21,11 +21,13 @@ namespace FishTagEstimators
       stage3.predict();
     }
     template <class T>
-    bool XKF<T>::update(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations) {
+    uint8_t XKF<T>::update(const TagBuffer *tagBuffer, const Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, const std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations) {
       std::cout << std::endl << "RDOA.rows(): " << RDOA.rows() << std::endl;
+      uint8_t status = 0;
       if(RDOA.rows()>0)
       {
         if(stage1.update(tagBuffer, RDOA, RDOAcombinations)) {
+          status += 1;
           std::cout << std::endl << "Stage1 update" << std::endl;
           if(!stage2.active) {
             stage2.xHat(0) = stage1.xHat(0);
@@ -33,8 +35,11 @@ namespace FishTagEstimators
             stage2.xHat(2) = stage1.xHat(2);
             stage2.active = true;
           }
+        }
+        if(stage2.active) {
           if(stage2.constructCandR(tagBuffer, RDOA, RDOAcombinations, stage1.getDm())) {
             if(stage2.update(stage2.yk)) {
+              status += 2;
               std::cout << std::endl << "Stage2 update" << std::endl;
               if(!stage3.active) {
                 stage3.xHat(0) = stage2.xHat(0);
@@ -49,13 +54,13 @@ namespace FishTagEstimators
         if(stage2.active && stage3.active) {
           if(stage3.constructCandR(tagBuffer, RDOA, RDOAcombinations, stage2.xHat)) {
             if(stage3.update(stage3.yk)) {
+              status += 4;
               std::cout << std::endl << "Stage3 update" << std::endl;
-              return true;
             }
           }
         }
       }
-      return false;
+      return status;
     }
     template <class T>
     bool XKF<T>::isInitialized(void) const {

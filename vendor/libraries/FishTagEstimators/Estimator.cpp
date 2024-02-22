@@ -13,7 +13,7 @@ namespace FishTagEstimators
    void Estimator<T>::predict() {return;}
 
   template <class T>
-   std::tuple<T, T, T> Estimator<T>::getEstimate() {
+   std::tuple<T, T, T> Estimator<T>::getEstimate() const{
     return {0.0,0.0,0.0};
   }
     typedef enum 
@@ -45,7 +45,7 @@ namespace FishTagEstimators
   }
 
   template <class T>
-  Eigen::Matrix<T, Estimator<T>::c_states, 1> Estimator<T>::getNED(const TBRFishTag &tagIn) {
+  Eigen::Matrix<T, Estimator<T>::c_states, 1> Estimator<T>::getNED(const TBRFishTag &tagIn) const{
     Eigen::Matrix<T, c_states, 1> ret;
     ret << tagIn.N, tagIn.E, tagIn.D;
     return ret;
@@ -101,7 +101,7 @@ namespace FishTagEstimators
   //! @param [in] TDOA Time Difference of Arrival 
   //! @return Boolean representing accepted/not accepted
   template <class T>
-  bool Estimator<T>::timeShiftCorrect(const long int TDOA)
+  bool Estimator<T>::timeShiftCorrect(const long int TDOA) const
   {
     if((std::abs(TDOA) <= max_time_shift_ms))
       return true;
@@ -129,13 +129,13 @@ namespace FishTagEstimators
   }
 
   template <class T>
-  void Estimator<T>::printNewBool(void) {
-    for (tagBool_t::iterator it = unprocessedData.begin(); it != unprocessedData.end(); it++)
+  void Estimator<T>::printNewBool(void) const{
+    for (auto it : unprocessedData)
     {
-      if(it->second) {
-        std::cout << "Receiver " << it->first << " True" << std::endl;
+      if(it.second) {
+        std::cout << "Receiver " << it.first << " True" << std::endl;
       } else {
-        std::cout << "Receiver " << it->first << " False" << std::endl;
+        std::cout << "Receiver " << it.first << " False" << std::endl;
       }
     }
   }

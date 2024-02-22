@@ -15,7 +15,7 @@ namespace FishTagEstimators
           T rr_cov;  // Measurement noise Covariance - range
           T rz_cov;  // Measurement noise Covariance - depth
         //LTVKF();
-        bool constructCandR(TagBuffer *tagBuffer, Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, T m_dr);        
+        bool constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, const std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, T dm);        
     };
     template class LTVKF<float>;
     template class LTVKF<double>;
