@@ -64,6 +64,7 @@ namespace Control
         std::string estimatorPrefix;
 
         bool dynamicSpeed;
+
       };
 
       struct Task : public DUNE::Tasks::Task
@@ -108,11 +109,15 @@ namespace Control
         //! Average SNR for current transmission across all receivers.
         float m_avg_snr;
 
+        unsigned lastTagCount;
+
         std::vector<participant_t> m_allocation;
+
         Task(const std::string &name, Tasks::Context &ctx) : 
         DUNE::Tasks::Task(name, ctx),
         m_formation_rotate_rad(0.0),
-        m_formation_rotation_step_rad(M_PI/2) // 90deg
+        m_formation_rotation_step_rad(M_PI/2), // 90deg
+        lastTagCount(0)
         {
           param("FishTag min interval", m_args.fishtag_min_interval)
               .units(Units::Second)
@@ -257,6 +262,7 @@ namespace Control
 
           m_formation_rotate_rad = 0;
           m_formation_started = false;
+          lastTagCount = 3;
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         }
 
@@ -361,18 +367,18 @@ namespace Control
 
         void consume(const IMC::TBRFishTag *msg)
         {
-          static unsigned snrCount= 0;
           static uint16_t cumSNR = 0;
           if(isActive()) {
             if(m_last_of_msg.target == m_args.estimatorPrefix + std::to_string(msg->trans_id)) {
               if(m_last_tag_timer.getElapsed() > 3) { // 3sec to allow for slow communication
                 m_avg_snr = msg->snr;
-                snrCount = 1;
+                lastTagCount = 1;
                 cumSNR = msg->snr;
               } else {
-                ++snrCount;
+                ++lastTagCount;
                 cumSNR += msg->snr;
-                m_avg_snr = cumSNR/snrCount;
+                m_avg_snr = cumSNR/lastTagCount;
+
               }
               m_last_tag_timer.reset();
               inf("Avg SNR: %f", m_avg_snr);
@@ -431,6 +437,13 @@ namespace Control
           debug("r=%f, i=%f, x=%f, t=%f, f=%f", rotation_dist, minTagInterval, maxTagInterval, timeout, FollowRefInterval);
         }
 
+        /// @brief Spatialite database function that checks if the intersection of a circle is larger than 2*M_PI/p.
+        /// @param x [in] Formation center x-coordinate [out] intersection x-coordinate between formation circle and the obstacle layer
+        /// @param y [in] Formation center y-coordinate [out] intersection y-coordinate between formation circle and the obstacle layer
+        /// @param r Formation radius
+        /// @param p Formation participants
+        /// @param angle The angle between the two intersection points of the formation circle and the obstacle layer
+        /// @return If the rotation can be performed, true, else false. Also false if there are database errors or multiple arcs.
         bool rotationChecker(double &x, double &y, double r, unsigned p, double &angle) {
           std::string query = "select X(s), Y(s), 2 * asin (0.5 * distance(s, e) / r), IIF(geometryType(inter) == 'LINESTRING', 1, 0) from ("
               "select r, startPoint(inter) as s, endPoint(inter) as e, inter from ("
@@ -474,6 +487,13 @@ namespace Control
           return false; // Angle too big, rotation not possible
         }
 
+        /// @brief Calculation wrapper for rotationChecker
+        /// @param x0 Formation center x-coordinate
+        /// @param y0 Formation center y-coordinate
+        /// @param r Formation radius
+        /// @param p Formation participants
+        /// @param angle Output containing the rotation angle if sucess
+        /// @return True if rotation sucess, else false
         bool rotateFormation(double x0, double y0, double r, unsigned p, double &angle) {
           double x=x0, y=y0;
           if(rotationChecker(x, y, r, p, angle)) {
@@ -944,9 +964,10 @@ namespace Control
 
         void updateReference() {
           static bool m_collision = false;
+
+
         std::pair<double,double> utmpoint, utmchanged;
         m_con->transformSRID(Math::Angles::degrees(m_last_rs_msg.lon), Math::Angles::degrees(m_last_rs_msg.lat), 4326, utmpoint.first, utmpoint.second, 32632);
-
 
           std::vector<std::pair<double, double>> pos;
 
