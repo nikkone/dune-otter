@@ -44,7 +44,6 @@ namespace SourceEstimators
     using DUNE_NAMESPACES;
 
     static const unsigned c_states = 3;
-    static const float communicationWaitSec = 1.5;
     struct Arguments
     {
       //! Time to wait in while. In practice, this controls how regular the filter timing is
@@ -89,6 +88,9 @@ namespace SourceEstimators
       uint32_t timestampTimeout;
       //! Factor to multiply tag data with to get depth in meters
       float depthConversion;
+
+      //! Wait this long untill updating position filter (To avoid processing only the two first when three are available)
+      float communicationWaitSec;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -101,7 +103,6 @@ namespace SourceEstimators
       FishTagEstimators::EstimatorMap m_emap;
       std::vector<FishTagEstimators::EstimatorMap::estimatorTypeEnum_t> SingleReceiverEstimatorTypeToUse;
       std::vector<FishTagEstimators::EstimatorMap::estimatorTypeEnum_t> MultiReceiverEstimatorTypeToUse;
-      FishTagEstimators::tagBool_t newData;
       bool m_ss_valid;
       //! Speed of sound provider entity label.
       int m_c_sound_eid;
@@ -198,8 +199,14 @@ namespace SourceEstimators
 
         param("Timestamp Timeout [s]", m_args.timestampTimeout)
         .description("Maximum time [s] to keep an estimator alive without any detections received.")
+        .units(Units::Second)
         .defaultValue("500");
 
+        param("Communication Wait [s]", m_args.communicationWaitSec)
+        .units(Units::Second)
+        .description("Wait this long untill updating position filter (To avoid processing only the two first when three are available)")
+        .defaultValue("1.5");
+        
         param("Depth Coefficient", m_args.depthConversion)
         .description("The coefficient used to convert the data field of a tag to depth in meters")
         .defaultValue("0.2");
@@ -235,14 +242,14 @@ namespace SourceEstimators
         }
         if(paramChanged(m_args.singleEstimators) || paramChanged(m_args.multiEstimators)) {
           m_emap.clear();
-          SingleReceiverEstimatorTypeToUse.clear();
-          MultiReceiverEstimatorTypeToUse.clear();
           clearDUNETagBuffers_t(&tagBuffers);
           addEstimators();
         }
       }
 
       void addEstimators() {
+        SingleReceiverEstimatorTypeToUse.clear();
+        MultiReceiverEstimatorTypeToUse.clear();
         if(std::find(m_args.singleEstimators.begin(), m_args.singleEstimators.end(), "EKF") != m_args.singleEstimators.end()) {
           SingleReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_SingleReceiverEKF);
         } if(std::find(m_args.singleEstimators.begin(), m_args.singleEstimators.end(), "UKF") != m_args.singleEstimators.end()) {
@@ -324,7 +331,7 @@ namespace SourceEstimators
                 est->setParameter(m_args.ss_extra_param_name[i].c_str(), m_args.ss_extra_param_value[i]);
               }
             }
-            updateWaitTimer[msg->trans_id].setTop(communicationWaitSec);
+            updateWaitTimer[msg->trans_id].setTop(m_args.communicationWaitSec);
             //est->setParameter("receiver_depth", -0.5);
             //est->setParameter("max_jitter", 0.01);
             //est->setParameter("max_updates_per_new_measurement", 1);
@@ -344,6 +351,7 @@ namespace SourceEstimators
         // Action taken for all receptions: Add to buffer and run measurment update on estimators.
         size_t prev = tagBuffers[msg->trans_id]->size();
         if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
+          inf("Recent Detections: %u, timestamp: %lu", tagBuffers[msg->trans_id]->getNoOfMostRecentdetections(), tagBuffers[msg->trans_id]->getLatestTimestamp());
           // Add MultiReceiver Estimators when going from 2 to 3 receiving receivers
           if((prev == 2) && tagBuffers[msg->trans_id]->size() == 3) {
             for(auto it = MultiReceiverEstimatorTypeToUse.begin();it !=MultiReceiverEstimatorTypeToUse.end();it++) {
@@ -355,13 +363,14 @@ namespace SourceEstimators
               est->setAllowedTimeShift(m_args.max_time_shift_ms);
               est->setTDOACovariance(m_args.rr_cov);
               est->setDepthCovariance(m_args.rz_cov);
+              // TODO: Select min millis of most recent detection as X_0, as it's the closest
               est->initialize(
                 Eigen::Matrix3d::Identity(),
                 Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data()),
                 Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
                 Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
               );
-              updateWaitTimer[msg->trans_id].setTop(communicationWaitSec);
+              updateWaitTimer[msg->trans_id].setTop(m_args.communicationWaitSec);
               // Create/clear csv logfile for estimator with header
               std::ofstream logOutStream;
               logOutStream.open(m_args.log_folder_and_prefix + m_startupTimestamp + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
@@ -376,7 +385,6 @@ namespace SourceEstimators
             }
           }
           m_emap.updateUnprocessedDataAll(msg->serial_no);
-          newData[msg->trans_id] = true;
           spew("Receivers in buffer: %lu", tagBuffers[msg->trans_id]->size());
 
 /*
@@ -421,6 +429,7 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
       //! @param [in] in_logfilename Filename of file written to
       //! @param [in] logname Name used for the ID in the dispatched IMC::RemoteSensorInfo
       void logResult(FishTagEstimators::Estimator<double>* est, const std::string &in_logfilename, const std::string &logname) {
+        //inf("Logging %s", est->name.c_str());
         double lati,longi;
         std::tuple<double, double, double>  estimate = est->getEstimate();
         double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
@@ -467,6 +476,7 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
         }
       }
 
+
       void
       onMain(void)
       {
@@ -475,34 +485,29 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
             m_filter_timer.reset();
 
             std::vector<uint32_t> estimatorsToDelete;
-            for (FishTagEstimators::EstimatorMap::EstimatorMap_t::iterator it = m_emap.estimatorMap.begin(); it != m_emap.estimatorMap.end(); it++)
+            // Measurement update
+            for (auto it : m_emap.estimatorMap) // Iterate over (transmitter,estimators) map
             {
-              if (it->second != NULL)
+              if (it.second != NULL) // If there are estimators for the given transmitter
               {
-                for(FishTagEstimators::EstimatorMap::EstimatorVector_t::iterator est = it->second->begin();est != it->second->end();est++) {
-                  if(newData[it->first] && updateWaitTimer[it->first].overflow()) {
-                    if((*est)->update(tagBuffers[it->first])) {
-                      updateWaitTimer[it->first].reset();
-                      newData[it->first] = false;
+                for(auto est : *(it.second)) {
+                  if(est->hasUnprocessedData()) {//} && ( (tagBuffers[it.first]->getNoOfMostRecentdetections() > 2) || updateWaitTimer[it.first].overflow() )) {
+                    if(est->update(tagBuffers[it.first])) {
+                      updateWaitTimer[it.first].reset();
+                      inf("Update");
                     }
                   }
                   
-                    //inf("Updated %s %d %f", (*est)->name.c_str(), (*est)->trans_id, Clock::getSinceEpoch() - (double)tagBuffers[it->first]->getLatestTimestamp());
-
-                  if(( *est)->isActive()) {
-                    //spew("LogRes");
-                    logResult((*est), m_args.log_folder_and_prefix + m_startupTimestamp + (*est)->name + std::to_string((*est)->trans_id) + ".csv", (*est)->name);
+                  if(est->isActive()) {
+                    logResult(est, m_args.log_folder_and_prefix + m_startupTimestamp + est->name + std::to_string(est->trans_id) + ".csv", est->name);
                   }
-
 
                 }
                 
-
-
                 //inf("Limit %d, current: %f last %d, delta %f", tagBuffers[it->first]->timestampTimeoutLimit, DUNE::Time::Clock::getSinceEpoch(), tagBuffers[it->first]->latestTimestamp, DUNE::Time::Clock::getSinceEpoch() - tagBuffers[it->first]->latestTimestamp);
-                if(!tagBuffers[it->first]->checkTimeout(DUNE::Time::Clock::getSinceEpoch())) {
-                  war("Tag %d timed out.", it->first);
-                  estimatorsToDelete.push_back(it->first);
+                if(!tagBuffers[it.first]->checkTimeout(DUNE::Time::Clock::getSinceEpoch())) {
+                  war("Tag %d timed out.", it.first);
+                  estimatorsToDelete.push_back(it.first);
                 }
               }
             }
@@ -516,6 +521,7 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
                 tagBuffers.erase(id);
               }
             }
+            // Predict update
             m_emap.predictAll();
           }
           waitForMessages(m_args.message_wait_time);
