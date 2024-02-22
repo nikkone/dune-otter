@@ -51,18 +51,32 @@ namespace Simulators
     {
       //! Path to DB file
       std::string msg_path;
-      //! Message delay
+      //! Fixed tag delay
       float msg_delay;
+      //! Tag delay according to difference in timestamp
+      bool realTimeDelay;
+      //! Real time delay multiplier
+      float realTimeMultiplier;
     };
     struct Task: public DUNE::Tasks::Task
     {
       // Task arguments
       Arguments m_args;
+
+      IMC::TBRFishTag m_tag_msg;
+
+      IMC::RemoteSensorInfo m_tag_position;
+
+      //! UNIX Timestamp.
+      uint32_t m_prev_unix_timestamp;
+      //! Milliseconds part.
+      uint32_t m_prev_millis;
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx):
-        DUNE::Tasks::Task(name, ctx)
+        DUNE::Tasks::Task(name, ctx),
+        m_prev_unix_timestamp(0)
       {
         param("Messagefile Path", m_args.msg_path)
         .defaultValue("")
@@ -71,7 +85,15 @@ namespace Simulators
         param("Delay Between Tag Messages", m_args.msg_delay)
         .units(Units::Millisecond)
         .defaultValue("0.0")
-        .description("How long to wait between Tag messages.");        
+        .description("How long to wait between Tag messages.");
+        
+        param("Use Real Time Delay", m_args.realTimeDelay)
+        .defaultValue("true")
+        .description("Enable/disable tag delay according to difference in timestamp.");  
+
+        param("Real Time Delay Multiplyer", m_args.realTimeMultiplier)
+        .defaultValue("1.0")
+        .description("Allows to change speed of real time tag sending while keeping the correct intervals.");   
       }
 
       //! Update internal state with new parameter values.
@@ -251,27 +273,30 @@ namespace Simulators
           spew(DTR("Receiver memory address: %u"), recv_mem_addr);
         }
         spew("%f, %f", std::stof(parts[9]), std::stof(parts[10]));
-        IMC::TBRFishTag tag_msg;
-        tag_msg.serial_no = serial_no;
-        tag_msg.unix_timestamp = unix_timestamp;
-        tag_msg.millis = millis;
-        tag_msg.trans_protocol = trans_protocol;
-        tag_msg.trans_id = trans_id;
-        tag_msg.trans_data = trans_data;
-        tag_msg.snr = SNR;
-        tag_msg.trans_freq = trans_freq;
-        tag_msg.recv_mem_addr = recv_mem_addr;
-        tag_msg.lat = DUNE::Math::Angles::radians(std::stof(parts[9]));
-        tag_msg.lon = DUNE::Math::Angles::radians(std::stof(parts[10]));
-        dispatch(tag_msg);
-        // Send output to Neptus/DUNE log
-        IMC::RemoteSensorInfo tagPosition;
-        tagPosition.lat = tag_msg.lat;
-        tagPosition.lon = tag_msg.lon;
-        //tagPosition.data = std::to_string(m_tagDetection[0].unix_timestamp) + std::to_string(m_tagDetection[0].millis) + "," + std::to_string(m_tagDetection[1].unix_timestamp) + std::to_string(m_tagDetection[1].millis) + "," + std::to_string(m_tagDetection[2].unix_timestamp) + std::to_string(m_tagDetection[2].millis);
+
+        m_prev_unix_timestamp = m_tag_msg.unix_timestamp;
+        m_prev_millis = m_tag_msg.millis;
+
+        m_tag_msg.serial_no = serial_no;
+        m_tag_msg.unix_timestamp = unix_timestamp;
+        m_tag_msg.millis = millis;
+        m_tag_msg.trans_protocol = trans_protocol;
+        m_tag_msg.trans_id = trans_id;
+        m_tag_msg.trans_data = trans_data;
+        m_tag_msg.snr = SNR;
+        m_tag_msg.trans_freq = trans_freq;
+        m_tag_msg.recv_mem_addr = recv_mem_addr;
+        m_tag_msg.lat = DUNE::Math::Angles::radians(std::stof(parts[9]));
+        m_tag_msg.lon = DUNE::Math::Angles::radians(std::stof(parts[10]));
+        
+        // Compile message output to Neptus/DUNE log
+        
+        m_tag_position.lat = m_tag_msg.lat;
+        m_tag_position.lon = m_tag_msg.lon;
+        //m_tag_position.data = std::to_string(m_tagDetection[0].unix_timestamp) + std::to_string(m_tagDetection[0].millis) + "," + std::to_string(m_tagDetection[1].unix_timestamp) + std::to_string(m_tagDetection[1].millis) + "," + std::to_string(m_tagDetection[2].unix_timestamp) + std::to_string(m_tagDetection[2].millis);
         // + "," + m_xkf.stage3.innov.norm_p(2) + "," << m_xkf.stage3.PHat.norm_p(2) + "," << m_xkf.stage3.PHat.trace();
-        tagPosition.id = "Receiver" + std::to_string(serial_no);
-        dispatch(tagPosition);
+        m_tag_position.id = "Receiver" + std::to_string(serial_no);
+        
       }
 
       //! Interpret SensorReading sentence.
@@ -354,8 +379,22 @@ namespace Simulators
         std::string line;
         while (std::getline(infile, line) && !stopping())
         {
-            if(processSentence(line) == 2) {
-              Delay::waitMsec(m_args.msg_delay);
+            if(processSentence(line) == 2) { // Decode the line and enter if statement for tag messages
+              if(m_args.realTimeDelay) {
+                if(m_prev_unix_timestamp == 0) {
+                  m_prev_unix_timestamp = m_tag_msg.unix_timestamp;
+                } else {
+                  Delay::waitMsec(m_args.realTimeMultiplier*((m_tag_msg.unix_timestamp - m_prev_unix_timestamp)*1000+(m_tag_msg.millis-m_prev_millis)));
+                }
+                
+              } else {
+                if(m_prev_unix_timestamp + 1 < m_tag_msg.unix_timestamp) {
+                  Delay::waitMsec(m_args.msg_delay);
+                }
+              }
+
+              dispatch(m_tag_msg);
+              dispatch(m_tag_position);
             }
         }
 
