@@ -22,18 +22,17 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <FishTagEstimators/DUNETagBuffer.hpp>
-#include <boost/circular_buffer.hpp>
-
+#include <memory>
+#include <FishTagEstimators/PeriodFinder.hpp>
 #define LOGFTOILE 1
 namespace SourceEstimators
 {
-  //! Task that runs source position estimation algorithms for IMC::TBRFishTag
+  //! Task that finds the transmission period of an IMC::TBRFishTag based on the known series of intervals.
+  //! Note: Currently only supports single transmitter
   //! @author Nikolai Lauvås
   namespace PeriodFinder
   {
     using DUNE_NAMESPACES;
-
-
     const std::string intervals = "67,84,66,80,58,49,53,80,57,36,52,41,55,89,88,55,77,69,41,85,37,79,53,44,89,64,88,90,45,66,65,43,59,82,46,44,32,84,34,46,87,73,74,66,31,56,47,83,35,68,67,31,86,73,30,47,47,49,74,61,71,49,71,41,41,83,34,49,84,75,46,30,80,55,49,65,36,89,88,53,79,47,37,35,31,68,70,87,40,54,79,49,70,35,62,35,83,67,89,34";
     struct Arguments
     {
@@ -43,11 +42,10 @@ namespace SourceEstimators
       float filter_timestep;
       //! Reset toggle for buffers and estimators
       bool reset_toggle;
-
+      //! How long should a buffer be considered active before being deactivated
       uint16_t timestampTimeout;
       //! Factor to multiply tag data with to get depth in meters
       float depthConversion;
-
       //! Wait this long untill updating position filter (To avoid processing only the two first when three are available)
       float communicationWaitSec;
     };
@@ -56,27 +54,14 @@ namespace SourceEstimators
     {
       //! Datastructure to hold task arguments/parameters
       Arguments m_args;
-      //!
+      //! Container that stores the tag transmissions that have been received
       FishTagEstimators::DUNETagBuffers_t tagBuffers;
-
-      std::string m_startupTimestamp;
-
-      boost::circular_buffer<uint8_t> m_intervals;
       //! Timer responsible for running filter timestep
       Time::Counter<float> m_filter_timer;
-
-      size_t m_previous_pos;
-
-      bool m_interval_valid;
-
-      uint16_t m_expected_interval;
-
+      //! Used to find bugs
+      std::vector<std::unique_ptr<FishTagEstimators::PeriodFinder>> m_periodFinders; 
       Task(const std::string& name, Tasks::Context& ctx):
-        DUNE::Tasks::Task(name, ctx), 
-        m_intervals(5),
-        m_previous_pos(0),
-        m_interval_valid(false),
-        m_expected_interval(0)
+        DUNE::Tasks::Task(name, ctx)
       {
         param("Filter Timestep", m_args.filter_timestep)
         .description("The timestep of the filter")
@@ -135,183 +120,55 @@ namespace SourceEstimators
           tagBuffers[msg->trans_id]->setTimestampTimeoutLimit(m_args.timestampTimeout);
           spew("Created buffer for receiver %u", msg->serial_no);
         }
-        uint64_t  prevTimestamp = tagBuffers[msg->trans_id]->getLatestTimestamp(); //ms
-        // Action taken for all receptions: Add to buffer and run measurment update on estimators.
-        if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
-          //inf("Recent Detections for tagID%u: %u, timestamp: %lu", msg->trans_id, tagBuffers[msg->trans_id]->getNoOfMostRecentdetections(), tagBuffers[msg->trans_id]->getLatestTimestamp());
-          uint16_t interval = (uint16_t)std::round((float)(tagBuffers[msg->trans_id]->getLatestTimestamp() - prevTimestamp)/1000);
-          if(interval > 1) {
-            if(interval <= 90 && interval >= 30) {
-
-             if((interval != m_expected_interval) && m_interval_valid) { // Unexpected, check if it's next
-                int nextNumber = 0;
-                int sum = 0;
-                size_t temp_pos = m_previous_pos;
-                for (int i = 0; i < 7; ++i) {
-                    nextNumber = findNextNumber(intervals, temp_pos);
-                    sum += nextNumber;
-                    m_intervals.push_back(nextNumber);
-                    war("Lost: %d", nextNumber);
-                    //std::cout << "Lost: " << nextNumber << std::endl;
-                    if(sum >= interval) {
-                      break;
-                    }
-                }
-                if(sum==interval) {
-                  m_previous_pos = temp_pos;
-                  m_expected_interval = findNextNumber(intervals, temp_pos);
-                  //inf("Expected next %d", m_expected_interval);
-                } else {
-                  war("Could not find match. Sum: %u, Interval: %u", sum, interval);
-                  m_intervals.clear();
-                }
-              return;
-             }
-
-              //inf("New interval: %d", interval);
-              m_intervals.push_back(interval);
-              std::string currentIntervals;
-              for(auto inter : m_intervals) {
-                currentIntervals += std::to_string(inter) + ",";// + inter;//std::string(inter);
-              }
-              currentIntervals.pop_back();
-
-              size_t pos = 0;
-              size_t prev_pos = 0;
-              bool found = false;
-              int nextInterval = 0;
-              while ((pos = intervals.find(currentIntervals, pos)) != std::string::npos) {
-                  spew("Found at position: %lu", pos);
-                  
-                  prev_pos = (pos + currentIntervals.length())%intervals.length();
-                  pos += currentIntervals.length();
-                  found=true;
-              }
-              if(!found) {
-                pos = 0;
-                prev_pos = 0;
-                std::string intervalsR = shiftString(intervals);
-                while ((pos = intervalsR.find(currentIntervals, pos)) != std::string::npos) {
-                    spew("Found at position: %lu", pos);
-                    
-                    prev_pos = (pos + currentIntervals.length())%intervals.length();
-                    pos += currentIntervals.length();
-                    found=true;
-                }
-                // TODO: set m_previous_pos
-                nextInterval = findNextNumber(intervalsR, prev_pos);
-              } else {
-                m_previous_pos = prev_pos;
-                nextInterval = findNextNumber(intervals, prev_pos);
-              }
-              if(!found) {
-                err("Could not find substring in intervals: %s", currentIntervals.c_str());
-                
-              }
-
-              if(m_interval_valid) {
-                if(interval == m_expected_interval) {
-                  inf("Got: %d, Expected: %d, Next %d", interval, m_expected_interval, nextInterval);
-                } else {
-                  err("Got: %d, Expected: %d, Next %d", interval, m_expected_interval, nextInterval);
-                }
-              } else {
-                inf("Next %d", nextInterval);
-                m_interval_valid = true; // TODO: Make invalid if multiple possible
-              }
-              m_expected_interval = nextInterval;
-            } else {
-              if(m_interval_valid) {
-                int nextNumber = 0;
-                int sum = 0;
-                size_t temp_pos = m_previous_pos;
-                for (int i = 0; i < 7; ++i) {
-                    nextNumber = findNextNumber(intervals, temp_pos);
-                    sum += nextNumber;
-                    m_intervals.push_back(nextNumber);
-                    war("Lost: %d", nextNumber);
-                    //std::cout << "Lost: " << nextNumber << std::endl;
-                    if(sum >= interval) {
-                      break;
-                    }
-                }
-                if(sum==interval) {
-                  m_previous_pos = temp_pos;
-                  m_expected_interval = findNextNumber(intervals, temp_pos);
-                  //inf("Expected next %d", m_expected_interval);
-                } else {
-                  war("Could not find match. Sum: %u, Interval: %u", sum, interval);
-                  m_intervals.clear();
-                }
-              }
-            }
-          }
+        uint64_t prevTimestamp_ms = tagBuffers[msg->trans_id]->getLatestTimestamp();
+        // Add to buffer containing all tags
+        if(!tagBuffers[msg->trans_id]->addTagDetection(msg)) {
+            err("Failed to add tag to buffer");
+            return;
         }
-      }
-/* ChatGPT
-Write cpp code takes a std::string with comma separated numbers shifts it according to the closest comma to center so that what comes after this point is now at the beginning, and what comes before this point is now at the end
-*/
-      std::string shiftString(const std::string& input) {
-          // Find the closest comma to the center
-          size_t mid = input.size() / 2;
-          size_t closestCommaIndex = input.find_last_of(',', mid);
 
-          // If no comma is found before the midpoint, consider the midpoint itself
-          if (closestCommaIndex == std::string::npos)
-              closestCommaIndex = mid;
+        if(tagBuffers[msg->trans_id]->getNoOfMostRecentdetections() > 1) {
+          return;
+        }
 
-          // Create a new string with the portion after the closest comma followed by the portion before it
-          std::string shiftedString = input.substr(closestCommaIndex + 1) + "," + 
-                                      input.substr(0, closestCommaIndex);
+        uint16_t currentInterval = (uint16_t)std::round((float)(tagBuffers[msg->trans_id]->getLatestTimestamp() - prevTimestamp_ms)/1000);
 
-          return shiftedString;
-      }
+        if(m_periodFinders.size() < 1000) {
+        std::unique_ptr<FishTagEstimators::PeriodFinder> finder1 = std::make_unique<FishTagEstimators::PeriodFinder>(intervals, 30, 90, 4);
+        m_periodFinders.push_back(std::move(finder1));
+        }
+        int i = 0;
+        int sucesses = 0;
+        static int totalSucesses = 0;
+        int misses = 0;
+        static int totalMisses = 0;
+        for(auto& it : m_periodFinders) {
+          uint16_t expected = it->getExpectedInterval();
+          it->addInterval(currentInterval);
 
-/* ChatGPT
-In cpp, I have a large std::string that contains comma separated numbers. I want to create a function that is able to get a position in the large string and find the next number. If the end is reached, then the next number from the start should be returned
-*/
-      int findNextNumber(const std::string& input, size_t& position) {
-          size_t startPos = position;
-          size_t length = input.length();
-          
-          // Skip any non-digit characters
-          while (startPos < length && !isdigit(input[startPos])) {
-              startPos++;
+          switch(it->checkValidity()) {
+            case FishTagEstimators::PeriodFinder::IntervalValidity::Invalid:
+                war("PeriodEst #%d: Expected: %d, Got: %d, Next: %d. Invalid", i, expected, currentInterval, it->getExpectedInterval());
+                ++misses;
+                break;
+            case FishTagEstimators::PeriodFinder::IntervalValidity::Valid:
+                //inf("PeriodEst #%d: Expected: %d, Got: %d, Next: %d", i, expected, currentInterval, it->getExpectedInterval());
+                ++sucesses;
+                break;
+            case FishTagEstimators::PeriodFinder::IntervalValidity::LowestEstimate:
+                war("PeriodEst #%d: Expected: %d, Got: %d, Guesstimate: %d", i, expected, currentInterval, it->getExpectedInterval());
+                ++misses;
+                break;
+            default:
+                err("Unknown validity state");
+                break;
           }
-          if (startPos >= length) {
-            startPos = 0;
-            while (startPos < length && !isdigit(input[startPos])) {
-                startPos++;
-            }
-          }
+          i++;
+        }
+        totalSucesses += sucesses;
+        totalMisses += misses;
 
-          
-          size_t endPos = startPos;
-          // Find the end of the number
-          while (endPos < length && isdigit(input[endPos])) {
-              endPos++;
-          }
-          
-          // If the end of the string is reached, wrap around
-          if (endPos > length) {
-              endPos = 0;
-              while (endPos < position && isdigit(input[endPos])) {
-                  endPos++;
-              }
-          }
-          
-          // Extract the number
-          int result =0;
-          try{
-            result = std::stoi(input.substr(startPos, endPos - startPos));
-          } catch(...) {
-            err("Not int: %s", input.substr(startPos, endPos - startPos).c_str());
-          }
-          
-          // Update position
-          position = endPos;
-          
-          return result;
+        inf("Sucesses: %d, totalSucesses: %d, Misses: %d, totalMisses: %d", sucesses, totalSucesses, misses, totalMisses);
       }
 
       void
