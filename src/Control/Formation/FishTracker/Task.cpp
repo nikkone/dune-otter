@@ -30,9 +30,18 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 
+// SQLITE3 headers.
+#include <sqlite3/sqlite3.h>
+
+
 // DUNE::Control::Formation::FishTracker::Task::updateReference
 #include <ENCGIS/DBconnection.hpp>
 #include <ENCGIS/isPointInLayerStatement.hpp>
+
+// Header needed for the transmission period finder functionality
+#include <FishTagEstimators/PeriodFinder.hpp>
+#include <FishTagEstimators/DUNETagBuffer.hpp>
+
 namespace Control
 {
   //! Device driver for ThelmaHydrophone
@@ -56,15 +65,16 @@ namespace Control
         std::string dbNavigableLayerName;
         //!
         bool useCollisionMitigation;
-
+        //! Location of the sqlite dbfile containing information on the tagged fish
+        std::string taglistDBpath;
+        //!
         std::string participants;
-
+        //!
         unsigned formationAllocator;
-
+        //!
         std::string estimatorPrefix;
-
+        //!
         bool dynamicSpeed;
-
       };
 
       struct Task : public DUNE::Tasks::Task
@@ -80,9 +90,9 @@ namespace Control
         Time::Counter<float> m_ref_send_timer;
         //!
         IMC::RemoteSensorInfo m_last_rs_msg;
-
+        //!
         IMC::otterFormation m_last_of_msg;
-
+        //!
         DUNE::IMC::DesiredSpeed m_dsp;
         //! The rotation state of the entire formation
         double m_formation_rotate_rad;
@@ -104,20 +114,29 @@ namespace Control
         double m_formation_radius;
         //! vehicleid - Lat(rad), Lon(rad), LastReference, time since last position update
         std::map<uint16_t, std::tuple<fp64_t, fp64_t, IMC::Reference, DUNE::Time::Delta>> m_participants; 
+        //!
         typedef std::map<uint16_t, std::tuple<fp64_t, fp64_t, IMC::Reference, DUNE::Time::Delta>>::iterator participant_t;
-
         //! Average SNR for current transmission across all receivers.
         float m_avg_snr;
-
+        //!
         unsigned lastTagCount;
-
+        //!
         std::vector<participant_t> m_allocation;
+        //! Database containing tag information
+        sqlite3 *m_db;
+        //!
+        bool m_db_used;
+        //! Transmitter ID as index
+        std::map<uint32_t, std::unique_ptr<FishTagEstimators::PeriodFinder>> m_periodFinders; 
+        //! Container that stores the tag transmissions that have been received
+        FishTagEstimators::DUNETagBuffers_t tagBuffers;
 
         Task(const std::string &name, Tasks::Context &ctx) : 
         DUNE::Tasks::Task(name, ctx),
         m_formation_rotate_rad(0.0),
         m_formation_rotation_step_rad(M_PI/2), // 90deg
-        lastTagCount(0)
+        lastTagCount(0),
+        m_db_used(false)
         {
           param("FishTag min interval", m_args.fishtag_min_interval)
               .units(Units::Second)
@@ -158,6 +177,10 @@ namespace Control
           param("Navigable Layer Name", m_args.dbNavigableLayerName)
           .defaultValue("navigable")
           .description("Navigable Layer Name");
+
+          param("Taglist DB Path", m_args.taglistDBpath)
+          .defaultValue("")
+          .description("Activate sending.");
 
           param("Participants", m_args.participants)
               .defaultValue("ntnu-otter-01,ntnu-otter-02,ntnu-otter-03")
@@ -206,11 +229,22 @@ namespace Control
             err(DTR("Problem creating query for navigable layer: %s"), e.what());
             setEntityState(IMC::EntityState::ESTA_FAULT, Status::CODE_MISSING_DATA);
           }
-
+          if(!m_args.taglistDBpath.empty()) {
+            if(sqlite3_open_v2(m_args.taglistDBpath.c_str(), &m_db,SQLITE_OPEN_READONLY,0) != SQLITE_OK){
+              err("Can't open database: %s\n", sqlite3_errmsg(m_db));
+              sqlite3_close(m_db);
+              m_db_used = false;
+            } else {
+              m_db_used = true;
+            }
+          } else {
+          war("Not using database for tag information");
+          }
         }
 
         void onResourceRelease(void)
         {
+          sqlite3_close(m_db);
         }
 
         void onResourceInitialization(void)
@@ -367,6 +401,23 @@ namespace Control
 
         void consume(const IMC::TBRFishTag *msg)
         {
+          // Action taken on first reception of a transmitter ID: Add estimators, configure and initialize logfile
+          if(tagBuffers.find(msg->trans_id) == tagBuffers.end()) {
+            // New transmitter found, create buffer (TransDepth irrelevant, so setting to 0.0)
+            tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 1, 0.0);
+            // Set NED frame used on specific tag to location of first tag location
+            double ref[] = {msg->lat, msg->lon, 0.0};
+            tagBuffers[msg->trans_id]->setReferenceCoordinateRad(ref);
+            //tagBuffers[msg->trans_id]->setTimestampTimeoutLimit(m_args.timestampTimeout);
+            spew("Created buffer for receiver %u", msg->serial_no);
+          }
+          uint64_t prevTimestamp_ms = tagBuffers[msg->trans_id]->getLatestTimestamp();
+          // Add to buffer containing all tags
+          if(!tagBuffers[msg->trans_id]->addTagDetection(msg)) {
+              err("Failed to add tag to buffer");
+              return;
+          }
+          // Calculate averate SNR (TODO: Implement in tagbuffer)
           static uint16_t cumSNR = 0;
           if(isActive()) {
             if(m_last_of_msg.target == m_args.estimatorPrefix + std::to_string(msg->trans_id)) {
@@ -384,6 +435,76 @@ namespace Control
               inf("Avg SNR: %f", m_avg_snr);
             }
           }
+          // The rest of this function is part of the period estimation/lookup
+          if(tagBuffers[msg->trans_id]->getNoOfMostRecentdetections() > 1) {
+            return;
+          }
+          // Add new period finder if not exists
+          if(m_periodFinders.find(msg->trans_id) == m_periodFinders.end()) {
+            // TODO: Run DBquery, and add data to period finder
+            uint16_t minTagInterval = 0;
+            uint16_t maxTagInterval = 0;
+            std::string transmissionIntervals = "";
+            if(!getTagInfoFromDB(msg->trans_id, minTagInterval, maxTagInterval, transmissionIntervals)) {
+              return; // Failed DB lookup
+            } 
+            std::unique_ptr<FishTagEstimators::PeriodFinder> finder = std::make_unique<FishTagEstimators::PeriodFinder>(transmissionIntervals, minTagInterval, maxTagInterval, 6, 700);
+            m_periodFinders[msg->trans_id] = std::move(finder);
+          }
+          // Add interval
+          if(prevTimestamp_ms == 0) {
+            // First detection, so no interval
+            return;
+          }
+          uint16_t currentInterval = (uint16_t)std::round((float)(tagBuffers[msg->trans_id]->getLatestTimestamp() - prevTimestamp_ms)/1000);
+        static int totalSucesses = 0;
+        static int totalMisses = 0;
+          uint16_t expected = m_periodFinders[msg->trans_id]->getExpectedInterval();
+          m_periodFinders[msg->trans_id]->addInterval(currentInterval);
+
+          switch(m_periodFinders[msg->trans_id]->checkValidity()) {
+            case FishTagEstimators::PeriodFinder::IntervalValidity::Invalid:
+                war("Failed: Expected: %d, Got: %d, Next: %d. Invalid", expected, currentInterval, m_periodFinders[msg->trans_id]->getExpectedInterval());
+                //war("Failed: Earliest expected next transmission: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp() + m_periodFinders[msg->trans_id]->getExpectedInterval()*1000);
+                ++totalMisses;
+                break;
+            case FishTagEstimators::PeriodFinder::IntervalValidity::Valid:
+                inf("Expected: %d, Got: %d, Next: %d", expected, currentInterval, m_periodFinders[msg->trans_id]->getExpectedInterval());
+                //inf("Expected next transmission: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp() + it->getExpectedInterval()*1000);
+                ++totalSucesses;
+                break;
+            case FishTagEstimators::PeriodFinder::IntervalValidity::LowestEstimate:
+                war("Expected: %d, Got: %d, Guesstimate: %d", expected, currentInterval, m_periodFinders[msg->trans_id]->getExpectedInterval());
+                //war("Ambigous: Earliest expected next transmission: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp() + it->getExpectedInterval()*1000);
+                ++totalMisses;
+                break;
+            default:
+                err("Unknown validity state");
+                break;
+          }
+
+          inf("totalSucesses: %d, totalMisses: %d", totalSucesses, totalMisses);
+
+        }
+
+        //! Checks if a tag is in the taglist DB and fills relevant fields in the otterformation message
+        bool getTagInfoFromDB(const uint32_t transId, uint16_t& minTagInterval, uint16_t& maxTagInterval, std::string& transmissionIntervals) {
+          std::string query = "select minInterval, maxInterval, tranmsissionIntervals from taglist where ID=" + std::to_string(transId);
+          
+          sqlite3_stmt* db_handle = nullptr;
+
+          if (sqlite3_prepare_v2(m_db, query.c_str(), query.length(), &db_handle, 0) == SQLITE_OK) {
+            if(sqlite3_step(db_handle) == SQLITE_ROW) {
+              minTagInterval = sqlite3_column_int(db_handle, 0);
+              maxTagInterval = sqlite3_column_int(db_handle, 1);
+              transmissionIntervals = std::string(reinterpret_cast<const char*>(sqlite3_column_text(db_handle, 2)));
+
+              sqlite3_finalize(db_handle);
+              return true;
+            }
+          }
+          sqlite3_finalize(db_handle);
+          return false;
         }
 
         void addVehicles(std::string participants) {
