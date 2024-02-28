@@ -113,7 +113,7 @@ namespace SourceEstimators
         // Action taken on first reception of a transmitter ID: Add estimators, configure and initialize logfile
         if(tagBuffers.find(msg->trans_id) == tagBuffers.end()) {
           // New transmitter found, create buffer
-          tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 5, m_args.depthConversion);
+          tagBuffers[msg->trans_id] = new FishTagEstimators::DUNETagBuffer(msg->trans_id, 1, m_args.depthConversion);
           // Set NED frame used on specific tag to location of first tag location
           double ref[] = {msg->lat, msg->lon, 0.0};
           tagBuffers[msg->trans_id]->setReferenceCoordinateRad(ref);
@@ -134,7 +134,7 @@ namespace SourceEstimators
         uint16_t currentInterval = (uint16_t)std::round((float)(tagBuffers[msg->trans_id]->getLatestTimestamp() - prevTimestamp_ms)/1000);
 
         if(m_periodFinders.size() < 1000) {
-        std::unique_ptr<FishTagEstimators::PeriodFinder> finder1 = std::make_unique<FishTagEstimators::PeriodFinder>(intervals, 30, 90, 4);
+        std::unique_ptr<FishTagEstimators::PeriodFinder> finder1 = std::make_unique<FishTagEstimators::PeriodFinder>(intervals, 30, 90, 10);
         m_periodFinders.push_back(std::move(finder1));
         }
         int i = 0;
@@ -148,15 +148,18 @@ namespace SourceEstimators
 
           switch(it->checkValidity()) {
             case FishTagEstimators::PeriodFinder::IntervalValidity::Invalid:
-                war("PeriodEst #%d: Expected: %d, Got: %d, Next: %d. Invalid", i, expected, currentInterval, it->getExpectedInterval());
+                //war("PeriodEst #%d: Expected: %d, Got: %d, Next: %d. Invalid", i, expected, currentInterval, it->getExpectedInterval());
+                war("Failed: Earliest expected next transmission: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp() + it->getExpectedInterval()*1000);
                 ++misses;
                 break;
             case FishTagEstimators::PeriodFinder::IntervalValidity::Valid:
                 //inf("PeriodEst #%d: Expected: %d, Got: %d, Next: %d", i, expected, currentInterval, it->getExpectedInterval());
+                //inf("Expected next transmission: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp() + it->getExpectedInterval()*1000);
                 ++sucesses;
                 break;
             case FishTagEstimators::PeriodFinder::IntervalValidity::LowestEstimate:
                 war("PeriodEst #%d: Expected: %d, Got: %d, Guesstimate: %d", i, expected, currentInterval, it->getExpectedInterval());
+                //war("Ambigous: Earliest expected next transmission: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp() + it->getExpectedInterval()*1000);
                 ++misses;
                 break;
             default:

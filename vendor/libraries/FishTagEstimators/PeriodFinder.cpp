@@ -1,5 +1,6 @@
 #include "PeriodFinder.hpp"
 #include <cmath>
+#include <iostream>
 namespace FishTagEstimators
 {
   bool PeriodFinder::addInterval(uint16_t currentInterval)
@@ -18,11 +19,12 @@ namespace FishTagEstimators
 
   bool PeriodFinder::handleUnexpectedInterval(uint16_t currentInterval)
   {
-    uint16_t sum = 0;
+    // TODO: Handle invalid where currentInterval > maxInterval: No, multiple ambigous solutions to find_consequtive
+    uint32_t sum = 0;
     size_t temporaryIntervalPosition = previousIntervalBufferPosition;
-    for (int i = 0; i < maxResolvingAttempts; ++i)
+    for (uint16_t i = 0; i < maxResolvingAttempts; ++i)
     {
-      int nextNumber = findNextNumber(transmissionIntervals, temporaryIntervalPosition);
+      uint16_t nextNumber = findNextNumber(transmissionIntervals, temporaryIntervalPosition);
       if (nextNumber == 0)
       {
         // Error handling for findNextNumber
@@ -30,7 +32,7 @@ namespace FishTagEstimators
       }
       sum += nextNumber;
       intervalsBuffer.push_back(nextNumber);
-      // wrnOutput << "Lost: " << nextNumber << std::endl;
+       //std::cout << "Lost: " << nextNumber << ", Sum: " << sum << std::endl;
       if (sum >= currentInterval)
       {
         break;
@@ -99,7 +101,11 @@ namespace FishTagEstimators
         return false;
       }
       // Sucess: Found solution in shifted transmissionIntervals string
-      // TODO: set previousIntervalBufferPosition
+      size_t mid = transmissionIntervals.length() / 2;
+      size_t closestCommaIndex = transmissionIntervals.find_last_of(',', mid);
+      previousIntervalBufferPosition = (prevPos+shiftedTransmissionIntervals.substr(closestCommaIndex).length())%transmissionIntervals.length();
+      std::cout << "Found in reversed! Pos: " << previousIntervalBufferPosition << std::endl;
+      //std::cout << transmissionIntervals.substr(previousIntervalBufferPosition) << std::endl;
       nextInterval = findNextNumber(shiftedTransmissionIntervals, prevPos);
     }
 
@@ -144,7 +150,7 @@ Write cpp code takes a std::string with comma separated numbers shifts it accord
 */
     std::string PeriodFinder::shiftString(const std::string& input) const {
         // Find the closest comma to the center
-        size_t mid = input.size() / 2;
+        size_t mid = input.length() / 2;
         size_t closestCommaIndex = input.find_last_of(',', mid);
 
         // If no comma is found before the midpoint, consider the midpoint itself

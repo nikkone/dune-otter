@@ -1,5 +1,4 @@
 #include <boost/circular_buffer.hpp>
-//#include <iostream>
 namespace FishTagEstimators
 {
   //! @brief Class that finds the transmission period of pseudo-randomly transmitting acoustic fish telemetry tags based on a known series of intervals.
@@ -23,13 +22,13 @@ namespace FishTagEstimators
     //! The length of the pattern that is searched for
     const uint8_t patternSize;
     //! The maximum number of tries to consolidate unexpected intervals
-    const uint8_t maxResolvingAttempts;
+    const uint16_t maxResolvingAttempts;
 
     PeriodFinder(const std::string &intervalsIn,
                   uint16_t minIntervalIn,
                   uint16_t maxIntervalIn,
                   uint8_t patternSizeIn = 5,
-                  uint8_t maxResolvingAttemptsIn = 7)
+                  uint16_t maxResolvingAttemptsIn = 7)
         : transmissionIntervals(intervalsIn),
           minInterval(minIntervalIn),
           maxInterval(maxIntervalIn),
