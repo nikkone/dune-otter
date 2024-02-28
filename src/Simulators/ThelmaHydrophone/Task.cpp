@@ -392,7 +392,7 @@ namespace Simulators
                   Delay::waitMsec(m_args.msg_delay);
                 }
               }
-
+              debug("Dispatching TagID %u with original timestamp %u.%u", m_tag_msg.trans_id, m_tag_msg.unix_timestamp, m_tag_msg.millis);
               dispatch(m_tag_msg);
               dispatch(m_tag_position);
             }
