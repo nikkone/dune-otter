@@ -53,7 +53,7 @@ namespace Supervisors
       double fishtag_min_interval;
       //! Only used if the db is not used
       double fishtag_max_interval;
-
+      //! Location of the sqlite dbfile containing information on the tagged fish
       std::string taglistDBpath;
 
       //! 
@@ -97,7 +97,7 @@ namespace Supervisors
         bool m_formation_started;
 
         std::string m_tracked_id;
-
+        //! Database containing tag information
         sqlite3 *m_db;
 
         bool m_db_used;
@@ -240,6 +240,8 @@ namespace Supervisors
           } else {
             m_db_used = true;
           }
+        } else {
+          war("Not using database for tag information");
         }
       }
 
