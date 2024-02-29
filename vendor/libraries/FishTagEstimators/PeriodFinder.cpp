@@ -1,6 +1,8 @@
 #include "PeriodFinder.hpp"
 #include <cmath>
 #include <iostream>
+#include <sstream>
+#include <algorithm>
 namespace FishTagEstimators
 {
   bool PeriodFinder::addInterval(uint16_t currentInterval)
@@ -14,54 +16,6 @@ namespace FishTagEstimators
     {
       return handleUnexpectedInterval(currentInterval);
     }
-    return handleExpectedInterval(currentInterval);
-  }
-
-  bool PeriodFinder::handleUnexpectedInterval(uint16_t currentInterval)
-  {
-    // TODO: Handle invalid where currentInterval > maxInterval: No, multiple ambigous solutions to find_consequtive
-    uint32_t sum = 0;
-    size_t temporaryIntervalPosition = previousIntervalBufferPosition;
-    for (uint16_t i = 0; i < maxResolvingAttempts; ++i)
-    {
-      uint16_t nextNumber = findNextNumber(transmissionIntervals, temporaryIntervalPosition);
-      if (nextNumber == 0)
-      {
-        // Error handling for findNextNumber
-        break;
-      }
-      sum += nextNumber;
-      intervalsBuffer.push_back(nextNumber);
-       //std::cout << "Lost: " << nextNumber << ", Sum: " << sum << std::endl;
-      if (sum >= currentInterval)
-      {
-        break;
-      }
-    }
-    if (sum == currentInterval)
-    {
-      // Match found after lost detections was accounted for
-      previousIntervalBufferPosition = temporaryIntervalPosition;
-      expectedInterval = findNextNumber(transmissionIntervals, temporaryIntervalPosition);
-      if (expectedInterval == 0)
-      {
-        expectedIntervalStatus = IntervalValidity::Invalid;
-        return false;
-      }
-      expectedIntervalStatus = IntervalValidity::Valid;
-      return true;
-    }
-    else
-    {
-      // No match found
-      expectedIntervalStatus = IntervalValidity::Invalid;
-      intervalsBuffer.clear();
-      return false;
-    }
-  }
-
-  bool PeriodFinder::handleExpectedInterval(uint16_t currentInterval)
-  {
     // Start over again if expectedInterval provided, but was not sucessful
     if (expectedIntervalStatus != IntervalValidity::Invalid)
     {
@@ -71,49 +25,145 @@ namespace FishTagEstimators
         resetExpectedInterval();
       }
     }
-
     intervalsBuffer.push_back(currentInterval);
-    std::string currentIntervals = getCurrentIntervalString(intervalsBuffer);
-
-    size_t prevPos = 0;
     
-    uint16_t minFound = maxInterval + 1;
-    uint16_t nextInterval = 0;
-    uint8_t found = findIntervalsInString(currentIntervals, transmissionIntervals, minFound, prevPos);
+    return handleExpectedInterval();
+  }
 
-    if (found != 0)
+  bool PeriodFinder::handleUnexpectedInterval(uint16_t currentInterval)
+  {
+    std::vector<uint16_t>::const_iterator temporaryIntervalPosition;
+    uint32_t sum = 0;
+    temporaryIntervalPosition = previousIntervalBufferPosition;
+    for (uint16_t i = 0; i < maxResolvingAttempts; ++i)
     {
+      ++temporaryIntervalPosition;
+      if(temporaryIntervalPosition == transmissionIntervals.cend()) {
+        temporaryIntervalPosition = transmissionIntervals.cbegin();
+      }
+      uint16_t nextNumber = *temporaryIntervalPosition;
+      sum += nextNumber;
+      intervalsBuffer.push_back(nextNumber);
+      std::cout << "Lost: " << nextNumber << ", Sum: " << sum << std::endl;
+      if (sum >= currentInterval)
+      {
+        break;
+      }
+    }
+
+    
+    if (sum == currentInterval)
+    {
+      // Match found after lost detections was accounted for
+      previousIntervalBufferPosition = temporaryIntervalPosition;
+      expectedInterval = *(++temporaryIntervalPosition);
+      if (expectedInterval == 0)
+      {
+        expectedIntervalStatus = IntervalValidity::Invalid;
+        return false;
+      }
+      expectedIntervalStatus = IntervalValidity::Valid;
+      return true;
+    }
+    int maxSequenceLength = 20;
+    if((expectedIntervalStatus == IntervalValidity::Invalid) && (currentInterval > maxInterval) && (currentInterval < maxSequenceLength*maxInterval)) {
+        
+        std::vector<std::vector<uint16_t>> allSequences;
+        for (int sequenceLength = 3; sequenceLength <= maxSequenceLength; ++sequenceLength) {
+            std::vector<std::vector<uint16_t>> sequences = findAllConsecutiveSequences(transmissionIntervals, currentInterval, sequenceLength);
+
+            if (!sequences.empty()) {
+                allSequences.insert(allSequences.end(), sequences.begin(), sequences.end());
+            }
+        }
+        if(!allSequences.empty()) {
+          if (allSequences.size() == 1) {
+            std::cout << "Unique solution!" << std::endl;
+            resetExpectedInterval();
+            for(auto it : *(allSequences.begin())) {
+              intervalsBuffer.push_back(it);
+            }
+            return handleExpectedInterval();
+          } else {
+            // TODO: Choose minval, but set lowest estimate state
+            std::cout << "Multiple solutions!" << std::endl;
+          }
+        }
+
+    }
+
+    // No match found
+    expectedIntervalStatus = IntervalValidity::Invalid;
+    intervalsBuffer.clear();
+    return false;
+  }
+
+  bool PeriodFinder::handleExpectedInterval()
+  {
+    uint16_t nextInterval = 0;
+    auto sequenceMatches = findAllSequenceMatches();
+    
+    if (!sequenceMatches.empty())
+    {
+      //std::cout << "nextInterval not empty" << std::endl;
       // Complete of partial Sucess: Found solution in unmodified string
-      previousIntervalBufferPosition = prevPos;
-      nextInterval = findNextNumber(transmissionIntervals, prevPos);
+      previousIntervalBufferPosition = sequenceMatches[0]+ intervalsBuffer.size() -1;
+      size_t index = std::distance(transmissionIntervals.begin(), previousIntervalBufferPosition);
+      //std::cout << "Size: " << transmissionIntervals.size() << ", Next: " << index << std::endl; 
+      if(index >= transmissionIntervals.size()) {
+        previousIntervalBufferPosition = transmissionIntervals.cbegin()+ index-transmissionIntervals.size();
+        nextInterval = transmissionIntervals[index-transmissionIntervals.size()+1];
+      } else if ((previousIntervalBufferPosition+1) == transmissionIntervals.cend()) {
+        nextInterval = transmissionIntervals[0];
+      } else {
+        nextInterval = *(previousIntervalBufferPosition+1);
+      }
+
     }
     else
     {
-      // Nothing found in unmodified string, try rotating it to check end conditions
-      std::string shiftedTransmissionIntervals = shiftString(transmissionIntervals);
-      prevPos = 0;
-      found = findIntervalsInString(currentIntervals, shiftedTransmissionIntervals, minFound, prevPos);
-      if (found == 0)
-      {
-        // Failed: currentIntervals could not be found in transmissionIntervals
-        intervalsBuffer.clear();
-        resetExpectedInterval();
-        return false;
-      }
-      // Sucess: Found solution in shifted transmissionIntervals string
-      size_t mid = transmissionIntervals.length() / 2;
-      size_t closestCommaIndex = transmissionIntervals.find_last_of(',', mid);
-      previousIntervalBufferPosition = (prevPos+shiftedTransmissionIntervals.substr(closestCommaIndex).length())%transmissionIntervals.length();
-      std::cout << "Found in reversed! Pos: " << previousIntervalBufferPosition << std::endl;
-      //std::cout << transmissionIntervals.substr(previousIntervalBufferPosition) << std::endl;
-      nextInterval = findNextNumber(shiftedTransmissionIntervals, prevPos);
+      std::cout << "nextInterval empty" << std::endl;
+      intervalsBuffer.clear();
+      resetExpectedInterval();
+      return false;
     }
 
-    if (found > 1)
+    if (sequenceMatches.size() > 1)
     {
+      //std::cout << "Multiple options" << std::endl;
       // Partial sucess: provide the LowestEstimate (safe time to move for vehicles)
-      expectedInterval = minFound;
+      // Find the minimum next value
+      std::vector<uint16_t>::const_iterator minIt = transmissionIntervals.cbegin();
+      auto minElement = std::numeric_limits<uint16_t>::max(); // Initialize with max value
+      for (auto sequence = sequenceMatches.begin();sequence != sequenceMatches.end();sequence++) {
+          // Increment the iterator if it's not at the end
+          std::vector<uint16_t>::const_iterator innterIt;
+          if (sequence != sequenceMatches.end()) {
+            innterIt = ++(*sequence);
+          } else {
+            innterIt = transmissionIntervals.begin();
+          }
+
+          // Compare the value pointed to by the iterator with the current minimum
+          if (sequence != sequenceMatches.end() && *innterIt < minElement) {
+              minElement = *innterIt;
+              minIt = innterIt;
+          }
+      }
+
+      expectedInterval = minElement;
       expectedIntervalStatus = IntervalValidity::LowestEstimate;
+      if(minIt+1 == transmissionIntervals.cend()) {
+        minIt = transmissionIntervals.cbegin();
+      }
+      previousIntervalBufferPosition = minIt -1;
+      size_t index = std::distance(transmissionIntervals.begin(), previousIntervalBufferPosition);
+      //std::cout << "Size: " << transmissionIntervals.size() << ", Next: " << index << std::endl; 
+      if(index >= transmissionIntervals.size()) {
+        previousIntervalBufferPosition = transmissionIntervals.cbegin()+ index-transmissionIntervals.size();
+        nextInterval = transmissionIntervals[index-transmissionIntervals.size()+1];
+      }
+      
       return false;
     }
       
@@ -127,113 +177,62 @@ namespace FishTagEstimators
     return false;
   }
 
-  std::string PeriodFinder::getCurrentIntervalString(const boost::circular_buffer<uint16_t> &currentIntervals) const{
-    if (currentIntervals.empty()) {
-        return "";
-    }
-
-    // Calculate the total size required for the string to avoid reallocations
-    size_t totalSize = currentIntervals.size() * 4 - 1; // Max size string (three digits+one comma)*elements minus last comma removal 
-
-    std::string currentIntervalsString;
-    currentIntervalsString.reserve(totalSize); // Pre-allocate memory for the string
-
-    for(const auto inter : currentIntervals) {
-        currentIntervalsString += std::to_string(inter) + ",";
-    }
-    currentIntervalsString.pop_back(); // To remove last comma
-    return currentIntervalsString;
-  }
-
-/* ChatGPT
-Write cpp code takes a std::string with comma separated numbers shifts it according to the closest comma to center so that what comes after this point is now at the beginning, and what comes before this point is now at the end
-*/
-    std::string PeriodFinder::shiftString(const std::string& input) const {
-        // Find the closest comma to the center
-        size_t mid = input.length() / 2;
-        size_t closestCommaIndex = input.find_last_of(',', mid);
-
-        // If no comma is found before the midpoint, consider the midpoint itself
-        if (closestCommaIndex == std::string::npos)
-            closestCommaIndex = mid;
-
-        // Create a new string with the portion after the closest comma followed by the portion before it
-        std::string shiftedString = input.substr(closestCommaIndex + 1) + "," + 
-                                    input.substr(0, closestCommaIndex);
-
-        return shiftedString;
-    }
-
-/* ChatGPT
-In cpp, I have a large std::string that contains comma separated numbers. I want to create a function that is able to get a position in the large string and find the next number. If the end is reached, then the next number from the start should be returned
-*/
-  //! Created with ChatGPT, but needed additional work for end handeling
-  uint16_t PeriodFinder::findNextNumber(const std::string& input, size_t& position) {
-      size_t startPos = position;
-      size_t length = input.length();
-      
-      // Skip any non-digit characters
-      while (startPos < length && !isdigit(input[startPos])) {
-          startPos++;
-      }
-      if (startPos >= length) {
-        startPos = 0;
-        while (startPos < length && !isdigit(input[startPos])) {
-            startPos++;
-        }
-      }
-
-      
-      size_t endPos = startPos;
-      // Find the end of the number
-      while (endPos < length && isdigit(input[endPos])) {
-          endPos++;
-      }
-      
-      // If the end of the string is reached, wrap around
-      if (endPos > length) {
-          endPos = 0;
-          while (endPos < position && isdigit(input[endPos])) {
-              endPos++;
+  std::vector<uint16_t> PeriodFinder::stringToVector(const std::string& input) {
+      std::vector<uint16_t> result;
+      std::stringstream ss(input);
+      std::string token;
+      while (std::getline(ss, token, ',')) {
+          try {
+              uint16_t value = stringToUint16(token);
+              result.push_back(value);
+          } catch (const std::exception& e) {
+              std::cerr << "Error: " << e.what() << std::endl;
           }
       }
-      
-      // Extract the number
-      uint16_t result =0;
-      try{
-        result = stringToUint16(input.substr(startPos, endPos - startPos));
-      } catch(...) {
-        return 0;
-      }
-      
-      // Update position
-      position = endPos;
-      
       return result;
   }
-  
+  // Function to find all occurrences of the sequence
+  std::vector<std::vector<uint16_t>::const_iterator> PeriodFinder::findAllSequenceMatches() {
+
+      std::vector<std::vector<uint16_t>::const_iterator> matches;
+
+      // Iterate over intervalsBuffer
+      for (auto bufferIter = transmissionIntervals.begin(); bufferIter != transmissionIntervals.end(); ++bufferIter) {
+          auto sequenceIter = intervalsBuffer.begin();
+
+          // Check if the current element matches the first element of the sequence
+          if (*bufferIter == *sequenceIter) {
+              auto tempBufferIter = bufferIter;
+              auto found = true;
+
+              // Check if the subsequent elements match the rest of the sequence
+              for (++sequenceIter, ++tempBufferIter; sequenceIter != intervalsBuffer.end(); ++sequenceIter, ++tempBufferIter) {
+                  // If buffer wraps around, reset to the beginning
+                  if (tempBufferIter == transmissionIntervals.end()) {
+                      tempBufferIter = transmissionIntervals.begin();
+                  }
+
+                  if (*tempBufferIter != *sequenceIter) {
+                      found = false;
+                      break;
+                  }
+              }
+
+              // If the sequence is found, store the iterators to the match
+              if (found) {
+                  matches.push_back(std::vector<uint16_t>::const_iterator(bufferIter));
+              }
+          }
+      }
+
+      return matches;
+  }
+
   void PeriodFinder::resetExpectedInterval() {
     expectedIntervalStatus = IntervalValidity::Invalid;
     expectedInterval = minInterval;
   }
-
-  // Function to find occurrences of a substring within a string
-  uint8_t PeriodFinder::findIntervalsInString(const std::string& substring, const std::string& str, uint16_t& minFound, size_t& prevPos)
-  { 
-    uint8_t found = 0;
-    size_t pos = 0;
-    while ((pos = str.find(substring, pos)) != std::string::npos)
-    {
-
-      prevPos = (pos + substring.length()) % str.length();
-      pos += substring.length();
-      found++;
-      size_t tempPos = prevPos;
-      minFound = std::min(minFound, findNextNumber(str, tempPos));
-    }
-    return found;
-  }
-
+  
   uint16_t PeriodFinder::stringToUint16(const std::string& str) const {
       try {
           unsigned long value = std::stoul(str);
@@ -249,4 +248,44 @@ In cpp, I have a large std::string that contains comma separated numbers. I want
       }
   }
 
+  std::vector<std::vector<uint16_t>> PeriodFinder::findAllConsecutiveSequences(const std::vector<uint16_t> &numbers, uint16_t target_sum, uint16_t sequenceLength)
+  {
+    std::vector<std::vector<uint16_t>> result;
+    uint16_t current_sum = 0;
+
+    // Calculate the initial sum of the first 'sequenceLength' elements
+    for (uint16_t i = 0; i < sequenceLength; ++i)
+    {
+      current_sum += numbers[i];
+    }
+
+    // Check if the initial sequence sums up to the target
+    if (current_sum == target_sum)
+    {
+      std::vector<uint16_t> sequence;
+      for (uint16_t i = 0; i < sequenceLength; ++i)
+      {
+        sequence.push_back(numbers[i]);
+      }
+      result.push_back(sequence);
+    }
+
+    // Slide the window to find the consecutive sequences
+    for (size_t i = sequenceLength; i < numbers.size() + sequenceLength; ++i)
+    {
+      // Slide the window by removing the first element and adding the next element
+      current_sum = current_sum - numbers[(i - sequenceLength) % numbers.size()] + numbers[i % numbers.size()];
+      // Check if the current sequence sums up to the target
+      if (current_sum == target_sum)
+      {
+        std::vector<uint16_t> sequence;
+        for (uint16_t j = (i - sequenceLength + 1) % numbers.size(); j <= i % numbers.size(); ++j)
+        {
+          sequence.push_back(numbers[j]);
+        }
+        result.push_back(sequence);
+      }
+    }
+    return result;
+  }
 }

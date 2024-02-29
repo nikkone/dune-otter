@@ -23,8 +23,14 @@
 #include <DUNE/DUNE.hpp>
 #include <FishTagEstimators/DUNETagBuffer.hpp>
 #include <memory>
-#include <FishTagEstimators/PeriodFinder.hpp>
-#define LOGFTOILE 1
+#define STRING 1
+
+#if STRING
+  #include <FishTagEstimators/PeriodFinderString.hpp>
+#else
+  #include <FishTagEstimators/PeriodFinder.hpp>
+#endif
+
 namespace SourceEstimators
 {
   //! Task that finds the transmission period of an IMC::TBRFishTag based on the known series of intervals.
@@ -33,7 +39,12 @@ namespace SourceEstimators
   namespace PeriodFinder
   {
     using DUNE_NAMESPACES;
-    const std::string intervals = "67,84,66,80,58,49,53,80,57,36,52,41,55,89,88,55,77,69,41,85,37,79,53,44,89,64,88,90,45,66,65,43,59,82,46,44,32,84,34,46,87,73,74,66,31,56,47,83,35,68,67,31,86,73,30,47,47,49,74,61,71,49,71,41,41,83,34,49,84,75,46,30,80,55,49,65,36,89,88,53,79,47,37,35,31,68,70,87,40,54,79,49,70,35,62,35,83,67,89,34";
+    using namespace FishTagEstimators;
+
+    // Tag64
+    //const std::string intervals = "67,84,66,80,58,49,53,80,57,36,52,41,55,89,88,55,77,69,41,85,37,79,53,44,89,64,88,90,45,66,65,43,59,82,46,44,32,84,34,46,87,73,74,66,31,56,47,83,35,68,67,31,86,73,30,47,47,49,74,61,71,49,71,41,41,83,34,49,84,75,46,30,80,55,49,65,36,89,88,53,79,47,37,35,31,68,70,87,40,54,79,49,70,35,62,35,83,67,89,34";
+    //Tag73
+    const std::string intervals = "44,80,39,35,56,72,72,51,73,53,60,49,59,59,75,63,43,90,89,81,65,85,48,52,66,48,41,36,77,49,77,49,49,52,35,41,41,75,44,30,79,42,84,59,58,31,75,63,72,37,39,81,80,89,50,44,60,30,35,37,37,87,86,74,39,74,73,30,87,89,69,39,33,60,68,83,87,68,48,51,39,46,61,40,89,56,35,59,88,75,75,71,67,71,64,58,51,39,56,56";
     struct Arguments
     {
       //! Time to wait in while. In practice, this controls how regular the filter timing is
@@ -59,7 +70,13 @@ namespace SourceEstimators
       //! Timer responsible for running filter timestep
       Time::Counter<float> m_filter_timer;
       //! Used to find bugs
-      std::vector<std::unique_ptr<FishTagEstimators::PeriodFinder>> m_periodFinders; 
+#if STRING
+  std::vector<std::unique_ptr<FishTagEstimators::PeriodFinderString>> m_periodFinders; 
+#else
+  std::vector<std::unique_ptr<FishTagEstimators::PeriodFinder>> m_periodFinders; 
+#endif
+
+      
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx)
       {
@@ -130,13 +147,26 @@ namespace SourceEstimators
         if(tagBuffers[msg->trans_id]->getNoOfMostRecentdetections() > 1) {
           return;
         }
-
+        if(prevTimestamp_ms == 0) {
+          return;// First timestamp, so no interval available
+        }
         uint16_t currentInterval = (uint16_t)std::round((float)(tagBuffers[msg->trans_id]->getLatestTimestamp() - prevTimestamp_ms)/1000);
-
+        static int finders = 0;
+        finders++;
         if(m_periodFinders.size() < 1000) {
-        std::unique_ptr<FishTagEstimators::PeriodFinder> finder1 = std::make_unique<FishTagEstimators::PeriodFinder>(intervals, 30, 90, 10);
+        //if(finders > 0 && finders < 7) {
+
+#if STRING
+  std::unique_ptr<FishTagEstimators::PeriodFinderString> finder1 = std::make_unique<FishTagEstimators::PeriodFinderString>(intervals, 30, 90, 10, 700);
+#else
+  std::unique_ptr<FishTagEstimators::PeriodFinder> finder1 = std::make_unique<FishTagEstimators::PeriodFinder>(intervals, 30, 90, 10, 700); 
+#endif
+
+
+        
         m_periodFinders.push_back(std::move(finder1));
         }
+        
         int i = 0;
         int sucesses = 0;
         static int totalSucesses = 0;
@@ -147,17 +177,29 @@ namespace SourceEstimators
           it->addInterval(currentInterval);
 
           switch(it->checkValidity()) {
-            case FishTagEstimators::PeriodFinder::IntervalValidity::Invalid:
-                //war("PeriodEst #%d: Expected: %d, Got: %d, Next: %d. Invalid", i, expected, currentInterval, it->getExpectedInterval());
-                war("Failed: Earliest expected next transmission: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp() + it->getExpectedInterval()*1000);
+#if STRING
+  case FishTagEstimators::PeriodFinderString::IntervalValidity::Invalid:
+#else
+  case FishTagEstimators::PeriodFinder::IntervalValidity::Invalid:
+#endif
+                war("PeriodEst #%d: Expected: %d, Got: %d, Next: %d. Invalid", i, expected, currentInterval, it->getExpectedInterval());
+                //war("Failed: Earliest expected next transmission: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp() + it->getExpectedInterval()*1000);
                 ++misses;
                 break;
-            case FishTagEstimators::PeriodFinder::IntervalValidity::Valid:
+#if STRING
+  case FishTagEstimators::PeriodFinderString::IntervalValidity::Valid:
+#else
+  case FishTagEstimators::PeriodFinder::IntervalValidity::Valid:
+#endif
                 //inf("PeriodEst #%d: Expected: %d, Got: %d, Next: %d", i, expected, currentInterval, it->getExpectedInterval());
                 //inf("Expected next transmission: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp() + it->getExpectedInterval()*1000);
                 ++sucesses;
                 break;
-            case FishTagEstimators::PeriodFinder::IntervalValidity::LowestEstimate:
+#if STRING
+  case FishTagEstimators::PeriodFinderString::IntervalValidity::LowestEstimate:
+#else
+  case FishTagEstimators::PeriodFinder::IntervalValidity::LowestEstimate:
+#endif
                 war("PeriodEst #%d: Expected: %d, Got: %d, Guesstimate: %d", i, expected, currentInterval, it->getExpectedInterval());
                 //war("Ambigous: Earliest expected next transmission: %ld", tagBuffers[msg->trans_id]->getLatestTimestamp() + it->getExpectedInterval()*1000);
                 ++misses;
@@ -171,6 +213,7 @@ namespace SourceEstimators
         totalSucesses += sucesses;
         totalMisses += misses;
 
+        //
         inf("Sucesses: %d, totalSucesses: %d, Misses: %d, totalMisses: %d", sucesses, totalSucesses, misses, totalMisses);
       }
 
