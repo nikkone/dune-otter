@@ -75,6 +75,8 @@ namespace Control
         std::string estimatorPrefix;
         //!
         bool dynamicSpeed;
+        //!
+        double safePeriodPadding;
       };
 
       struct Task : public DUNE::Tasks::Task
@@ -92,6 +94,7 @@ namespace Control
         IMC::RemoteSensorInfo m_last_rs_msg;
         //!
         IMC::otterFormation m_last_of_msg;
+        uint32_t m_targetId;
         //!
         DUNE::IMC::DesiredSpeed m_dsp;
         //! The rotation state of the entire formation
@@ -133,6 +136,7 @@ namespace Control
 
         Task(const std::string &name, Tasks::Context &ctx) : 
         DUNE::Tasks::Task(name, ctx),
+        m_targetId(0),
         m_formation_rotate_rad(0.0),
         m_formation_rotation_step_rad(M_PI/2), // 90deg
         lastTagCount(0),
@@ -157,7 +161,6 @@ namespace Control
               .maximumValue("6.284") // ~2PI
               .description("Period between sync messages");
 
-
           param("Use anti-collision strategies", m_args.useCollisionMitigation)
               .defaultValue("false")
               .description("Activate or deactivate the collision mitigation strategies");
@@ -180,7 +183,7 @@ namespace Control
 
           param("Taglist DB Path", m_args.taglistDBpath)
           .defaultValue("")
-          .description("Activate sending.");
+          .description("Path for DB with taglist.");
 
           param("Participants", m_args.participants)
               .defaultValue("ntnu-otter-01,ntnu-otter-02,ntnu-otter-03")
@@ -189,6 +192,12 @@ namespace Control
           param("Estimator Prefix", m_args.estimatorPrefix)
           .defaultValue("MultiReceiverXKF")
           .description("Estimator Prefix");
+
+          param("Safe Period Padding", m_args.safePeriodPadding)
+          .units(Units::Second)
+          .defaultValue("5.0")
+          .minimumValue("0.0")
+          .description("Period between sync messages");
 
 
           bind<IMC::Abort>(this);
@@ -346,6 +355,7 @@ namespace Control
           switch(msg->msg_type) {
             case IMC::otterFormation::MessageTypeEnum::T_start:
               m_last_of_msg = *msg;
+              m_targetId = std::stoul(msg->target.substr(m_args.estimatorPrefix.length()));
               m_formation_radius = msg->maxradius;
               m_dsp.value = msg->maxspeed;
               m_dsp.speed_units = msg->speed_units;
@@ -435,6 +445,7 @@ namespace Control
               inf("Avg SNR: %f", m_avg_snr);
             }
           }
+          
           // The rest of this function is part of the period estimation/lookup
           if(tagBuffers[msg->trans_id]->getNoOfMostRecentdetections() > 1) {
             return;
@@ -459,6 +470,7 @@ namespace Control
           uint16_t currentInterval = (uint16_t)std::round((float)(tagBuffers[msg->trans_id]->getLatestTimestamp() - prevTimestamp_ms)/1000);
         static int totalSucesses = 0;
         static int totalMisses = 0;
+
           uint16_t expected = m_periodFinders[msg->trans_id]->getExpectedInterval();
           m_periodFinders[msg->trans_id]->addInterval(currentInterval);
 
@@ -485,6 +497,11 @@ namespace Control
 
           inf("totalSucesses: %d, totalMisses: %d", totalSucesses, totalMisses);
 
+          // Update Timer
+          if(msg->trans_id == m_targetId) {
+            m_last_tag_timer.setTop(m_periodFinders[msg->trans_id]->getExpectedInterval());
+          }
+          
         }
 
         //! Checks if a tag is in the taglist DB and fills relevant fields in the otterformation message
@@ -1065,12 +1082,17 @@ namespace Control
             std::get<2>(participant->second).lon = std::get<1>(participant->second);
           }
           // else Check if within safe "unlimited" actuation period
-          if(m_last_tag_timer.getElapsed() < m_minTagInterval-5) {
+          double interval = m_minTagInterval;
+          if(m_periodFinders.find(m_targetId) != m_periodFinders.end()) {
+            interval = m_periodFinders[m_targetId]->getExpectedInterval();
+          }
+          interval -= m_args.safePeriodPadding; // TODO: parameter
+          if(m_last_tag_timer.getElapsed() < interval) {
             // find distance between announce and desired pos
             // calculate speed needed to reach there within tag deduced interval (m_minTagInterval)
             double desiredSpeed = DUNE::Coordinates::WGS84::distance((double)std::get<0>(participant->second), std::get<1>(participant->second), 0.0, // Pos from Announce
                                                            std::get<2>(participant->second).lat, std::get<2>(participant->second).lon, 0.0)/ // Desired pos for ref
-                                                           (m_minTagInterval-5-m_last_tag_timer.getElapsed());
+                                                           (interval-m_last_tag_timer.getElapsed());
             // Trim desiredSpeed. If close to target, FollowRef will deactivate anyways, so set lower end to minspeed to allow Hoover to move back to center if drifting.
             desiredSpeed = DUNE::Math::trimValue(desiredSpeed, m_last_of_msg.minspeed, m_last_of_msg.maxspeed);
             std::get<2>(participant->second).speed.get()->value = desiredSpeed;
@@ -1079,7 +1101,7 @@ namespace Control
             std::get<2>(participant->second).speed.get()->value = m_last_of_msg.minspeed;
           }
           spew("Vehicle %d: %f m/s", participant->first,std::get<2>(participant->second).speed.get()->value);
-          spew("Elapsed: %f, Remaining: %f, Top: %f, CompareVal: %f", m_last_tag_timer.getElapsed(), m_last_tag_timer.getRemaining(), m_last_tag_timer.getTop(), m_minTagInterval-5);
+          spew("Elapsed: %f, Remaining: %f, Top: %f, CompareVal: %f", m_last_tag_timer.getElapsed(), m_last_tag_timer.getRemaining(), m_last_tag_timer.getTop(), interval);
         }
 
 
