@@ -14,8 +14,7 @@ namespace FishTagEstimators
         Valid = 1,
         LowestEstimate = 2
       };
-      //! String containing comma separated transmission intervals
-      //const std::string transmissionIntervals;
+      //! Vector containing comma separated transmission intervals
       const std::vector<uint16_t> transmissionIntervals;
       //! The minimum transmitting interval for the acoustic tranmsitter
       const uint16_t minInterval;
@@ -82,6 +81,10 @@ namespace FishTagEstimators
       //! Resets the variables associated with the expected interval
       void resetExpectedInterval();
 
+      /// @brief Creates a vector from a string with comma separated positive numbers
+      /// @param input String of positive comma separated whole numbers
+      /// @return A vector of positive numbers extracted from the string
+      std::vector<uint16_t> stringToVector(const std::string& input);
     private:
       //! Buffer that stores most recent valid tag intervals used for matching
       boost::circular_buffer<uint16_t> intervalsBuffer;
@@ -103,10 +106,21 @@ namespace FishTagEstimators
       //! @return True if the next interval is definitively known, false if invalid or guessed.
       bool handleUnexpectedInterval(uint16_t currentInterval);
 
+      /// @brief Transform a string of numbers to uint16_t
+      /// @param str String with numbers
+      /// @return The uint16_t version of the string
       uint16_t stringToUint16(const std::string& str) const;
-      std::vector<uint16_t> stringToVector(const std::string& input);
+
+      /// @brief Searches the class intervals for the sequence in the intervalsBuffer
+      /// @return Iterators to the sequence matches, or empty vector
       std::vector<std::vector<uint16_t>::const_iterator> findAllSequenceMatches();
-      //! AI coded
+
+      /// @brief Function that tries to find a sequence of a given length and sum within a vector of numbers.
+      /// AI coded
+      /// @param numbers A vector of numbers
+      /// @param target_sum The target sum of the sequence
+      /// @param sequence_length The length of the target sequence
+      /// @return A vector of sequences stored as vectors
       std::vector<std::vector<uint16_t>> findAllConsecutiveSequences(const std::vector<uint16_t>& numbers, uint16_t target_sum, uint16_t sequence_length);
     };
 }
