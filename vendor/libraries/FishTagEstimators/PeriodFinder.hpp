@@ -69,6 +69,9 @@ namespace FishTagEstimators
       //! Returns the most recent expected interval. Returns the minimum interval if not known
       uint16_t getExpectedInterval() const
       {
+        if(expectedInterval < minInterval) {
+          return minInterval;
+        }
         return expectedInterval;
       }
 
