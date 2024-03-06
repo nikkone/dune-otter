@@ -499,8 +499,12 @@ namespace Maneuver
 
           if(!at_xy_target) {
             bool unchangedSpeed = sameSpeed(ref, &m_last_ref);
+            bool unchangedRadius = true;
+            if(std::fabs(ref->radius) != m_last_ref.radius) {
+              unchangedRadius = false;
+            }
             still_same_reference = still_same_reference && unchangedSpeed;
-            if (!unchangedSpeed && m_path_sent) {
+            if ((!unchangedSpeed || !unchangedRadius) && m_path_sent) {
               IMC::DesiredSpeed desSpeed;
               desSpeed.value = desired_path.speed;
               desSpeed.speed_units = desired_path.speed_units;
