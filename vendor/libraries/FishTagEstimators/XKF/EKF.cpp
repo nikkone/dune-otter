@@ -5,16 +5,22 @@ namespace FishTagEstimators
 {
   namespace XKF
   {
-    /*template <class T>
+    template <class T>
     EKF<T>::EKF() {
-
-    }*/
+      OFP::KalmanFilterDynamic<T, 3>();
+    }
 template <class T>
 bool EKF<T>::constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, const std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, Eigen::Matrix<T, 3, 1> xHatInn)
     {
       if(RDOA.rows() < 2) {
         return false;
       }
+      T posCov = rr_cov;
+      /*
+      if(RDOA.rows() == 1) {
+        posCov = rr_cov*0.1;
+      }
+      */
       
       // Resize matrices to maximum probable
       OFP::KalmanFilterDynamic<T, 3>::C.resize(RDOA.rows()+1,OFP::KalmanFilterDynamic<T, 3>::nx); // Eq (19) Praveen
@@ -65,8 +71,8 @@ bool EKF<T>::constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T, E
 
       // Compute R matrix
       OFP::KalmanFilterDynamic<T, 3>::R = OFP::KalmanFilterDynamic<T, 3>::R.Zero(used+1, used+1);
-      OFP::KalmanFilterDynamic<T, 3>::R.topLeftCorner(used,used) << Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>::Constant(used,used, rr_cov);
-      OFP::KalmanFilterDynamic<T, 3>::R.topLeftCorner(used,used) += Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>::Identity(used,used)*rr_cov;
+      OFP::KalmanFilterDynamic<T, 3>::R.topLeftCorner(used,used) << Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>::Constant(used,used, posCov);
+      OFP::KalmanFilterDynamic<T, 3>::R.topLeftCorner(used,used) += Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>::Identity(used,used)*posCov;
       OFP::KalmanFilterDynamic<T, 3>::R.bottomRightCorner(1, 1) << rz_cov;
 
       // For debugging

@@ -12,7 +12,7 @@ namespace FishTagEstimators
     template <class T>
     class EKF: public OFP::KalmanFilterDynamic<T, 3>{
         public:
-        //EKF();
+        EKF();
           T rr_cov;  // Measurement noise Covariance - range
           T rz_cov;  // Measurement noise Covariance - depth
         bool constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, const std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, Eigen::Matrix<T, 3, 1> xHatInn);
