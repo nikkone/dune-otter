@@ -30,8 +30,13 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 
+// SQLITE3 headers.
+#include <sqlite3/sqlite3.h>
 
+// Cpp std headers
 #include <chrono>
+
+#include <FishTagEstimators/PeriodFinder.hpp>
 namespace Simulators
 {
   //! TODO: Add reading positions from file to have moving tag
@@ -116,8 +121,11 @@ namespace Simulators
       std::string GPS_src_transmitter;
       //! Source Entity to use GPS information from.
       std::string GPS_src_ent_transmitter;
+
+      //! Location of the sqlite dbfile containing information on the tagged fish
+      std::string taglistDBpath;
     };
-    struct Task: public DUNE::Tasks::Periodic
+    struct Task: public DUNE::Tasks::Task
     {
       IMC::RemoteSensorInfo tagPosition;
       IMC::TBRFishTag tag_msg;
@@ -140,15 +148,38 @@ namespace Simulators
       fp64_t m_receiver_lat, m_receiver_lon;
       //! Current Lat and Lon of transmitter.
       fp64_t m_transmitter_lat, m_transmitter_lon;
+
+      //! Storage for the transmission intervals used by the 
+      std::vector<uint16_t> m_intervals;
+      //! Database containing tag information
+      sqlite3 *m_db;
+
+      //! Number of executions thus far.
+      unsigned m_run_count;
+      //! Time of last run.
+      double m_run_time;
+      //! Task frequency (Hz).
+      double m_frequency;
+      //!
+      unsigned m_currentInterval;
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx):
-        DUNE::Tasks::Periodic(name, ctx),
-        m_time_prng(NULL),
-        m_position_prng(NULL),
-        m_depth_prng(NULL)
+        DUNE::Tasks::Task(name, ctx),
+        m_time_prng(nullptr),
+        m_position_prng(nullptr),
+        m_depth_prng(nullptr),
+        m_db(nullptr),
+        m_run_count(0),
+        m_run_time(0),
+        m_currentInterval(0)
       {
+        param(DTR_RT("Execution Frequency"), m_frequency)
+        .units(Units::Hertz)
+        .defaultValue("1.0")
+        .description(DTR("Frequency at which task is executed when not using intervals"));
+
         param("Receiver Serial", m_args.serial_no)
         .defaultValue("47");
 
@@ -159,7 +190,7 @@ namespace Simulators
         .defaultValue("67");
 
         param("Transmitter ID", m_args.trans_id)
-        .defaultValue("40");
+        .defaultValue("64");
 
         param("Receiver Memory Location", m_args.recv_mem_addr)
         .defaultValue("1001");
@@ -287,6 +318,11 @@ namespace Simulators
         .description("Using a linear model ax+b=SNR, this is the 'b' coefficient ")
         .defaultValue("50");
 
+        param("Taglist DB Path", m_args.taglistDBpath)
+        .defaultValue("")
+        .description("Path for DB with taglist.");
+
+
         bind<IMC::GpsFix>(this);
       }
 
@@ -340,6 +376,17 @@ namespace Simulators
                                          m_args.position_prng_seed);
         m_depth_prng = Random::Factory::create(m_args.depth_prng_type,
                                          m_args.depth_prng_seed);
+        if(!m_args.taglistDBpath.empty()) {
+          if(sqlite3_open_v2(m_args.taglistDBpath.c_str(), &m_db,SQLITE_OPEN_READONLY,0) != SQLITE_OK){
+            err("Can't open database: %s\n", sqlite3_errmsg(m_db));
+            sqlite3_close(m_db);
+          } else {
+            debug("Taglist opened sucess!");
+          }
+        } else {
+        war("Not using database for tag information");
+        }
+
       }
 
       //! Initialize resources.
@@ -348,6 +395,16 @@ namespace Simulators
       {
         //IMC::TBRFishTag::TransmitProtocolEnum trans_protocol = IMC::TBRFishTag::TBR_S256;
         tag_msg.trans_protocol = IMC::TBRFishTag::TBR_S256;
+        if(!m_args.taglistDBpath.empty()) {
+          uint16_t minTagInterval = 0;
+          uint16_t maxTagInterval = 0;
+          std::string intervals;
+          getTagInfoFromDB(m_args.trans_id, minTagInterval, maxTagInterval, intervals);
+          FishTagEstimators::PeriodFinder pf("",30,90); 
+          m_intervals = pf.stringToVector(intervals);
+          m_currentInterval = 0;
+          spew("Got intervals %s", intervals.c_str());
+        }
       }
 
       //! Release resources.
@@ -357,6 +414,7 @@ namespace Simulators
         Memory::clear(m_time_prng);
         Memory::clear(m_position_prng);
         Memory::clear(m_depth_prng);
+        sqlite3_close(m_db);
       }
 
       void
@@ -382,6 +440,75 @@ namespace Simulators
           m_transmitter_lon=msg->lon;
         }
       }
+
+      //! Checks if a tag is in the taglist DB and fills relevant fields in the otterformation message
+      bool getTagInfoFromDB(const uint32_t transId, uint16_t& minTagInterval, uint16_t& maxTagInterval, std::string& transmissionIntervals) {
+        std::string query = "select minInterval, maxInterval, tranmsissionIntervals from taglist where ID=" + std::to_string(transId);
+        
+        sqlite3_stmt* db_handle = nullptr;
+
+        if (sqlite3_prepare_v2(m_db, query.c_str(), query.length(), &db_handle, 0) == SQLITE_OK) {
+          if(sqlite3_step(db_handle) == SQLITE_ROW) {
+            minTagInterval = sqlite3_column_int(db_handle, 0);
+            maxTagInterval = sqlite3_column_int(db_handle, 1);
+            try{
+              transmissionIntervals = std::string(reinterpret_cast<const char*>(sqlite3_column_text(db_handle, 2)));
+            } catch (...) {
+              sqlite3_finalize(db_handle);
+              return false;
+            }
+            sqlite3_finalize(db_handle);
+            return true;
+          }
+        }
+        sqlite3_finalize(db_handle);
+        return false;
+      }
+
+    void
+    onMain(void)
+    {
+      // Start actual work
+        double now = Time::Clock::get();
+        double delay = (1 / m_frequency);
+        if(m_intervals.size() > 0) {
+          delay = m_intervals.at(m_currentInterval);
+        }
+        double next_inv = now + delay;
+        m_run_time = now;
+
+        //task();// Causes problems running so early!
+        //++m_run_count;
+        while (!stopping())
+        {
+          if(m_intervals.size() > 0) {
+            delay = m_intervals.at(++m_currentInterval);
+          } else {
+            delay = (1.0 / m_frequency);
+          }
+
+          if (next_inv > now)
+            Time::Delay::wait(next_inv - now);
+
+          next_inv += delay;
+          now = Time::Clock::get();
+          m_run_time = now;
+
+          // Perform job.
+          consumeMessages();
+          if (!stopping())
+          {
+            task();
+            ++m_run_count;
+          }
+
+          now = Time::Clock::get();
+        }
+      //}
+    }
+
+
+
       //! Main loop.
       void
       task(void)
