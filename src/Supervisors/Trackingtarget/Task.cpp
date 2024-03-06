@@ -124,9 +124,9 @@ namespace Supervisors
             .minimumValue("0.0")
             .description("Period after which the tracker considers a fish tag lost");
 
-        param("Taglist Path", m_args.taglistDBpath)
+        param("Taglist DB Path", m_args.taglistDBpath)
         .defaultValue("")
-        .description("Activate sending.");
+        .description("Path for DB with taglist.");
 
         param("Position Filter Prefix", m_args.positionFilterPrefix)
         .defaultValue("MultiReceiverXKF")
@@ -286,8 +286,14 @@ namespace Supervisors
               size_t pos_end = msg->id.find(m_args.positionFilterPrefix);
               if(pos_end != std::string::npos) {
                 m_of_msg.custom.clear();
+
+                uint16_t minTagInterval = 0;
+                uint16_t maxTagInterval = 0;
+                std::string intervals = "";
                 try {
-                  if(tagInDB(std::stoi(msg->id.substr(pos_end+m_args.positionFilterPrefix.length())), m_of_msg)) {
+                  //if(tagInDB(std::stoi(msg->id.substr(pos_end+m_args.positionFilterPrefix.length())), m_of_msg)) {
+                  if(getTagInfoFromDB(std::stoi(msg->id.substr(pos_end+m_args.positionFilterPrefix.length())),minTagInterval,maxTagInterval,intervals)) {
+                    m_of_msg.custom = generateCustomParameters(m_args.formation_rotation_step,minTagInterval, maxTagInterval, m_args.ref_timeout, m_args.ref_send_interval);
                     spew("Found tag");
                     if(stopPrevious) {
                       sendFormationStop();
@@ -319,27 +325,23 @@ namespace Supervisors
       }
 
       //! Checks if a tag is in the taglist DB and fills relevant fields in the otterformation message
-      bool tagInDB(unsigned id, IMC::otterFormation &msg) {
-        std::string query = "select t.'duty.sec' from taglist as t where t.'at.id'=" + std::to_string(id);
+      bool getTagInfoFromDB(const uint32_t transId, uint16_t& minTagInterval, uint16_t& maxTagInterval, std::string& transmissionIntervals) {
+        std::string query = "select minInterval, maxInterval, tranmsissionIntervals from taglist where ID=" + std::to_string(transId);
         
         sqlite3_stmt* db_handle = nullptr;
 
         if (sqlite3_prepare_v2(m_db, query.c_str(), query.length(), &db_handle, 0) == SQLITE_OK) {
           if(sqlite3_step(db_handle) == SQLITE_ROW) {
-            std::string dutySec = std::string(reinterpret_cast<const char*>(sqlite3_column_text(db_handle, 0)));
-            unsigned minTagInterval = 0, maxTagInterval = 0;
-            size_t pos_end = dutySec.find('-');
-            if(pos_end != std::string::npos) {
-              try{
-                minTagInterval = std::stoi(dutySec.substr(0, pos_end));
-                maxTagInterval = std::stoi(dutySec.substr(pos_end+1)); // +1 to remove the delimiting '-'
-                msg.custom = generateCustomParameters(m_args.formation_rotation_step,minTagInterval, maxTagInterval, m_args.ref_timeout, m_args.ref_send_interval);
-                sqlite3_finalize(db_handle);
-                return true;
-              } catch (...) {
-                err("Error extracting tag interval from db.");
-              }
+            minTagInterval = sqlite3_column_int(db_handle, 0);
+            maxTagInterval = sqlite3_column_int(db_handle, 1);
+            try{
+              transmissionIntervals = std::string(reinterpret_cast<const char*>(sqlite3_column_text(db_handle, 2)));
+            } catch (...) {
+              sqlite3_finalize(db_handle);
+              return false;
             }
+            sqlite3_finalize(db_handle);
+            return true;
           }
         }
         sqlite3_finalize(db_handle);
@@ -354,7 +356,6 @@ namespace Supervisors
         ";t=" + std::to_string(timeout) +
         ";f=" + std::to_string(FollowRefInterval) +
         ";";
-      
       }
 
 
@@ -364,7 +365,6 @@ namespace Supervisors
       {
         while (!stopping())
         {
-          tagInDB(73, m_of_msg);
           waitForMessages(1.0);
           if(m_formation_started && !m_args.keepFormation && m_last_tag_timer.overflow()) {
             war("Formation stopped due to timeout");
