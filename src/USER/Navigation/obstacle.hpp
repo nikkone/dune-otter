@@ -16,7 +16,7 @@
 /**
  *    \file   obstacle.h
  *    \brief  Declares the obstacle class.
- *    \author Inger Berge Hagen, Giorgio D. K. M. Kufoalor
+ *    \author Inger Berge Hagen, Giorgio D. K. M. Kufoalor, adapted by Melih Akdağ
  */
 
 
@@ -62,9 +62,11 @@ namespace DUNE
 		Eigen::VectorXd u_;
 		Eigen::VectorXd v_;
 
+
 		double psi_;
 		double A_, B_, C_, D_, l, w;
 		double os_x, os_y;
+double rule;
 		
 		private:
 

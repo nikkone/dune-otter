@@ -16,7 +16,7 @@
 /**
  *    \file   sb_mpc.h
  *    \brief  Declares the simulationBasedMpc class.
- *    \author Inger Berge Hagen, Giorgio D. K. M. Kufoalor
+ *    \author Inger Berge Hagen, Giorgio D. K. M. Kufoalor, adapted by Melih Akdağ.
  */
 
 #ifndef DUNE_NAVIGATION_SB_MPC_HPP_INCLUDED_
@@ -63,9 +63,9 @@ namespace DUNE
 	 */
 
 	void create(double T, double DT, double P, double Q, double D_CLOSE, double D_SAFE, double K_COLL, double PHI_AH, double PHI_OT, 
-							double PHI_HO, double PHI_CR, double KAPPA, double K_P, double K_CHI, double K_DP, double K_DCHI_SB, double K_DCHI_P, double K_CHI_SB, double K_CHI_P);
+							double PHI_HO, double PHI_CR, double KAPPA, double K_P, double K_CHI, double K_DP, double K_DCHI, double K_DCHI_SB, double K_DCHI_P);
 	
-	std::tuple<double, double, double> getBestControlOffset(double u_os, double psi_os, double u_d, double psi_d, const std::vector<double>& asv_state, const Math::Matrix& obst_states);
+	std::tuple<double, double, double> getBestControlOffset(double u_os, double psi_os, double u_os_prev, double psi_os_prev, double u_d, double psi_d, const std::vector<double>& asv_state, const Math::Matrix& obst_states);
 
 	/**
 	 * @brief  Returns the simulation time (prediction horizon) [sec].
@@ -133,6 +133,10 @@ namespace DUNE
 	 * @brief Returns the cost of deviating from the nominal heading
 	 */
 	double getKChi();
+/**
+	 * @brief Returns the cost of changing the heading offset.
+	 */
+	double getKdChi();
 	/**
 	 * @brief Returns the cost of changing the heading offset to starboard.
 	 */
@@ -151,17 +155,15 @@ namespace DUNE
 	 */
 	Eigen::VectorXd getPCA();
 
-	 /**
-    * @brief Returns the cost weights
-    */
-	double getKChiSB();
-	double getKChiP();
+	 double D_CLOSE_;
 
 	Eigen::VectorXd Chi_ca_;
 	Eigen::VectorXd P_ca_;
-	double cost_;
-	double psi_os_best;
-	double u_os_best;
+	
+	//double cost_;
+	//double psi_os_best;
+	//double u_os_best;
+
 	// State Variables
 	double Chi_ca_last_;
 	double P_ca_last_;
@@ -176,8 +178,7 @@ namespace DUNE
 	void setDt(double dt);
 
 	void setP(double p);
-	void setP_G(double p_g);
-	void setQ(double q);
+		void setQ(double q);
 	void setDClose(double d_close);
 	void setDSafe(double d_safe);
 	void setKColl(double k_coll);
@@ -189,23 +190,17 @@ namespace DUNE
 	void setKP(double K_P);
 	void setKdP(double K_dP);
 	void setKChi(double K_Chi);
+void setKdChi(double K_dChi);
 	void setKdChiSB(double K_dChi_SB);
 	void setKdChiP(double K_dChi_P);
 	void setChiCA(Eigen::VectorXd Chi_ca);
 	void setPCA(Eigen::VectorXd P_ca);
 
-	void setKChiSB(double K_Chi_SB);
-	void setKChiP(double K_Chi_P);
+		private:
 
-	void setP_ca_last(double value);
-  void setChi_ca_last(double value);
-
-	private:
-
-	double costFunction(double P_ca, double Chi_ca, int k); 
-	double deltaP(double P_ca);
-	double deltaChi(double Chi_ca, double k_dchi_p, double k_dchi_sb); 
-	double sqrChi(double Chi_ca, double k_chi_p, double k_chi_sb);
+	double costFunction(double P_ca, double Chi_ca, double u_os_prev, double psi_os_prev, int k); 
+	double deltaP(double P_ca, double u_os_prev);
+	double deltaChi(double Chi_ca, double psi_os_prev);
 	inline double normalize_angle(double angle); 
 	inline double normalize_angle_360(double angle); 
 	inline double angle_diff(double a,double b); // Computes angle difference
@@ -222,8 +217,7 @@ namespace DUNE
 	// Tuning Parameters
 	double P_;
 	double Q_;
-	double D_CLOSE_;
-	double D_SAFE_;
+		double D_SAFE_;
 	double K_COLL_;
 	double PHI_AH_;
 	double PHI_OT_;
@@ -233,12 +227,10 @@ namespace DUNE
 	double K_P_;
 	double K_CHI_;
 	double K_DP_;
+double K_DCHI_;
 	double K_DCHI_SB_;
 	double K_DCHI_P_;
-	double K_CHI_SB_;
-	double K_CHI_P_;
-	
-	
+		
 	ownship *asv;
 	std::vector<obstacle*> obst_vect;
 
