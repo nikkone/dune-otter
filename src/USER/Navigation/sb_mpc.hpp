@@ -23,7 +23,7 @@
 #define DUNE_NAVIGATION_SB_MPC_HPP_INCLUDED_
 
 // DUNE headers.
-#//include <USER/DUNE.hpp>
+//#include <DUNE/DUNE.hpp>
 #include <USER/Navigation/autonaut.hpp>
 #include <USER/Navigation/obstacle.hpp>
 #include <Eigen/Dense>
@@ -133,7 +133,7 @@ namespace DUNE
 	 * @brief Returns the cost of deviating from the nominal heading
 	 */
 	double getKChi();
-/**
+	/**
 	 * @brief Returns the cost of changing the heading offset.
 	 */
 	double getKdChi();
@@ -155,7 +155,7 @@ namespace DUNE
 	 */
 	Eigen::VectorXd getPCA();
 
-	 double D_CLOSE_;
+	double D_CLOSE_;
 
 	Eigen::VectorXd Chi_ca_;
 	Eigen::VectorXd P_ca_;
@@ -178,7 +178,7 @@ namespace DUNE
 	void setDt(double dt);
 
 	void setP(double p);
-		void setQ(double q);
+	void setQ(double q);
 	void setDClose(double d_close);
 	void setDSafe(double d_safe);
 	void setKColl(double k_coll);
@@ -190,22 +190,22 @@ namespace DUNE
 	void setKP(double K_P);
 	void setKdP(double K_dP);
 	void setKChi(double K_Chi);
-void setKdChi(double K_dChi);
+	void setKdChi(double K_dChi);
 	void setKdChiSB(double K_dChi_SB);
 	void setKdChiP(double K_dChi_P);
 	void setChiCA(Eigen::VectorXd Chi_ca);
 	void setPCA(Eigen::VectorXd P_ca);
 
-		private:
+	private:
 
 	double costFunction(double P_ca, double Chi_ca, double u_os_prev, double psi_os_prev, int k); 
 	double deltaP(double P_ca, double u_os_prev);
-	double deltaChi(double Chi_ca, double psi_os_prev);
+	double deltaChi(double Chi_ca, double psi_os_prev); 
 	inline double normalize_angle(double angle); 
 	inline double normalize_angle_360(double angle); 
 	inline double angle_diff(double a,double b); // Computes angle difference
 	void rot2d(double yaw, Eigen::Vector2d &res);
-
+	
 	double trueBearing(double self_x, double self_y, double ts_x, double ts_y);
 	double relativeBearing(double self_x, double self_y, double self_psi, double ts_x, double ts_y);
 	double colregRule(double self_x, double self_y, double self_cog, double self_sog, double ts_x, double ts_y, double ts_cog, double ts_sog);
@@ -217,7 +217,7 @@ void setKdChi(double K_dChi);
 	// Tuning Parameters
 	double P_;
 	double Q_;
-		double D_SAFE_;
+	double D_SAFE_;
 	double K_COLL_;
 	double PHI_AH_;
 	double PHI_OT_;
@@ -227,10 +227,10 @@ void setKdChi(double K_dChi);
 	double K_P_;
 	double K_CHI_;
 	double K_DP_;
-double K_DCHI_;
+	double K_DCHI_;
 	double K_DCHI_SB_;
 	double K_DCHI_P_;
-		
+	
 	ownship *asv;
 	std::vector<obstacle*> obst_vect;
 

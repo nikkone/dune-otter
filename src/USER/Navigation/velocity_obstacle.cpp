@@ -6,9 +6,6 @@
 
 // Local headers.
 #include <USER/Navigation/velocity_obstacle.hpp>
-#include <USER/Navigation/sb_mpc.hpp>
-#include <USER/Navigation/autonaut.hpp>
-#include <USER/Navigation/obstacle.hpp>
 //#include <DUNE/DUNE.hpp>
 #include <eFLL/Fuzzy.h>
 
@@ -33,7 +30,7 @@ namespace DUNE
     }
 	
 	void
-	velocityObstacle::create(double D_CLOSE, double D_SAFE, double KAPPA, double K_P)
+	velocityObstacle::create(double D_CLOSE, double D_SAFE, double KAPPA, double K_P, int VO_METHOD)
 	{
 		D_CLOSE_ = D_CLOSE;
 		D_SAFE_ = D_SAFE;
@@ -46,6 +43,8 @@ namespace DUNE
 
 		P_ca_.resize(4);
 		P_ca_ << 0.0, 0.25, 0.5, 1.0;
+
+		vo_method = VO_METHOD; 	// VO=1, RVO=2
 	}
 
 
@@ -74,6 +73,10 @@ namespace DUNE
 	velocityObstacle::velocityUpdate(double psi_des, double U_des, const std::vector<double>& asv_state, const Math::Matrix& obst_states)
 	{
 		Eigen::Vector2d Vs, Ps, Vo, Po, trans_Vo_Vs;
+
+		trans_Vo_Vs(0) = 0.0;
+		trans_Vo_Vs(1) = 0.0;
+
 		double dist, theta_o_s, theta_obst, theta_obst_left, theta_obst_right, psi_desired, U_desired, cost;
 		
 		// A matrix with a row of [trans_Vo_Vs(0), trans_Vo_Vs(1), bound_left(0), bound_left(1), bound_right(0), bound_right(1), dist, 2*obs_radius] for each obstacle
@@ -95,13 +98,16 @@ namespace DUNE
 			Vo(0) = obst_states(i,11)*std::cos(Angles::radians(obst_states(i,10)));
 			Vo(1) = obst_states(i,11)*std::sin(Angles::radians(obst_states(i,10)));
 
-			// RVO
-			trans_Vo_Vs(0) = Ps(0)+0.5*(Vo(0)+Vs(0));
-			trans_Vo_Vs(1) = Ps(1)+0.5*(Vo(1)+Vs(1));
-
-			// VO
-			//trans_Vo_Vs(0) = Ps(0)+Vo(0);
-			//trans_Vo_Vs(1) = Ps(1)+Vo(1);
+			if (vo_method==1)	// Classical VO
+			{
+				trans_Vo_Vs(0) = Ps(0)+Vo(0);
+				trans_Vo_Vs(1) = Ps(1)+Vo(1);
+			}	
+			else if (vo_method==2)	// Reciprocal VO
+			{
+				trans_Vo_Vs(0) = Ps(0)+0.5*(Vo(0)+Vs(0));
+				trans_Vo_Vs(1) = Ps(1)+0.5*(Vo(1)+Vs(1));
+			}
 
 			dist = distance(Ps, Po);
 			theta_o_s = atan2(Po(1)-Ps(1), Po(0)-Ps(0));
@@ -383,6 +389,10 @@ namespace DUNE
     	        {
     	        	return false;
     	        }
+    	    }
+else
+    	    {
+    	    	return false;
     	    }
     	}
 	}

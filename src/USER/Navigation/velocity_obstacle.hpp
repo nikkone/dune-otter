@@ -29,7 +29,7 @@ namespace DUNE
 			~velocityObstacle();
 		
 		
-			void create(double D_CLOSE, double D_SAFE, double KAPPA, double K_P);
+			void create(double D_CLOSE, double D_SAFE, double KAPPA, double K_P, int VO_METHOD);
 		
 			std::tuple<double, double, double> velocityUpdate(double psi_des, double U_des, const std::vector<double>& asv_state, const Math::Matrix& obst_states);
 			
@@ -54,13 +54,19 @@ namespace DUNE
 			 * @brief Returns the cost of deviating from the nominal speed.
 			 */
 			double getKP();
+			/**
+			 * @brief Returns the VO method.
+			 */
+			int getVoMethod();
 			
 			void setDClose(double d_close);
 			void setDSafe(double d_safe);
 			void setKappa(double kappa);
 			void setKdP(double K_P);
+			void setVoMethod(int vo_method);
 
 			double D_CLOSE_;
+			int vo_method;
 
 			private:
 			Eigen::Vector2d computeVelocityDesired(double psi_des, double U_des);
