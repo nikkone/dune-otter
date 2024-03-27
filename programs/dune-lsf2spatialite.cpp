@@ -61,6 +61,11 @@ main(int argc, char** argv)
   filter[std::string("EstimatedState")] = true;
   filter[std::string("PathControlState")] = true;
   filter[std::string("RemoteSensorInfo")] = true;
+  filter[std::string("otterFormation")] = true;
+  filter[std::string("CpuUsage")] = true;
+  filter[std::string("SetEntityParameters")] = true;
+  filter[std::string("EulerAngles")] = true;
+  filter[std::string("GpsFix")] = true;
 
   int verbose = 0;
   uint16_t src = 0xFFFF, dst = 0xFFFF;
