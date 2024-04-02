@@ -91,6 +91,8 @@ namespace SourceEstimators
 
       //! Wait this long untill updating position filter (To avoid processing only the two first when three are available)
       float communicationWaitSec;
+      // Enable/disable timeout
+      bool useTimeout;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -210,6 +212,10 @@ namespace SourceEstimators
         param("Depth Coefficient", m_args.depthConversion)
         .description("The coefficient used to convert the data field of a tag to depth in meters")
         .defaultValue("0.2");
+
+        param("Use Timeout", m_args.useTimeout)
+        .description("Enable/disable timeout")
+        .defaultValue("false");
 
         bind<IMC::TBRFishTag>(this);
         bind<IMC::SoundSpeed>(this);
@@ -491,7 +497,7 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
               if (it.second != NULL) // If there are estimators for the given transmitter
               {
                 for(auto est : *(it.second)) {
-                  if(est->hasUnprocessedData()) {//} && ( (tagBuffers[it.first]->getNoOfMostRecentdetections() > 2) || updateWaitTimer[it.first].overflow() )) {
+                  if(est->hasUnprocessedData() && ( (tagBuffers[it.first]->getNoOfMostRecentdetections() > 2) || updateWaitTimer[it.first].overflow() )) {
                     if(est->update(tagBuffers[it.first])) {
                       updateWaitTimer[it.first].reset();
                       inf("Update");
@@ -505,10 +511,13 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
                 }
                 
                 //inf("Limit %d, current: %f last %d, delta %f", tagBuffers[it->first]->timestampTimeoutLimit, DUNE::Time::Clock::getSinceEpoch(), tagBuffers[it->first]->latestTimestamp, DUNE::Time::Clock::getSinceEpoch() - tagBuffers[it->first]->latestTimestamp);
-                if(!tagBuffers[it.first]->checkTimeout(DUNE::Time::Clock::getSinceEpoch())) {
-                  war("Tag %d timed out.", it.first);
-                  estimatorsToDelete.push_back(it.first);
+                if(m_args.useTimeout) {
+                  if(!tagBuffers[it.first]->checkTimeout(DUNE::Time::Clock::getSinceEpoch())) {
+                    war("Tag %d timed out.", it.first);
+                    estimatorsToDelete.push_back(it.first);
+                  }
                 }
+  
               }
             }
 
