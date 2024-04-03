@@ -7,6 +7,7 @@
 #include "SingleReceiverXKF.hpp"
 #include "MultipleReceiverEKF.hpp"
 #include "MultipleReceiversXKF.hpp"
+#include "MultipleReceiversXKFVelocity.hpp"
 namespace FishTagEstimators
 {
   Estimator<double>* EstimatorMap::addEstimator(uint32_t trans_id, estimatorTypeEnum_t type) {
@@ -39,6 +40,9 @@ namespace FishTagEstimators
           break;
         case estimatorType_MultipleReceiverXKF:
           est = new MultipleReceiverXKF<double>();
+          break;
+        case estimatorType_MultipleReceiverXKFVelocity:
+          est = new MultipleReceiverXKFVelocity<double>();
           break;
         default:
           return nullptr;

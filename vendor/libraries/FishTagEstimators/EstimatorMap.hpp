@@ -27,7 +27,8 @@ namespace FishTagEstimators
         estimatorType_SingleReceiverASLV2,
         estimatorType_SingleReceiverXKF,
         estimatorType_MultipleReceiverEKF,
-        estimatorType_MultipleReceiverXKF
+        estimatorType_MultipleReceiverXKF,
+        estimatorType_MultipleReceiverXKFVelocity
       } estimatorTypeEnum_t;
       //! 
       EstimatorMap_t estimatorMap;

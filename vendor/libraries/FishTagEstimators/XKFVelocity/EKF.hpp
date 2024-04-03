@@ -1,0 +1,25 @@
+#ifndef FishTagEstimator_XKF_EKFVelocity
+#define FishTagEstimator_XKF_EKFVelocity
+
+#include <OpenFilterPack/KalmanFilterDynamic.hpp>
+#include <Eigen/Core>
+#include "../TagBuffer.hpp"
+#include <vector>
+namespace FishTagEstimators
+{
+  namespace XKFVelocity
+  {
+    template <class T>
+    class EKF: public OFP::KalmanFilterDynamic<T, 6>{
+        public:
+        EKF();
+          T rr_cov;  // Measurement noise Covariance - range
+          T rz_cov;  // Measurement noise Covariance - depth
+        bool constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T, Eigen::Dynamic, 1> RDOA, const std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations, Eigen::Matrix<T, 6, 1> xHatInn);
+    };
+    //template class EKF<float>;
+    template class EKF<double>;
+    //template class EKF<long double>;
+  }
+}
+#endif // END FishTagEstimator_XKF_EKFVelocity

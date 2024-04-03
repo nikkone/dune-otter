@@ -8,7 +8,7 @@
   //! @author Nikolai Lauvås
 namespace FishTagEstimators
 {
-  template <class T>
+  template <class T, uint8_t STATES = 3>
   class Estimator
   {
     public:
@@ -19,7 +19,7 @@ namespace FishTagEstimators
       std::string name;
 
       //! The amount of states in the process model of the estimator
-      static const unsigned c_states = 3;
+      static const unsigned c_states = STATES;
       
       //! Transmitter ID this tag estimates the position for.
       uint32_t trans_id;
@@ -51,7 +51,7 @@ namespace FishTagEstimators
 
       //! Prepares the NED data of a tag detection for use in Eigen
       //! @param [in] tagIn Tag with NED of interest
-      Eigen::Matrix<T, c_states, 1> getNED(const TBRFishTag &tagIn) const;
+      Eigen::Matrix<T, STATES, 1> getNED(const TBRFishTag &tagIn) const;
 
       //! Initializer for the estimator
       //! @param [in] A_inn State transition matrix

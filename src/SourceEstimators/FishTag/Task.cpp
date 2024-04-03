@@ -273,6 +273,9 @@ namespace SourceEstimators
         if(std::find(m_args.multiEstimators.begin(), m_args.multiEstimators.end(), "XKF") != m_args.multiEstimators.end()) {
           MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverXKF);
         }
+        if(std::find(m_args.multiEstimators.begin(), m_args.multiEstimators.end(), "XKFVEL") != m_args.multiEstimators.end()) {
+          MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverXKFVelocity);
+        }
         if(std::find(m_args.multiEstimators.begin(), m_args.multiEstimators.end(), "EKF") != m_args.multiEstimators.end()) {
           MultiReceiverEstimatorTypeToUse.push_back(FishTagEstimators::EstimatorMap::estimatorTypeEnum_t::estimatorType_MultipleReceiverEKF);
         }
