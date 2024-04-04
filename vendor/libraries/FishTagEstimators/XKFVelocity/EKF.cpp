@@ -45,7 +45,7 @@ bool EKF<T>::constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T, E
           
           OFP::KalmanFilterDynamic<T, 6>::yk.row(used) << RDOA(combination);
           OFP::KalmanFilterDynamic<T, 6>::ykest.row(used) << dr - dm; // R_Khat, Eq. 17 Praveen|| q_t - p_i || - || q_t - p_m ||
-          std::cout << "dr,dm: " << dr << "," << dm << std::endl;
+          //std::cout << "dr,dm: " << dr << "," << dm << std::endl;
           used++;
         }
         combination++;
@@ -77,12 +77,12 @@ bool EKF<T>::constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T, E
       OFP::KalmanFilterDynamic<T, 6>::R.bottomRightCorner(1, 1) << rz_cov;
 
       // For debugging
-      std::cout << "PHat" << std::endl << OFP::KalmanFilterDynamic<T, 6>::PHat << std::endl;
-      std::cout << "error_stage3" << std::endl << error_stage3 << std::endl;
-      std::cout << "C" << std::endl << OFP::KalmanFilterDynamic<T, 6>::C << std::endl;
-      std::cout << "R" << std::endl << OFP::KalmanFilterDynamic<T, 6>::R << std::endl;
-      std::cout << "yk" << std::endl << OFP::KalmanFilterDynamic<T, 6>::yk << std::endl;
-      std::cout << "ykest" << std::endl << OFP::KalmanFilterDynamic<T, 6>::ykest << std::endl;
+      //std::cout << "PHat" << std::endl << OFP::KalmanFilterDynamic<T, 6>::PHat << std::endl;
+      //std::cout << "error_stage3" << std::endl << error_stage3 << std::endl;
+      //std::cout << "C" << std::endl << OFP::KalmanFilterDynamic<T, 6>::C << std::endl;
+      //std::cout << "R" << std::endl << OFP::KalmanFilterDynamic<T, 6>::R << std::endl;
+      //std::cout << "yk" << std::endl << OFP::KalmanFilterDynamic<T, 6>::yk << std::endl;
+      //std::cout << "ykest" << std::endl << OFP::KalmanFilterDynamic<T, 6>::ykest << std::endl;
 
       return true;
     }

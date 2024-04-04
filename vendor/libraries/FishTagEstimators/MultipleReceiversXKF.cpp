@@ -112,7 +112,6 @@ namespace FishTagEstimators
             for(auto it : tempUsed) {
               tempLatestReceiverPositionsUsed.push_back(std::pair<T,T>((tagBuffer->tagBuffer[it.first]->rbegin())->N, (tagBuffer->tagBuffer[it.first]->rbegin())->E));
             }
-            latestTimestamp = referenceReceiverToA;
           } 
           break;
           case 6: // Only stage 2 and 3 update
@@ -122,7 +121,6 @@ namespace FishTagEstimators
             for(auto it : tempUsed) {
               tempLatestReceiverPositionsUsed.push_back(std::pair<T,T>((tagBuffer->tagBuffer[it.first]->rbegin())->N, (tagBuffer->tagBuffer[it.first]->rbegin())->E));
             }
-            latestTimestamp = referenceReceiverToA;
           } 
           break;
           case 7: // All steps updated
@@ -133,7 +131,6 @@ namespace FishTagEstimators
               unprocessedData[it.first] = false;
               tempLatestReceiverPositionsUsed.push_back(std::pair<T,T>((tagBuffer->tagBuffer[it.first]->rbegin())->N, (tagBuffer->tagBuffer[it.first]->rbegin())->E));
             }
-            latestTimestamp = referenceReceiverToA;
             std::cout << std::endl << "Status: " << (int)status << std::endl;
             //return true;
           }

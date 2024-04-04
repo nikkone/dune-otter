@@ -23,6 +23,10 @@ namespace FishTagEstimators
       unsigned buffer_size;
       //! How many detections are available for the most recent timestamp
       unsigned detectionsMostRecentTs;
+      //! The timestamp of the first detection of the latest transmission.
+      uint64_t latestTimestamp_ms;
+      //! The timestep between the two most recent transmissions (ms).
+      long latestTimeStep_ms;
     public:
       //! The data structure where tags are buffered
       tagBufferMap_t tagBuffer;
@@ -84,7 +88,18 @@ namespace FishTagEstimators
       /// @param currentTimestamp 
       /// @return True if there has been updates within acceptable timeframe, false if not.
       virtual bool checkTimeout(double currentTimestamp);
-      
+
+      /// @brief Get function for latestTimestamp_ms
+      /// @return latestTimestamp_ms
+      uint64_t getLatestTimestamp() {
+        return latestTimestamp_ms;
+      }
+      /// @brief Get function for latestTimeStep_ms
+      /// @return latestTimeStep_ms
+      long getLatestTimeStep() {
+        return latestTimeStep_ms;
+      }
+
       //!
       size_t size() const;
 

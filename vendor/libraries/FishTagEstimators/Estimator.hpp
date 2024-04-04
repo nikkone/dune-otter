@@ -108,12 +108,6 @@ namespace FishTagEstimators
       //! @return True if parameter found
       bool setParameter(std::string parameterName, T value);
 
-      /// @brief Get function for latestTimestamp
-      /// @return latestTimestamp
-      uint64_t getLatestTimestamp() const{
-        return latestTimestamp;
-      }
-
       /// @brief Get function for the Geometric dillution of position of previous estimate
       /// @return GDOP
       uint64_t getGDOP() const {
@@ -168,9 +162,6 @@ namespace FishTagEstimators
       
       //! A datastructure to keep track of which tag detections have been used.
       tagBool_t unprocessedData;
-
-      //! The timestamp of the first detection of the latest transmission.
-      uint64_t latestTimestamp;
 
       //! Geometric dillution of position of previous estimate
       uint32_t GDOP;

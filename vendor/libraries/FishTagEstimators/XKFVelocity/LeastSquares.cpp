@@ -93,19 +93,19 @@ namespace FishTagEstimators
       T R1, R2;
       if(ctc == 1) { // Equivalent to aa=0
         R1 = -cc/bb;
-        std::cout << "CTC=1" << std::endl; 
+        //std::cout << "CTC=1" << std::endl; 
         // Unique solution
       } else {
         if((bb*bb - 4*aa*cc) <= 0.0) {
           R1 = -bb/(2*aa);
-          std::cout << "(bb*bb - 4*aa*cc) <= 0.0" << std::endl;
-          std::cout << "a, b, c: "<< aa << ", " << bb << ", " << cc << std::endl;
+          //std::cout << "(bb*bb - 4*aa*cc) <= 0.0" << std::endl;
+          //std::cout << "a, b, c: "<< aa << ", " << bb << ", " << cc << std::endl;
           // Unique solution
         } else {
           T s = sqrt(bb*bb - 4*aa*cc);
           R1 = (-bb + s)/(2*aa);
           R2 = (-bb - s)/(2*aa);
-          std::cout << "Resolve ambiguity R1: " << R1 << ", R2: "<< R2 << std::endl; 
+          //std::cout << "Resolve ambiguity R1: " << R1 << ", R2: "<< R2 << std::endl; 
           R1 = resolveRAmbiguity(R1, R2);
         }
       }
@@ -114,8 +114,8 @@ namespace FishTagEstimators
         dm = R1;
         return true;
       }
-      std::cout << "Could not dm. R1: " << R1 << std::endl;
-      std::cout << "a, b, c: "<< aa << ", " << bb << ", " << cc << std::endl;
+      //std::cout << "Could not dm. R1: " << R1 << std::endl;
+      //std::cout << "a, b, c: "<< aa << ", " << bb << ", " << cc << std::endl;
       return false;
     }
 

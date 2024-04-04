@@ -43,12 +43,6 @@ namespace FishTagEstimators
       //! @param [in/out] input Tag detection to take lat/lon [rad] from 
       void toNEDframe(TBRFishTag &input);
 
-      /// @brief Get function for latestTimestamp_ms
-      /// @return latestTimestamp_ms
-      uint64_t getLatestTimestamp() {
-        return latestTimestamp_ms;
-      }
-
       void setTimestampTimeoutLimit(uint32_t timestampTimeoutLimit_inn) {
         timestampTimeoutLimit_s = timestampTimeoutLimit_inn;
       }
@@ -74,9 +68,6 @@ namespace FishTagEstimators
 
       //! The maximum time to consider the a transmission to be the same as last one
       uint32_t timestampTimeoutLimit_s;
-
-      //! The timestamp of the first detection of the latest transmission.
-      uint64_t latestTimestamp_ms;
 
   };
   //! A map of tag buffers, where the index is used for transmitter ID and the second is a pointer to a DUNETagBuffers_t

@@ -48,8 +48,10 @@ namespace FishTagEstimators
       if(((uint64_t)msg->unix_timestamp)*1000 + msg->millis - latestTimestamp_ms > maxTimestampDifference_ms) {
         // TODO: Check if more than one unused, then run update of filter
         //latestTimestamp_ms = msg->getTimeStamp();
+        latestTimeStep_ms = ((uint64_t)msg->unix_timestamp)*1000 + msg->millis - latestTimestamp_ms;
         latestTimestamp_ms = ((uint64_t)msg->unix_timestamp)*1000 + msg->millis;
         detectionsMostRecentTs = 1;
+        
         //std::cout << std::endl << "set" << std::endl;
       } else {
         detectionsMostRecentTs++;

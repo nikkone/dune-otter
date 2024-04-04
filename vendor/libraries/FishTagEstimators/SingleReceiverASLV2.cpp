@@ -94,7 +94,6 @@ namespace FishTagEstimators
     //}
     // Run filter update, and if sucessfull, set unprocessedData to false for used data receivers
     if(aslv.update(&tempTagBuffer, RDOA, RDOAcombinations)) {
-      latestTimestamp = ((uint64_t)tagBuffer->tagBuffer.begin()->second->rbegin()->unix_timestamp)*1000 + tagBuffer->tagBuffer.begin()->second->rbegin()->millis;
       activateEstimator();
       return true;
     }

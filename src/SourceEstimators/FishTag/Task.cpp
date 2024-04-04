@@ -360,7 +360,7 @@ namespace SourceEstimators
         // Action taken for all receptions: Add to buffer and run measurment update on estimators.
         size_t prev = tagBuffers[msg->trans_id]->size();
         if(tagBuffers[msg->trans_id]->addTagDetection(msg)) {
-          inf("Recent Detections: %u, timestamp: %lu", tagBuffers[msg->trans_id]->getNoOfMostRecentdetections(), tagBuffers[msg->trans_id]->getLatestTimestamp());
+          inf("Recent Detections: %u, timestamp: %lu, timestep: %lu", tagBuffers[msg->trans_id]->getNoOfMostRecentdetections(), tagBuffers[msg->trans_id]->getLatestTimestamp(), tagBuffers[msg->trans_id]->getLatestTimeStep());
           // Add MultiReceiver Estimators when going from 2 to 3 receiving receivers
           if((prev == 2) && tagBuffers[msg->trans_id]->size() == 3) {
             for(auto it = MultiReceiverEstimatorTypeToUse.begin();it !=MultiReceiverEstimatorTypeToUse.end();it++) {
@@ -444,7 +444,7 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
         double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
         double latLon[3] = {0,0,0};
         if(tagBuffers.find(est->trans_id) != tagBuffers.end()) {
-          tagBuffers[est->trans_id]->fromNEDframe(result, latLon);
+          tagBuffers.at(est->trans_id)->fromNEDframe(result, latLon);
           lati=latLon[0], longi=latLon[1];
 
 
@@ -467,7 +467,7 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
 
           if (logOutStream.good()) {
             logOutStream.precision(15);
-              logOutStream << est->getLatestTimestamp()<< ","<< Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi);
+              logOutStream << tagBuffers.at(est->trans_id)->getLatestTimestamp()<< ","<< Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi);
             for(auto it : est->getUsedPositions()) {
               logOutStream << ","<< it.first << ","<< it.second;
               //inf("Receiver Position (North,East): (%f,%f)", it.first, it.second);
