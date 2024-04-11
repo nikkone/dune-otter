@@ -32,7 +32,7 @@ namespace OFP
       //! State Covariance estimate matric.
       Eigen::Matrix<T, states, states> PHat;
       //! Process noise covariance matrix.
-      Eigen::Matrix<T, states, states> Q;
+      Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> Q;
       //! Measurement noise covariance matrix.
       Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> R;
       //! Time varying innovation vector.
@@ -55,13 +55,14 @@ namespace OFP
       //! @param [in] P0_inn Initial covarinace matrix
       //! @param [in] x0_inn Initial state
       void initialize(const Eigen::Matrix<T, states, states> &A_inn,
-                      const Eigen::Matrix<T, states, states> &Q_inn,
+                      const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &Q_inn,
                       const Eigen::Matrix<T, states, states> &P0_inn,
                       const Eigen::Matrix<T, states, 1> &x0_inn) {
         A = A_inn;
         Q = Q_inn;
         PHat = P0_inn;
         xHat = x0_inn;
+        D = Eigen::Matrix<T, states, states>::Identity();
       }
 
 
@@ -117,7 +118,7 @@ namespace OFP
         if(active) {
           //Predict Step / Project ahead
           xHat = A*xHat;
-          PHat = A*PHat*A.transpose() + Q;
+          PHat = A*PHat*A.transpose() + D*Q*D.transpose();
           return true;
         }
         return false;
