@@ -16,6 +16,15 @@ namespace FishTagEstimators
    std::tuple<T, T, T> Estimator<T, STATES>::getEstimate() const{
     return {0.0,0.0,0.0};
   }
+
+    template <class T, uint8_t STATES>
+   void Estimator<T, STATES>::estimateToStream(std::ostream& os) const {return;}
+
+    template <class T, uint8_t STATES>
+   void Estimator<T, STATES>::headerToStream(std::ostream& os) const {
+    os << "N,E,D";
+   }
+
     typedef enum 
   { 
     param_trans_id,
@@ -25,6 +34,7 @@ namespace FishTagEstimators
     param_max_updates_per_new_measurement,
     param_max_correction_attempts
   } t_param;
+
     template <class T, uint8_t STATES>
   void Estimator<T, STATES>::setSoundSpeed(T soundSpeed) {
     c_speed = soundSpeed;

@@ -34,6 +34,8 @@ namespace FishTagEstimators
       //! @return Tuple with estimated position in a NED frame (relative to origin used in tagBuffer).
       virtual std::tuple<T, T, T> getEstimate() const;
 
+      virtual void estimateToStream(std::ostream& os) const;
+      virtual void headerToStream(std::ostream& os) const;
       //! The current sound speed used for TDOA calculations
       void setSoundSpeed(T soundSpeed);
 

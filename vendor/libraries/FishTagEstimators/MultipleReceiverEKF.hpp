@@ -29,6 +29,7 @@ namespace FishTagEstimators
         return ekf.active;
       }
       bool checkTime(double transmissionFirstTime, double currentTime) const;
+      void estimateToStream(std::ostream& os) const;
     private:
       
   };

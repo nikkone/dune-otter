@@ -384,7 +384,9 @@ namespace SourceEstimators
               std::ofstream logOutStream;
               logOutStream.open(m_args.log_folder_and_prefix + m_startupTimestamp + est->name + std::to_string(est->trans_id) + ".csv", std::ofstream::out | std::ofstream::trunc);
               if (logOutStream.good()) {
-                  logOutStream << "t0,timestamp,N,E,D,Lat,Lon" << std::endl;
+                  logOutStream << "t0,timestamp,";
+                  est->headerToStream(logOutStream);
+                  logOutStream << ",Lat,Lon" << std::endl;
                   logOutStream.close();
               }
               // Add all receivers to UnprocessedData in current Estimator
@@ -467,7 +469,9 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
 
           if (logOutStream.good()) {
             logOutStream.precision(15);
-              logOutStream << tagBuffers.at(est->trans_id)->getLatestTimestamp()<< ","<< Clock::getSinceEpochMsec() << "," << result[0] << "," << result[1] << "," << result[2] << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi);
+              logOutStream << tagBuffers.at(est->trans_id)->getLatestTimestamp()<< ","<< Clock::getSinceEpochMsec() << ",";
+               est->estimateToStream(logOutStream);
+              logOutStream << "," << DUNE::Math::Angles::degrees(lati) << "," << DUNE::Math::Angles::degrees(longi);
             for(auto it : est->getUsedPositions()) {
               logOutStream << ","<< it.first << ","<< it.second;
               //inf("Receiver Position (North,East): (%f,%f)", it.first, it.second);

@@ -8,6 +8,10 @@ namespace FishTagEstimators
     return {ekf.xHat(0),ekf.xHat(1),ekf.xHat(2)};
   }
 
+  void MultipleReceiverEKF::estimateToStream(std::ostream& os) const {
+    os << ekf.xHat(0) << "," << ekf.xHat(1) << "," << ekf.xHat(2);
+  }
+
   void MultipleReceiverEKF::initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &Q_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &P0_inn,

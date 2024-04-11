@@ -39,6 +39,8 @@ namespace FishTagEstimators
       };
       SingleReceiverBase() {};
       ~SingleReceiverBase() {};
+
+      void estimateToStream(std::ostream& os) const;
     protected:
       enum interval_mode_enum
       { 

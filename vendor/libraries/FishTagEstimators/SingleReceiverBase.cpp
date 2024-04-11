@@ -76,4 +76,10 @@ namespace FishTagEstimators
     }
     return false;
   }
+
+  void SingleReceiverBase::estimateToStream(std::ostream& os) const {
+    std::tuple<double, double, double>  estimate = getEstimate();
+    double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
+    os << result[0] << "," << result[1] << "," << result[2];
+  }
 }
