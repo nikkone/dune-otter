@@ -7,7 +7,7 @@ namespace FishTagEstimators
   {
     template <class T> 
       void XKF<T>::initialize(const Eigen::Matrix<T, 6, 6> &A_inn,
-                           const Eigen::Matrix<T, 6, 6> &Q_inn,
+                           const Eigen::Matrix<T, 3, 3> &Q_inn,
                            const Eigen::Matrix<T, 6, 6> &P0_inn,
                            const Eigen::Matrix<T, 6, 1> &x0_inn) {
       stage2.initialize(A_inn, Q_inn, P0_inn, x0_inn);
@@ -39,6 +39,12 @@ namespace FishTagEstimators
         if(stage2.active) {
           if(stage2.constructCandR(tagBuffer, RDOA, RDOAcombinations, stage1.getDm())) {
             if(stage2.update(stage2.yk)) {
+              stage2.dt = 0.01;//0.1*(tagBuffer->getLatestTimeStep()/1000);
+              stage2.A = Eigen::Matrix<T, 6, 6>::Identity();
+              stage2.A.topRightCorner(3,3) = Eigen::Matrix<T, 3, 3>::Identity() * stage2.dt;
+              stage2.D = Eigen::Matrix<T, 6, 3>::Ones();
+              stage2.D.topLeftCorner(3,3) = Eigen::Matrix<T, 3, 3>::Identity() * (stage2.dt*stage2.dt/2);
+              stage2.D.bottomLeftCorner(3,3) = Eigen::Matrix<T, 3, 3>::Identity() * stage2.dt;
               status += 2;
               std::cout << std::endl << "Stage2 update" << std::endl;
               if(!stage3.active) {
@@ -54,6 +60,13 @@ namespace FishTagEstimators
         if(stage2.active && stage3.active) {
           if(stage3.constructCandR(tagBuffer, RDOA, RDOAcombinations, stage2.xHat)) {
             if(stage3.update(stage3.yk)) {
+              stage3.dt = 0.01;//*(tagBuffer->getLatestTimeStep()/1000);
+              stage3.A = Eigen::Matrix<T, 6, 6>::Identity();
+              stage3.A.topRightCorner(3,3) = Eigen::Matrix<T, 3, 3>::Identity() * stage3.dt;
+              stage3.D = Eigen::Matrix<T, 6, 3>::Zero();
+              stage3.D.topLeftCorner(3,3) = Eigen::Matrix<T, 3, 3>::Identity() * (stage3.dt*stage3.dt/2);
+              stage3.D.bottomLeftCorner(3,3) = Eigen::Matrix<T, 3, 3>::Identity() * stage3.dt;
+              std::cout << "D:" << std::endl << stage3.D<< std::endl;
               status += 4;
               std::cout << std::endl << "Stage3 update" << std::endl;
             }

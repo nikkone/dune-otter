@@ -17,6 +17,7 @@ bool LTVKF<T>::constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T,
 
       // Resize matrices to maximum probable
       OFP::KalmanFilterDynamic<T, 6>::C.resize(RDOA.rows()+1,OFP::KalmanFilterDynamic<T, 6>::nx);
+      OFP::KalmanFilterDynamic<T, 6>::C = OFP::KalmanFilterDynamic<T, 6>::C.Zero(RDOA.rows()+1,OFP::KalmanFilterDynamic<T, 6>::nx);
       Eigen::Matrix<T, Eigen::Dynamic,1> d; // nja in paper
       d.resize(RDOA.rows()+1,1);
 
@@ -25,13 +26,13 @@ bool LTVKF<T>::constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T,
 
       // Set reference receiver
       uint32_t referenceReceiver = RDOAcombinations.front().second;
-      Eigen::Matrix<T, 6, 1> referenceReceiverNED = Eigen::Matrix<T, 6, 1>((tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->N, (tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->E,(tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->D,0,0,0);
+      Eigen::Matrix<T, 3, 1> referenceReceiverNED = Eigen::Matrix<T, 3, 1>((tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->N, (tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->E,(tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->D);
 
       uint8_t used = 0, combination = 0;
       for(auto it : RDOAcombinations) {
         if(it.second == referenceReceiver) {
           // Current
-          Eigen::Matrix<T, 6, 1> currentReceiverNED = Eigen::Matrix<T, 6, 1>((tagBuffer->tagBuffer.at(it.first)->rbegin())->N, (tagBuffer->tagBuffer.at(it.first)->rbegin())->E,(tagBuffer->tagBuffer.at(it.first)->rbegin())->D, 0,0,0);
+          Eigen::Matrix<T, 3, 1> currentReceiverNED = Eigen::Matrix<T, 3, 1>((tagBuffer->tagBuffer.at(it.first)->rbegin())->N, (tagBuffer->tagBuffer.at(it.first)->rbegin())->E,(tagBuffer->tagBuffer.at(it.first)->rbegin())->D);
           OFP::KalmanFilterDynamic<T, 6>::C.row(used) << -(
           currentReceiverNED -
           referenceReceiverNED).transpose();
@@ -52,8 +53,9 @@ bool LTVKF<T>::constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T,
         return false;
       }
       // Add depth measurement
-      OFP::KalmanFilterDynamic<T, 6>::C.row(used) = OFP::KalmanFilterDynamic<T, 6>::C.row(used).Zero(1,OFP::KalmanFilterDynamic<T, 6>::nx);
-      OFP::KalmanFilterDynamic<T, 6>::C.bottomRightCorner(1, 1) << 0.5;
+      //OFP::KalmanFilterDynamic<T, 6>::C.row(used) = OFP::KalmanFilterDynamic<T, 6>::C.row(used).Zero(1,OFP::KalmanFilterDynamic<T, 6>::nx);
+      //OFP::KalmanFilterDynamic<T, 6>::C.bottomRightCorner(1, 1) << 0.5;
+      OFP::KalmanFilterDynamic<T, 6>::C.row(used).bottomLeftCorner(1, 3) << 0,0,0.5;
       z.row(used) << (tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->trans_data*tagBuffer->getDepthConversionCoefficient(); // Depth measurement
       d.row(used) << 0;
 
@@ -82,8 +84,8 @@ bool LTVKF<T>::constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T,
 
       // For debugging
       //std::cout << "PHat" << std::endl << OFP::KalmanFilterDynamic<T, 6>::PHat << std::endl;
-      //std::cout << "C" << std::endl << OFP::KalmanFilterDynamic<T, 6>::C << std::endl;
-      //std::cout << "R" << std::endl << OFP::KalmanFilterDynamic<T, 6>::R << std::endl;
+      std::cout << "C" << std::endl << OFP::KalmanFilterDynamic<T, 6>::C << std::endl;
+      std::cout << "R" << std::endl << OFP::KalmanFilterDynamic<T, 6>::R << std::endl;
       //std::cout << "yk" << std::endl << OFP::KalmanFilterDynamic<T, 6>::yk << std::endl;
       //std::cout << "ykest" << std::endl << OFP::KalmanFilterDynamic<T, 6>::ykest << std::endl;
       return true;

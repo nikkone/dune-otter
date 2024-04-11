@@ -19,14 +19,14 @@ namespace FishTagEstimators
     //! 
     //! 
     Eigen::Matrix<T, 6, 6> AVel = Eigen::Matrix<T, 6, 6>::Identity();
-    Eigen::Matrix<T, 6, 6> QVel = Eigen::Matrix<T, 6, 6>::Identity();
+    //Eigen::Matrix<T, 6, 6> QVel = Eigen::Matrix<T, 6, 6>::Identity();
     Eigen::Matrix<T, 6, 6> P0Vel = Eigen::Matrix<T, 6, 6>::Identity();
     Eigen::Matrix<T, 6, 1> x0Vel = Eigen::Matrix<T, 6, 1>::Zero();
 
     x0Vel.block(0, 0, 3, 1) = x0_inn;
-    QVel.block(0, 0, 3, 3) = Q_inn;
+    //QVel.block(0, 0, 3, 3) = Q_inn;
     Estimator::initialize(A_inn, Q_inn, P0_inn, x0_inn);
-    xkf.initialize(AVel, QVel, P0Vel, x0Vel);
+    xkf.initialize(AVel, Q_inn, P0Vel, x0Vel);
     //std::cout << "XKF initialize" << std::endl;
   }
   
@@ -47,6 +47,20 @@ namespace FishTagEstimators
 
     //return {0.0,0.0,0.0};
   }
+
+  template <class T>
+  void MultipleReceiverXKFVelocity<T>::estimateToStream(std::ostream& os) const {
+    // Stage 3
+    //os << xkf.stage3.xHat(0) << "," << xkf.stage3.xHat(1) << "," <<xkf.stage3.xHat(2) << "," << xkf.stage3.xHat(3) << "," << xkf.stage3.xHat(4) << "," <<xkf.stage3.xHat(5) << "," << std::sqrt(xkf.stage3.xHat(3)*xkf.stage3.xHat(3) + xkf.stage3.xHat(4)*xkf.stage3.xHat(4) + xkf.stage3.xHat(5)*xkf.stage3.xHat(5));
+        
+    // Stage 2    
+    os << xkf.stage2.xHat(0) << "," << xkf.stage2.xHat(1) << "," <<xkf.stage2.xHat(2) << "," << xkf.stage2.xHat(3) << "," << xkf.stage2.xHat(4) << "," <<xkf.stage2.xHat(5) << "," << std::sqrt(xkf.stage2.xHat(3)*xkf.stage2.xHat(3) + xkf.stage2.xHat(4)*xkf.stage2.xHat(4) + xkf.stage2.xHat(5)*xkf.stage2.xHat(5));
+  }
+
+  template <class T>
+   void MultipleReceiverXKFVelocity<T>::headerToStream(std::ostream& os) const {
+    os << "N,E,D,Ndot,Edot,Ddot,U";
+   }
 
   template <class T>
   void MultipleReceiverXKFVelocity<T>::print(std::ostream& os) const {
@@ -155,8 +169,9 @@ namespace FishTagEstimators
       }
       std::cout << std::endl << "Retrying with other ref." << std::endl;
     }
-    std::cout << std::endl << "Status: " << (int)status << std::endl;
+
     if(status) {
+      std::cout << std::endl << "EndStatus: " << (int)status << std::endl;
       for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
         unprocessedData[it->first] = false;
       }

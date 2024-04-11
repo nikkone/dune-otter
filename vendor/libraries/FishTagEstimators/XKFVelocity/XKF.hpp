@@ -26,7 +26,7 @@ namespace FishTagEstimators
       //! @param [in] P0_inn Initial covarinace matrix
       //! @param [in] x0_inn Initial state
       void initialize(const Eigen::Matrix<T, 6, 6> &A_inn,
-                              const Eigen::Matrix<T, 6, 6> &Q_inn,
+                              const Eigen::Matrix<T, 3, 3> &Q_inn,
                               const Eigen::Matrix<T, 6, 6> &P0_inn,
                               const Eigen::Matrix<T, 6, 1> &x0_inn);  
 

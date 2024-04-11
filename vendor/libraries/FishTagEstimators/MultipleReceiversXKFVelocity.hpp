@@ -28,6 +28,10 @@ namespace FishTagEstimators
                                         const Eigen::Matrix<T, c_states, 1> &x0_inn);
       std::tuple<T, T, T> getEstimate() const;
       void print(std::ostream& os) const;
+
+      void estimateToStream(std::ostream& os) const;
+      virtual void headerToStream(std::ostream& os) const;
+
       bool isActive() const {
         return xkf.stage3.active;
       }
