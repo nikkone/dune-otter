@@ -31,6 +31,8 @@ namespace FishTagEstimators
       bool isActive() const {
         return xkf.stage3.active;
       }
+
+      void estimateToStream(std::ostream& os) const;
   void setTDOACovariance(T TDOACovariance);
   void setDepthCovariance(T depthCovariance);
   bool checkTime(T transmissionFirstTime, T currentTime) const;

@@ -169,4 +169,9 @@ template <class T>
       return false;
     }
   }
+
+  template <class T>
+  void MultipleReceiverXKF<T>::estimateToStream(std::ostream& os) const {
+    os << xkf.stage3.xHat(0) << "," << xkf.stage3.xHat(1) << "," <<xkf.stage3.xHat(2);
+  }
 }
