@@ -91,12 +91,12 @@ namespace FishTagEstimators
 
       /// @brief Get function for latestTimestamp_ms
       /// @return latestTimestamp_ms
-      uint64_t getLatestTimestamp() {
+      uint64_t getLatestTimestamp() const{
         return latestTimestamp_ms;
       }
       /// @brief Get function for latestTimeStep_ms
       /// @return latestTimeStep_ms
-      long getLatestTimeStep() {
+      long getLatestTimeStep() const{
         return latestTimeStep_ms;
       }
 
