@@ -84,8 +84,8 @@ bool LTVKF<T>::constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T,
 
       // For debugging
       //std::cout << "PHat" << std::endl << OFP::KalmanFilterDynamic<T, 6>::PHat << std::endl;
-      std::cout << "C" << std::endl << OFP::KalmanFilterDynamic<T, 6>::C << std::endl;
-      std::cout << "R" << std::endl << OFP::KalmanFilterDynamic<T, 6>::R << std::endl;
+      //std::cout << "C" << std::endl << OFP::KalmanFilterDynamic<T, 6>::C << std::endl;
+      //std::cout << "R" << std::endl << OFP::KalmanFilterDynamic<T, 6>::R << std::endl;
       //std::cout << "yk" << std::endl << OFP::KalmanFilterDynamic<T, 6>::yk << std::endl;
       //std::cout << "ykest" << std::endl << OFP::KalmanFilterDynamic<T, 6>::ykest << std::endl;
       return true;

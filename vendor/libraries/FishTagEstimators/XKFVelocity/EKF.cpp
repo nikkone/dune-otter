@@ -80,9 +80,12 @@ bool EKF<T>::constructCandR(const TagBuffer *tagBuffer, const Eigen::Matrix<T, E
 
       // For debugging
       //std::cout << "PHat" << std::endl << OFP::KalmanFilterDynamic<T, 6>::PHat << std::endl;
+      //std::cout << "trace(PHat)" << std::endl << OFP::KalmanFilterDynamic<T, 6>::PHat.trace() << std::endl;
+      //std::cout << "det(PHat)" << std::endl << OFP::KalmanFilterDynamic<T, 6>::PHat.determinant() << std::endl;
       //std::cout << "error_stage3" << std::endl << error_stage3 << std::endl;
       //std::cout << "C" << std::endl << OFP::KalmanFilterDynamic<T, 6>::C << std::endl;
       //std::cout << "R" << std::endl << OFP::KalmanFilterDynamic<T, 6>::R << std::endl;
+      //std::cout << "Q" << std::endl << OFP::KalmanFilterDynamic<T, 6>::Q << std::endl;
       //std::cout << "yk" << std::endl << OFP::KalmanFilterDynamic<T, 6>::yk << std::endl;
       //std::cout << "ykest" << std::endl << OFP::KalmanFilterDynamic<T, 6>::ykest << std::endl;
 

@@ -54,6 +54,11 @@ namespace FishTagEstimators
       double E;
       //! Down relative to fixed LL point
       double D;
+
+      // Comparison function for sorting based on ToA
+      static bool compareByTOA(const TBRFishTag& tag1, const TBRFishTag& tag2) {
+          return (long int)tag1.unix_timestamp*1000 + (long int)tag1.millis  < (long int)tag2.unix_timestamp*1000 + (long int)tag2.millis;
+      }
     };
 }
 #endif // FishTag_TBRFishTag

@@ -131,7 +131,6 @@ namespace FishTagEstimators
               unprocessedData[it.first] = false;
               tempLatestReceiverPositionsUsed.push_back(std::pair<T,T>((tagBuffer->tagBuffer[it.first]->rbegin())->N, (tagBuffer->tagBuffer[it.first]->rbegin())->E));
             }
-            std::cout << std::endl << "Status: " << (int)status << std::endl;
             //return true;
           }
           break;
@@ -147,8 +146,9 @@ namespace FishTagEstimators
       }
       std::cout << std::endl << "Retrying with other ref." << std::endl;
     }
-    std::cout << std::endl << "Status: " << (int)status << std::endl;
+    
     if(status) {
+      std::cout << std::endl << "EndStatus: " << (int)status << std::endl;
       for(tagBool_t::iterator it = used.begin();it != used.end();it++) {
         unprocessedData[it->first] = false;
       }

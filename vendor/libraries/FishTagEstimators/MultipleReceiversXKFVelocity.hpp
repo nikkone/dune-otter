@@ -32,6 +32,13 @@ namespace FishTagEstimators
       void estimateToStream(std::ostream& os) const;
       virtual void headerToStream(std::ostream& os) const;
 
+      void setTimestep(T ts) {
+        if(ts > 0.0) {
+          timestep = ts;
+          xkf.setTimestep(ts);
+        }
+      }
+
       bool isActive() const {
         return xkf.stage3.active;
       }

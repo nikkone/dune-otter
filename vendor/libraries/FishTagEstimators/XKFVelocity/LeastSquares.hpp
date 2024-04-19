@@ -46,11 +46,11 @@ namespace FishTagEstimators
         /// @param R1 First solution from quadratic formula
         /// @param R2 Second olution from quadratic formula
         /// @return Zero if unresolved, else valid dm
-        T resolveRAmbiguity(T R1, T R2);
+        T resolveRAmbiguity(T R1, T R2, std::vector<TBRFishTag> &tagDetectionsD, const Eigen::Matrix<T, 3,1> c, const Eigen::Matrix<T, 3,1> &w);
     };
-    template class LeastSquares<float>;
+    //template class LeastSquares<float>;
     template class LeastSquares<double>;
-    template class LeastSquares<long double>;
+    //template class LeastSquares<long double>;
   }
 }
 #endif // END FishTagEstimator_XKF_EKFVelocity

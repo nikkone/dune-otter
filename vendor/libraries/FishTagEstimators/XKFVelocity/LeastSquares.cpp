@@ -46,12 +46,21 @@ namespace FishTagEstimators
       // Set reference receiver
       uint32_t referenceReceiver = RDOAcombinations.front().second;
       Eigen::Matrix<T, 3, 1> referenceReceiverNED = Eigen::Matrix<T, 3, 1>((tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->N, (tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->E,(tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->D);
-
+      
+      long int minToA_ms = (long int)(tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->unix_timestamp*1000 + (long int)(tagBuffer->tagBuffer.at(referenceReceiver)->rbegin())->millis;
+      Eigen::Matrix<T, 3, 1> minToAReceiverNED = referenceReceiverNED;
+      
       uint8_t used = 0, combination = 0;
       for(auto it : RDOAcombinations) {
         if(it.second == referenceReceiver) {
           // Current
           Eigen::Matrix<T, 3, 1> currentReceiverNED = Eigen::Matrix<T, 3, 1>((tagBuffer->tagBuffer.at(it.first)->rbegin())->N, (tagBuffer->tagBuffer.at(it.first)->rbegin())->E,(tagBuffer->tagBuffer.at(it.first)->rbegin())->D);
+          long int currentToA_ms = (long int)(tagBuffer->tagBuffer.at(it.first)->rbegin())->unix_timestamp*1000 + (long int)(tagBuffer->tagBuffer.at(it.first)->rbegin())->millis;
+          if(minToA_ms > currentToA_ms) {
+            minToA_ms = currentToA_ms;
+            minToAReceiverNED = currentReceiverNED;
+          }
+
           Cyq.row(used) << -(
           currentReceiverNED -
           referenceReceiverNED).transpose();
@@ -105,8 +114,21 @@ namespace FishTagEstimators
           T s = sqrt(bb*bb - 4*aa*cc);
           R1 = (-bb + s)/(2*aa);
           R2 = (-bb - s)/(2*aa);
+
+          used = 0;
+          std::vector<TBRFishTag> tagDetections;
+          tagDetections.push_back(*(tagBuffer->tagBuffer.at(referenceReceiver)->rbegin()));
+          for(auto it : RDOAcombinations) {
+            if(it.second == referenceReceiver) {
+              tagDetections.push_back(*(tagBuffer->tagBuffer.at(it.first)->rbegin()));
+              used++;
+            }
+            if(used == 2) {
+              break;
+            }
+          }
           //std::cout << "Resolve ambiguity R1: " << R1 << ", R2: "<< R2 << std::endl; 
-          R1 = resolveRAmbiguity(R1, R2);
+          R1 = resolveRAmbiguity(R1, R2, tagDetections, c, w);
         }
       }
       if((R1 > 0.0) && (R1 < maxDm)) {
@@ -120,12 +142,74 @@ namespace FishTagEstimators
     }
 
     template <class T>
-    T LeastSquares<T>::resolveRAmbiguity(T R1, T R2)
+    T LeastSquares<T>::resolveRAmbiguity(T R1, T R2, std::vector<TBRFishTag> &tagDetections, const Eigen::Matrix<T, 3,1> c, const Eigen::Matrix<T, 3,1> &w)
     {
       T R_temp;
       if((R1 > 0.0) && (R1 < maxDm)) {
-        if((R2 > 0.0) && (R2 < maxDm)) { // Both valid, choose one of them 
-          R_temp = R1; // TODO: Find a way to choose
+        if((R2 > 0.0) && (R2 < maxDm)) { // Both valid, choose one of them
+          // Option 1: Choose Rx that makes xHat closest to the position of smallest ToA
+          /*T d1 = ((R1*c + w) - minToAReceiverNED).squaredNorm();
+          T d2 = ((R2*c + w) - minToAReceiverNED).squaredNorm();
+          if(d1<d2) {
+            R_temp = R1;
+          } else {
+            R_temp = R2;
+          }*/
+          
+          // Option 2: Choose RX that makes reception order correct according to ToA
+          Eigen::Matrix<T, 3,1> xHat1 = (R1*c + w);
+          Eigen::Matrix<T, 3,1> xHat2 = (R2*c + w);
+          std::sort(tagDetections.begin(), tagDetections.end(), TBRFishTag::compareByTOA);
+          // Check if R1 is valid
+          T dist = 0;
+          bool R1valid = true;
+          for(auto it: tagDetections) {
+            T d1 = (xHat1 - Eigen::Matrix<T, 3, 1>(it.N, it.E, it.D)).norm();
+            std::cout << it.serial_no << " - " << it.millis << " - " << d1 << " - " << int(it.snr) << std::endl;
+            if(d1 < dist) {
+              R1valid = false;
+              break;
+            } else {
+              dist = d1;
+            }
+          }
+          
+          // Check if R2 is valid
+          dist = 0;
+          bool R2valid = true;
+          for(auto it: tagDetections) {
+            T d1 = (xHat2 - Eigen::Matrix<T, 3, 1>(it.N, it.E, it.D)).norm();
+            std::cout << it.serial_no << " - " << it.millis << " - " << d1 << " - " << int(it.snr) << std::endl;
+            if(d1 < dist) {
+              R2valid = false;
+              break;
+            } else {
+              dist = d1;
+            }
+          }
+          if(R1valid || R2valid){
+            if(R1valid && R2valid) {
+              std::cout << "Both TOA valid" << std::endl;
+              R_temp = R1; // Choosen at random
+            } else if(R1valid) {
+              std::cout << "Only R1 TOA valid" << std::endl;
+              R_temp = R1;
+            } else {
+              std::cout << "Only R2 TOA valid" << std::endl;
+              R_temp = R2;
+            }
+          } else {
+            std::cout << "None TOA valid" << std::endl;
+            R_temp = R2; // Choosen at random
+          }
+          
+          /*Find NED+ToA for all receivers
+          Order by ToA
+          Find distance from Rx to all receivers
+
+          */
+         // Option 3: Choose R1/R2 always
+          R_temp = R1;
         } else { // Only R1 valid
           R_temp = R1;
         }

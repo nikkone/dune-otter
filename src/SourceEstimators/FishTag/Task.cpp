@@ -67,11 +67,11 @@ namespace SourceEstimators
 
 // Kalman Filter
       //! Extended Kalman filter - Qm
-      std::vector<double> ekf_Qm;      
+      std::vector<double> Qm;      
       //! Extended Kalman filter - P0
-      std::vector<double> ekf_P0;
+      std::vector<double> P0;
       //! Extended Kalman filter - x0
-      std::vector<double> ekf_x0;
+      std::vector<double> x0;
       //! Time of Arrival Covariance
       double rr_cov;
       //! Depth measurement Covariance
@@ -152,17 +152,17 @@ namespace SourceEstimators
         .defaultValue("false");
 
 // Kalman Filter Parameters
-        param("x0", m_args.ekf_x0)
+        param("x0", m_args.x0)
         .size(c_states)
         .description("Initial X value for the extended Kalman filter (Should not be 0,0,0, as this may give division by zero in estimators.)")
         .defaultValue("1.0, 1.0, 1.0");
 
-        param("P0", m_args.ekf_P0)
+        param("P0", m_args.P0)
         .size(c_states*c_states)
         .description("Initial P matrix value for the extended Kalman filter, first row")
         .defaultValue("1, 0, 0, 0, 1, 0, 0, 0, 1.0}");
 
-        param("Qm", m_args.ekf_Qm)
+        param("Qm", m_args.Qm)
         .size(c_states*c_states)
         .description("Process noise covariance matrix for the extended Kalman filter")
         .defaultValue("1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.1");
@@ -187,6 +187,7 @@ namespace SourceEstimators
         param("SS - Extra Parameters - Name", m_args.ss_extra_param_name)
         .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
         .defaultValue("receiver_depth,max_jitter,max_updates_per_new_measurement,max_correction_attempts,interval_mode,tag_period");
+        
         param("SS - Extra Parameters - Value", m_args.ss_extra_param_value)
         .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
         .defaultValue("-0.5,0.01,1,0,1,7");
@@ -227,6 +228,7 @@ namespace SourceEstimators
       {
         if(paramChanged(m_args.filter_timestep))
           m_filter_timer.setTop(m_args.filter_timestep);
+          // TODO: Should also change of estimators, or reset them?
         if(paramChanged(m_args.init_c_sound)) {
           m_c_sound = m_args.init_c_sound;
           m_emap.setSoundSpeed(m_c_sound);
@@ -324,11 +326,12 @@ namespace SourceEstimators
             est->setAllowedTimeShift(m_args.max_time_shift_ms);
             est->setTDOACovariance(m_args.rr_cov);
             est->setDepthCovariance(m_args.rz_cov);
+            est->setTimestep(m_args.filter_timestep);
             est->initialize(
               Eigen::Matrix3d::Identity(),
-              Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data()),
-              Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
-              Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
+              Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.Qm.data()),
+              Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.P0.data()),
+              Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.x0.data())
             );
             if(m_args.ss_serial_no == 0) {
               est->setParameter("receiver", msg->serial_no);
@@ -372,12 +375,13 @@ namespace SourceEstimators
               est->setAllowedTimeShift(m_args.max_time_shift_ms);
               est->setTDOACovariance(m_args.rr_cov);
               est->setDepthCovariance(m_args.rz_cov);
+              est->setTimestep(m_args.filter_timestep);
               // TODO: Select min millis of most recent detection as X_0, as it's the closest
               est->initialize(
                 Eigen::Matrix3d::Identity(),
-                Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_Qm.data()),
-                Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.ekf_P0.data()),
-                Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.ekf_x0.data())
+                Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.Qm.data()),
+                Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.P0.data()),
+                Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.x0.data())
               );
               updateWaitTimer[msg->trans_id].setTop(m_args.communicationWaitSec);
               // Create/clear csv logfile for estimator with header

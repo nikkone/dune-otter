@@ -10,7 +10,7 @@ namespace FishTagEstimators
                                         const Eigen::Matrix<T, c_states, c_states> &P0_inn,
                                         const Eigen::Matrix<T, c_states, 1> &x0_inn)
   {
-    name = "MultiReceiverXKFVelocity";
+    name = "MultiReceiverXKFVEL";
 
     //! TODO: Set D matrix, and use it for predict?
     //! Use Phat to descide if additional measurment methods can be used
@@ -27,6 +27,7 @@ namespace FishTagEstimators
     //QVel.block(0, 0, 3, 3) = Q_inn;
     Estimator::initialize(A_inn, Q_inn, P0_inn, x0_inn);
     xkf.initialize(AVel, Q_inn, P0Vel, x0Vel);
+    //xkf.initialize(AVel, QVel, P0Vel, x0Vel);
     //std::cout << "XKF initialize" << std::endl;
   }
   
@@ -51,15 +52,21 @@ namespace FishTagEstimators
   template <class T>
   void MultipleReceiverXKFVelocity<T>::estimateToStream(std::ostream& os) const {
     // Stage 3
-    //os << xkf.stage3.xHat(0) << "," << xkf.stage3.xHat(1) << "," <<xkf.stage3.xHat(2) << "," << xkf.stage3.xHat(3) << "," << xkf.stage3.xHat(4) << "," <<xkf.stage3.xHat(5) << "," << std::sqrt(xkf.stage3.xHat(3)*xkf.stage3.xHat(3) + xkf.stage3.xHat(4)*xkf.stage3.xHat(4) + xkf.stage3.xHat(5)*xkf.stage3.xHat(5));
+    os << xkf.stage3.xHat(0) << "," << xkf.stage3.xHat(1) << "," <<xkf.stage3.xHat(2)
+     << "," << xkf.stage3.xHat(3) << "," << xkf.stage3.xHat(4) << "," <<xkf.stage3.xHat(5) 
+     << "," << std::sqrt(xkf.stage3.xHat(3)*xkf.stage3.xHat(3) + xkf.stage3.xHat(4)*xkf.stage3.xHat(4) + xkf.stage3.xHat(5)*xkf.stage3.xHat(5))
+     << "," << xkf.stage3.PHat.trace();
         
     // Stage 2    
-    os << xkf.stage2.xHat(0) << "," << xkf.stage2.xHat(1) << "," <<xkf.stage2.xHat(2) << "," << xkf.stage2.xHat(3) << "," << xkf.stage2.xHat(4) << "," <<xkf.stage2.xHat(5) << "," << std::sqrt(xkf.stage2.xHat(3)*xkf.stage2.xHat(3) + xkf.stage2.xHat(4)*xkf.stage2.xHat(4) + xkf.stage2.xHat(5)*xkf.stage2.xHat(5));
+    //os << xkf.stage2.xHat(0) << "," << xkf.stage2.xHat(1) << "," <<xkf.stage2.xHat(2) << "," << xkf.stage2.xHat(3) << "," << xkf.stage2.xHat(4) << "," <<xkf.stage2.xHat(5) << "," << std::sqrt(xkf.stage2.xHat(3)*xkf.stage2.xHat(3) + xkf.stage2.xHat(4)*xkf.stage2.xHat(4) + xkf.stage2.xHat(5)*xkf.stage2.xHat(5));
+    // Stage 1  
+    //os << xkf.stage1.xHat(0) << "," << xkf.stage1.xHat(1) << "," <<xkf.stage1.xHat(2);
+
   }
 
   template <class T>
    void MultipleReceiverXKFVelocity<T>::headerToStream(std::ostream& os) const {
-    os << "N,E,D,Ndot,Edot,Ddot,U";
+    os << "N,E,D,Ndot,Edot,Ddot,U,traceP";
    }
 
   template <class T>
@@ -123,6 +130,10 @@ namespace FishTagEstimators
         }
       }
       if(baselines > 1) { // Do not process data/update filter if too few baselines available
+      /*if(baselines < 2) { // Add syntetic baseline
+
+      }*/
+
         // Run filter update, and if sucessfull, set unprocessedData to false for used data receivers
         status = xkf.update(tagBuffer, RDOA, RDOAcombinations);
         switch(status) {

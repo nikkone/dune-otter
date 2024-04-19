@@ -87,6 +87,21 @@ namespace FishTagEstimators
         }
         return false;
       }
+      
+      /// @brief Set function for the filter predict timestep
+      /// @param ts Timestep in seconds
+      virtual void setTimestep(T ts) {
+        if(ts > 0.0) {
+          timestep = ts;
+        }
+      }
+
+      /// @brief Get function for the filter predict timestep
+      /// @return Timestep in seconds
+      T getTimestep() {
+        return timestep;
+      }
+
 
       /// @brief Checks we have waited long enough to allow all receivers to report tag detection.
       /// @param currentTime Time since UNIX Epoch (Midnight UTC of January 1, 1970).
@@ -167,6 +182,9 @@ namespace FishTagEstimators
 
       //! Geometric dillution of position of previous estimate
       uint32_t GDOP;
+
+      //! Timestep that the predict step is run at in seconds
+      T timestep;
 
       //! Positions used in the estimate currently provided by getEstimate
       std::vector<std::pair<T,T>> latestReceiverPositionsUsed;
