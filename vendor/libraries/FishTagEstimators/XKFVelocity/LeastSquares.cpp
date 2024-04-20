@@ -20,7 +20,7 @@ namespace FishTagEstimators
     template <class T>
     LeastSquares<T>::LeastSquares() {
         xHat <<0,0,0;
-        maxDm = 700; //Default
+        maxDm = 550; //Default
     }
 
     template <class T>
@@ -157,15 +157,25 @@ namespace FishTagEstimators
           }*/
           
           // Option 2: Choose RX that makes reception order correct according to ToA
+          // Calculate position of both solutions
           Eigen::Matrix<T, 3,1> xHat1 = (R1*c + w);
           Eigen::Matrix<T, 3,1> xHat2 = (R2*c + w);
+          //Order by ToA ascending
           std::sort(tagDetections.begin(), tagDetections.end(), TBRFishTag::compareByTOA);
-          // Check if R1 is valid
+
+          // SNR to dist logarithmic model
+          const T B_fit = 49.807;
+          const T k_fit = 4.9147;
+          const T a_fit = 0.015309;          
+          // Check if receive order is correct for R1 and calculate squared error from SNR model
           T dist = 0;
           bool R1valid = true;
+          T SNRerror1 = 0;
           for(auto it: tagDetections) {
             T d1 = (xHat1 - Eigen::Matrix<T, 3, 1>(it.N, it.E, it.D)).norm();
-            std::cout << it.serial_no << " - " << it.millis << " - " << d1 << " - " << int(it.snr) << std::endl;
+            T SNRest = B_fit - k_fit*log(d1) - a_fit*d1;
+            SNRerror1 = SNRerror1 + pow(it.snr - SNRest, 2);
+            std::cout << it.serial_no << " - " << it.millis << " - " << d1 << " - " << int(it.snr) << " - " << SNRest << " - " << SNRerror1 << std::endl;
             if(d1 < dist) {
               R1valid = false;
               break;
@@ -174,12 +184,15 @@ namespace FishTagEstimators
             }
           }
           
-          // Check if R2 is valid
+          // Check if receive order is correct for R2 and calculate squared error from SNR model
           dist = 0;
           bool R2valid = true;
+          T SNRerror2 = 0;
           for(auto it: tagDetections) {
             T d1 = (xHat2 - Eigen::Matrix<T, 3, 1>(it.N, it.E, it.D)).norm();
-            std::cout << it.serial_no << " - " << it.millis << " - " << d1 << " - " << int(it.snr) << std::endl;
+            T SNRest = B_fit - k_fit*log(d1) - a_fit*d1;
+            SNRerror2 = SNRerror2 + pow(it.snr - SNRest, 2);
+            std::cout << it.serial_no << " - " << it.millis << " - " << d1 << " - " << int(it.snr) << " - " << SNRest << " - " << SNRerror2 << std::endl;
             if(d1 < dist) {
               R2valid = false;
               break;
@@ -187,10 +200,16 @@ namespace FishTagEstimators
               dist = d1;
             }
           }
+          // Select option according to TOA receive order first, and if still tie, use SNR model
           if(R1valid || R2valid){
             if(R1valid && R2valid) {
-              std::cout << "Both TOA valid" << std::endl;
-              R_temp = R1; // Choosen at random
+              if(SNRerror1 < SNRerror2) {
+                std::cout << "Both TOA valid, R1 least SNR error. SNRerr1: " <<SNRerror1 << ", SNRerr2: " << SNRerror2 << std::endl;
+                R_temp = R1;
+              } else {
+                std::cout << "Both TOA valid, R2 least SNR error. SNRerr1: " << SNRerror1 << ", SNRerr2: " << SNRerror2 << std::endl;
+                R_temp = R2;
+              }
             } else if(R1valid) {
               std::cout << "Only R1 TOA valid" << std::endl;
               R_temp = R1;
@@ -199,17 +218,17 @@ namespace FishTagEstimators
               R_temp = R2;
             }
           } else {
-            std::cout << "None TOA valid" << std::endl;
-            R_temp = R2; // Choosen at random
+            if(SNRerror1 < SNRerror2) {
+              std::cout << "None TOA valid, R1 least SNR error. SNRerr1: " <<SNRerror1 << ", SNRerr2: " << SNRerror2 << std::endl;
+              R_temp = R1;
+            } else {
+              std::cout << "None TOA valid, R2 least SNR error. SNRerr1: " << SNRerror1 << ", SNRerr2: " << SNRerror2 << std::endl;
+              R_temp = R2;
+            }
           }
           
-          /*Find NED+ToA for all receivers
-          Order by ToA
-          Find distance from Rx to all receivers
-
-          */
          // Option 3: Choose R1/R2 always
-          R_temp = R1;
+          //R_temp = R1;
         } else { // Only R1 valid
           R_temp = R1;
         }
