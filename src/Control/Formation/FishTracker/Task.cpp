@@ -76,6 +76,8 @@ namespace Control
         //!
         bool dynamicSpeed;
         //!
+        bool quietTime;
+        //!
         double safePeriodPadding;
       };
 
@@ -88,8 +90,10 @@ namespace Control
         std::unique_ptr<ENCGIS::isPointInLayerStatement> pointCheck;
         //! Timer that is reset when a RemoteSensorInfo for the following entity is received. Top is m_minTagInterval
         Time::Counter<float> m_last_tag_timer;
-        //! Timer.
+        //! Timer that sets the transmission interval
         Time::Counter<float> m_ref_send_timer;
+        //! Timer that sets the transmission interval
+        Time::Counter<float> m_quiet_timer;
         //!
         IMC::RemoteSensorInfo m_last_rs_msg;
         //!
@@ -199,6 +203,9 @@ namespace Control
           .minimumValue("0.0")
           .description("Period between sync messages");
 
+          param("Enable Quiet in Padding Period", m_args.quietTime)
+              .defaultValue("true")
+              .description("Activate or deactivate the actuator cutoff within the safe period padding interval.");
 
           bind<IMC::Abort>(this);
           bind<IMC::Announce>(this);
@@ -216,12 +223,19 @@ namespace Control
           }
           if(paramChanged(m_args.formation_rotation_step))
             m_formation_rotation_step_rad = m_args.formation_rotation_step;
+
           if(paramChanged(m_args.fishtag_min_interval)) {
             m_last_tag_timer.setTop(m_args.fishtag_min_interval);
             m_minTagInterval =  m_args.fishtag_min_interval; 
           }
           if(paramChanged(m_args.useCollisionMitigation))
             m_useCollisionMitigation = m_args.useCollisionMitigation;
+
+          if(paramChanged(m_args.safePeriodPadding)) {
+            if(m_args.quietTime && m_args.safePeriodPadding > 0.0) {
+              m_quiet_timer.setTop(m_args.safePeriodPadding);
+            }
+          }
         }
         
         void onResourceAcquisition(void)
@@ -355,7 +369,11 @@ namespace Control
           switch(msg->msg_type) {
             case IMC::otterFormation::MessageTypeEnum::T_start:
               m_last_of_msg = *msg;
-              m_targetId = std::stoul(msg->target.substr(m_args.estimatorPrefix.length()));
+              try{
+                m_targetId = std::stoul(msg->target.substr(m_args.estimatorPrefix.length()));
+              } catch(...) {
+                err("Could not transform to ID: %s", msg->target.substr(m_args.estimatorPrefix.length()).c_str());
+              }
               m_formation_radius = msg->maxradius;
               m_dsp.value = msg->maxspeed;
               m_dsp.speed_units = msg->speed_units;
@@ -427,7 +445,7 @@ namespace Control
               err("Failed to add tag to buffer");
               return;
           }
-          // Calculate averate SNR (TODO: Implement in tagbuffer)
+          // Calculate average SNR (TODO: Implement in tagbuffer)
           static uint16_t cumSNR = 0;
           if(isActive()) {
             if(m_last_of_msg.target == m_args.estimatorPrefix + std::to_string(msg->trans_id)) {
@@ -439,7 +457,6 @@ namespace Control
                 ++lastTagCount;
                 cumSNR += msg->snr;
                 m_avg_snr = cumSNR/lastTagCount;
-
               }
               m_last_tag_timer.reset();
               inf("Avg SNR: %f", m_avg_snr);
@@ -514,8 +531,9 @@ namespace Control
             if(sqlite3_step(db_handle) == SQLITE_ROW) {
               minTagInterval = sqlite3_column_int(db_handle, 0);
               maxTagInterval = sqlite3_column_int(db_handle, 1);
-              transmissionIntervals = std::string(reinterpret_cast<const char*>(sqlite3_column_text(db_handle, 2)));
-
+              if(sqlite3_column_text(db_handle, 2) != NULL) {
+                transmissionIntervals = std::string(reinterpret_cast<const char*>(sqlite3_column_text(db_handle, 2)));
+              }
               sqlite3_finalize(db_handle);
               return true;
             }
@@ -833,116 +851,44 @@ namespace Control
             retVal.push_back(firstVehicle);
             retVal.push_back(secondVehicle);
             retVal.push_back(thirdVehicle);
-
-
-              //std::get<2>(firstVehicle->second).lon = lon[0];
-              //std::get<2>(firstVehicle->second).lat = lat[0];
-              //std::get<2>(secondVehicle->second).lon = lon[1];
-              //std::get<2>(secondVehicle->second).lat = lat[1];
-              //std::get<2>(thirdVehicle->second).lon = lon[2];
-              //std::get<2>(thirdVehicle->second).lat = lat[2];
-
             double minDist = distMatrix[0][0] + distMatrix[1][1] + distMatrix[2][2];
 
             double tempsum = distMatrix[0][0] + distMatrix[1][2] + distMatrix[2][1];
-            //inf("Tempsum 1: %f + %f + %f = %f", distMatrix[0][0], distMatrix[1][1], distMatrix[2][2], minDist);
-            //for (auto &participant : retVal) {
-            //    inf("1. %d", participant->first);
-            //  }
-            //inf("Tempsum 2: %f + %f + %f = %f", distMatrix[0][0], distMatrix[1][2], distMatrix[2][1], tempsum);
             if( tempsum < minDist) {
               minDist = tempsum;
-              //participant->first);
               retVal[0] = firstVehicle;
               retVal[1] = thirdVehicle;
               retVal[2] = secondVehicle;
-              //std::get<2>(firstVehicle->second).lon = lon[0];
-              //std::get<2>(firstVehicle->second).lat = lat[0];
-              //std::get<2>(thirdVehicle->second).lon = lon[1];
-              //std::get<2>(thirdVehicle->second).lat = lat[1];
-              //std::get<2>(secondVehicle->second).lon = lon[2];
-              //std::get<2>(secondVehicle->second).lat = lat[2];
-              //for (auto &participant : retVal) {
-              //  inf("2- %d", participant->first);
-             // }
 
             }
             tempsum = distMatrix[0][1] + distMatrix[1][0] + distMatrix[2][2];
-            //inf("Tempsum 3: %f + %f + %f = %f", distMatrix[0][1], distMatrix[1][0], distMatrix[2][2], tempsum);
             if( tempsum < minDist) {
               minDist = tempsum;
-              //participant->first);
               retVal[0] = secondVehicle;
               retVal[1] = firstVehicle;
               retVal[2] = thirdVehicle;
-              //std::get<2>(secondVehicle->second).lon = lon[0];
-              //std::get<2>(secondVehicle->second).lat = lat[0];
-              //std::get<2>(firstVehicle->second).lon = lon[1];
-              //std::get<2>(firstVehicle->second).lat = lat[1];
-              //std::get<2>(thirdVehicle->second).lon = lon[2];
-              //std::get<2>(thirdVehicle->second).lat = lat[2];
-              //            for (auto &participant : retVal) {
-              //  inf("3- %d", participant->first);
-             // }
 
             }
             tempsum = distMatrix[0][1] + distMatrix[1][2] + distMatrix[2][0];
-            //inf("Tempsum 4: %f + %f + %f = %f", distMatrix[0][1], distMatrix[1][2], distMatrix[2][0], tempsum);
             if( tempsum < minDist) {
               minDist = tempsum;
-              //participant->first);
               retVal[0] = thirdVehicle;
               retVal[1] = firstVehicle;
               retVal[2] = secondVehicle;
-              //std::get<2>(thirdVehicle->second).lon = lon[0];
-              //std::get<2>(thirdVehicle->second).lat = lat[0];
-              //std::get<2>(firstVehicle->second).lon = lon[1];
-              //std::get<2>(firstVehicle->second).lat = lat[1];
-              //std::get<2>(secondVehicle->second).lon = lon[2];
-              //std::get<2>(secondVehicle->second).lat = lat[2];
-              //            for (auto &participant : retVal) {
-              //  inf("4- %d", participant->first);
-             // }
-
             }
             tempsum = distMatrix[0][2] + distMatrix[1][1] + distMatrix[2][0];
-            //inf("Tempsum 5: %f + %f + %f = %f", distMatrix[0][2], distMatrix[1][1], distMatrix[2][0], tempsum);
             if( tempsum < minDist) {
               minDist = tempsum;
-              //participant->first);
               retVal[0] = thirdVehicle;
               retVal[1] = secondVehicle;
               retVal[2] = firstVehicle;
-
-              //std::get<2>(thirdVehicle->second).lon = lon[0];
-              //std::get<2>(thirdVehicle->second).lat = lat[0];
-              //std::get<2>(secondVehicle->second).lon = lon[1];
-              //std::get<2>(secondVehicle->second).lat = lat[1];
-              //std::get<2>(firstVehicle->second).lon = lon[2];
-              //std::get<2>(firstVehicle->second).lat = lat[2];
-              //            for (auto &participant : retVal) {
-              //  inf("5- %d", participant->first);
-              //}
-
             }
             tempsum = distMatrix[0][2] + distMatrix[1][0] + distMatrix[2][1];
-            //inf("Tempsum 6: %f + %f + %f = %f", distMatrix[0][2], distMatrix[1][0], distMatrix[2][1], tempsum);
             if( tempsum < minDist) {
               minDist = tempsum;
-              //participant->first);
               retVal[0] = secondVehicle;
               retVal[1] = thirdVehicle;
               retVal[2] = firstVehicle;
-              //std::get<2>(secondVehicle->second).lon = lon[0];
-              //std::get<2>(secondVehicle->second).lat = lat[0];
-              //std::get<2>(thirdVehicle->second).lon = lon[1];
-              //std::get<2>(thirdVehicle->second).lat = lat[1];
-              //std::get<2>(firstVehicle->second).lon = lon[2];
-              //std::get<2>(firstVehicle->second).lat = lat[2];
-              //            for (auto &participant : retVal) {
-              //  inf("6- %d", participant->first);
-              //}
-
             }
 
             inf("Triple");
@@ -1073,21 +1019,23 @@ namespace Control
         /// @brief Optimizes speed for redetection of current tag
         /// @param participant 
         void dynamicSpeedAssigner(participant_t participant) {
+          static bool inQuietPeriod = false;
           // if(posest timer timeout)
-          if(m_last_tag_timer.overflow()) {
-            // Set speed to minimum.
-            std::get<2>(participant->second).speed.get()->value = m_last_of_msg.minspeed;
-            // Set desired pos to most recent announce to induce HOOVER mode.
-            std::get<2>(participant->second).lat = std::get<0>(participant->second);
-            std::get<2>(participant->second).lon = std::get<1>(participant->second);
-          }
+          //if(m_last_tag_timer.overflow()) {
+          //  // Set speed to minimum.
+          //  std::get<2>(participant->second).speed.get()->value = m_last_of_msg.minspeed;
+          //  // Set desired pos to most recent announce to induce HOOVER mode.
+          //  std::get<2>(participant->second).lat = std::get<0>(participant->second);
+          //  std::get<2>(participant->second).lon = std::get<1>(participant->second);
+          //}
           // else Check if within safe "unlimited" actuation period
           double interval = m_minTagInterval;
           if(m_periodFinders.find(m_targetId) != m_periodFinders.end()) {
             interval = m_periodFinders[m_targetId]->getExpectedInterval();
           }
-          interval -= m_args.safePeriodPadding; // TODO: parameter
+          interval -= m_args.safePeriodPadding;
           if(m_last_tag_timer.getElapsed() < interval) {
+            // Before tag is sent, so set speed according to distance to target location, allowing max speed/noise generation
             // find distance between announce and desired pos
             // calculate speed needed to reach there within tag deduced interval (m_minTagInterval)
             double desiredSpeed = DUNE::Coordinates::WGS84::distance((double)std::get<0>(participant->second), std::get<1>(participant->second), 0.0, // Pos from Announce
@@ -1096,9 +1044,22 @@ namespace Control
             // Trim desiredSpeed. If close to target, FollowRef will deactivate anyways, so set lower end to minspeed to allow Hoover to move back to center if drifting.
             desiredSpeed = DUNE::Math::trimValue(desiredSpeed, m_last_of_msg.minspeed, m_last_of_msg.maxspeed);
             std::get<2>(participant->second).speed.get()->value = desiredSpeed;
+            inQuietPeriod = false;
           } else {
-            // Set speed to m_last_of_msg->minspeed
-            std::get<2>(participant->second).speed.get()->value = m_last_of_msg.minspeed;
+            // Within maximum likelihood of sending interval, optimize acutation
+            if(m_args.quietTime && m_args.safePeriodPadding > 0.0) {
+              if(inQuietPeriod == false) {
+                inQuietPeriod = true;
+                m_quiet_timer.reset();
+              }
+              if(m_quiet_timer.overflow()) {
+                std::get<2>(participant->second).speed.get()->value = m_last_of_msg.minspeed;
+              } else {
+                std::get<2>(participant->second).speed.get()->value = 0;
+              }
+            } else {
+              std::get<2>(participant->second).speed.get()->value = m_last_of_msg.minspeed;
+            }
           }
           spew("Vehicle %d: %f m/s", participant->first,std::get<2>(participant->second).speed.get()->value);
           spew("Elapsed: %f, Remaining: %f, Top: %f, CompareVal: %f", m_last_tag_timer.getElapsed(), m_last_tag_timer.getRemaining(), m_last_tag_timer.getTop(), interval);
