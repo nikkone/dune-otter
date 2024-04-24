@@ -568,9 +568,10 @@ namespace Maneuver
             return;
           }
 
-          if ( (!ref->speed.isNull() && ref->speed.get()->value == 0))
+          if ( (!ref->speed.isNull() && ref->speed.get()->value < 0.1)) {
+            war("Movement disabled, speed is zero");
             enableMovement(false);
-          else {
+          } else {
             updateDesiredPath(desired_path, at_xy_target);
           } 
         }
