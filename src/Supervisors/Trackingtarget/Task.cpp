@@ -289,10 +289,9 @@ namespace Supervisors
 
                 uint16_t minTagInterval = 0;
                 uint16_t maxTagInterval = 0;
-                std::string intervals = "";
                 try {
                   //if(tagInDB(std::stoi(msg->id.substr(pos_end+m_args.positionFilterPrefix.length())), m_of_msg)) {
-                  if(getTagInfoFromDB(std::stoi(msg->id.substr(pos_end+m_args.positionFilterPrefix.length())),minTagInterval,maxTagInterval,intervals)) {
+                  if(getTagInfoFromDB(std::stoi(msg->id.substr(pos_end+m_args.positionFilterPrefix.length())),minTagInterval,maxTagInterval)) {
                     m_of_msg.custom = generateCustomParameters(m_args.formation_rotation_step,minTagInterval, maxTagInterval, m_args.ref_timeout, m_args.ref_send_interval);
                     spew("Found tag");
                     if(stopPrevious) {
@@ -325,17 +324,16 @@ namespace Supervisors
       }
 
       //! Checks if a tag is in the taglist DB and fills relevant fields in the otterformation message
-      bool getTagInfoFromDB(const uint32_t transId, uint16_t& minTagInterval, uint16_t& maxTagInterval, std::string& transmissionIntervals) {
-        std::string query = "select minInterval, maxInterval, tranmsissionIntervals from taglist where ID=" + std::to_string(transId);
+      bool getTagInfoFromDB(const uint32_t transId, uint16_t& minTagInterval, uint16_t& maxTagInterval) {
+        std::string query = "select minInterval, maxInterval from taglist where ID=" + std::to_string(transId);
         
         sqlite3_stmt* db_handle = nullptr;
 
         if (sqlite3_prepare_v2(m_db, query.c_str(), query.length(), &db_handle, 0) == SQLITE_OK) {
           if(sqlite3_step(db_handle) == SQLITE_ROW) {
-            minTagInterval = sqlite3_column_int(db_handle, 0);
-            maxTagInterval = sqlite3_column_int(db_handle, 1);
             try{
-              transmissionIntervals = std::string(reinterpret_cast<const char*>(sqlite3_column_text(db_handle, 2)));
+              minTagInterval = sqlite3_column_int(db_handle, 0);
+              maxTagInterval = sqlite3_column_int(db_handle, 1);
             } catch (...) {
               sqlite3_finalize(db_handle);
               return false;
