@@ -11,7 +11,7 @@ namespace FishTagEstimators
   class SingleReceiverXKF : public SingleReceiverBase
   {
     public:
-      SingleReceiverXKF() {};
+      SingleReceiverXKF() : xkf(false) {};
       ~SingleReceiverXKF() {};
 
       bool update(TagBuffer *tagBuffer);

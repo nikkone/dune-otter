@@ -173,8 +173,8 @@ namespace FishTagEstimators
           T SNRerror1 = 0;
           for(auto it: tagDetections) {
             T d1 = (xHat1 - Eigen::Matrix<T, 3, 1>(it.N, it.E, it.D)).norm();
-            T SNRest = B_fit - k_fit*log(d1) - a_fit*d1;
-            SNRerror1 = SNRerror1 + pow(it.snr - SNRest, 2);
+            T SNRest = B_fit - k_fit*std::log(d1) - a_fit*d1;
+            SNRerror1 = SNRerror1 + std::pow(it.snr - SNRest, 2);
             std::cout << it.serial_no << " - " << it.millis << " - " << d1 << " - " << int(it.snr) << " - " << SNRest << " - " << SNRerror1 << std::endl;
             if(d1 < dist) {
               R1valid = false;
@@ -190,8 +190,8 @@ namespace FishTagEstimators
           T SNRerror2 = 0;
           for(auto it: tagDetections) {
             T d1 = (xHat2 - Eigen::Matrix<T, 3, 1>(it.N, it.E, it.D)).norm();
-            T SNRest = B_fit - k_fit*log(d1) - a_fit*d1;
-            SNRerror2 = SNRerror2 + pow(it.snr - SNRest, 2);
+            T SNRest = B_fit - k_fit*std::log(d1) - a_fit*d1;
+            SNRerror2 = SNRerror2 + std::pow(it.snr - SNRest, 2);
             std::cout << it.serial_no << " - " << it.millis << " - " << d1 << " - " << int(it.snr) << " - " << SNRest << " - " << SNRerror2 << std::endl;
             if(d1 < dist) {
               R2valid = false;

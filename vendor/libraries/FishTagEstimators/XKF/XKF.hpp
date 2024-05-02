@@ -21,6 +21,8 @@ namespace FishTagEstimators
         LTVKF<T> stage2;
         EKF<T> stage3;
 
+        XKF(bool useTOASNRtieBreakerInn = true) : stage1(useTOASNRtieBreakerInn) {};
+
       //! Initializer for the filter
       //! @param [in] A_inn State transition matrix
       //! @param [in] Q_inn Measurement covariance matrix
@@ -61,6 +63,7 @@ namespace FishTagEstimators
 
         /// @brief Keeps track on if the estimator matrices are initialized
         bool initialized;
+
     };
     template class XKF<float>;
     template class XKF<double>;

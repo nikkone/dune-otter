@@ -16,7 +16,7 @@ namespace FishTagEstimators
         Eigen::Matrix<T, 3,1> xHat;
 
         /// @brief Initializes to zero position estimate and default maxDm(700)
-        LeastSquares();
+        LeastSquares(bool useTOASNRtieBreakerInn = true);
 
         /// @brief Set function for maxDm
         /// @param in_maxDm Desired maxDm, should be positive
@@ -41,6 +41,9 @@ namespace FishTagEstimators
 
         /// @brief Estimated distance between reference receiver and target
         T dm;
+
+        /// @brief Enables TOA tie breaker
+        bool useTOASNRtieBreaker;
 
         /// @brief Internal function to decide which solution of the quadratic formula to use, see (11) in paper
         /// @param R1 First solution from quadratic formula
