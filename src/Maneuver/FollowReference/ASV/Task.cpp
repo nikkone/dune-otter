@@ -472,14 +472,14 @@ namespace Maneuver
 
           if(m_args.useClosestSafePoint) {
             m_con->transformSRID(Math::Angles::degrees(desired_path.end_lon), Math::Angles::degrees(desired_path.end_lat), 4326, m_last_utm_pos_end.first, m_last_utm_pos_end.second, 32632);
-
+            inf("Original Pos: %f, %f", m_last_utm_pos_end.first, m_last_utm_pos_end.second);
             if(m_con->findClosestSafePointUTM(m_last_utm_pos_end.first, m_last_utm_pos_end.second)) {
-              inf("Original Pos: %f, %f", desired_path.end_lat, desired_path.end_lon);
+              //inf("Original Pos: %f, %f", desired_path.end_lat, desired_path.end_lon);
               inf("Safe Pos: %f, %f", m_last_utm_pos_end.first, m_last_utm_pos_end.second);
               spew("End Pointinlayer: %d", pointCheck->run(m_last_utm_pos_end.first, m_last_utm_pos_end.second));
             } else {
               err("findClosestSafePoint failed, probably DB error.");
-              inf("Original Pos: %f, %f", desired_path.end_lat, desired_path.end_lon);
+              //inf("Original Pos: %f, %f", desired_path.end_lat, desired_path.end_lon);
               inf("Safe Pos: %f, %f", m_last_utm_pos_end.first, m_last_utm_pos_end.second);
               return;
             }
@@ -612,9 +612,8 @@ namespace Maneuver
               //////////////////////////////////////////////////// Find end point of planner
               std::pair<double,double> utmend;
               m_con->transformSRID(Math::Angles::degrees(desired_lon), Math::Angles::degrees(desired_lat), 4326, utmend.first, utmend.second, 32632);
-
+                inf("Original Pos: %f, %f", utmend.first, utmend.second);
               if(m_con->findClosestSafePointUTM(utmend.first, utmend.second)) {
-                inf("Original Pos: %f, %f", desired_lat, desired_lon);
                 inf("Safe Pos: %f, %f", utmend.first, utmend.second);
                 spew("End Pointinlayer: %d", pointCheck->run(utmend.first, utmend.second));
               } else {
@@ -626,8 +625,9 @@ namespace Maneuver
               m_con->transformSRID(Math::Angles::degrees(m_estate.lon), Math::Angles::degrees(m_estate.lat), 4326, utmstart.first, utmstart.second, 32632);
               if(!pointCheck->run(utmstart.first, utmstart.second)) {
                 war("Startpoint collison");
+                inf("Original Pos: %f, %f", utmstart.first, utmstart.second);
                 if(m_con->findClosestSafePointUTM(utmstart.first, utmstart.second)) {
-                  inf("Original Pos: %f, %f", desired_lat, desired_lon);
+                  //inf("Original Pos: %f, %f", desired_lat, desired_lon);
                   inf("Safe Pos: %f, %f", utmstart.first, utmstart.second);
                   spew("Start Pointinlayer: %d", pointCheck->run(utmstart.first, utmstart.second));
                 } else {
