@@ -35,6 +35,7 @@
 
 // Cpp std headers
 #include <chrono>
+#include <random>
 
 #include <FishTagEstimators/PeriodFinder.hpp>
 namespace Simulators
@@ -124,6 +125,10 @@ namespace Simulators
 
       //! Location of the sqlite dbfile containing information on the tagged fish
       std::string taglistDBpath;
+
+      float missProbability;
+
+      uint16_t imcSource;
     };
     struct Task: public DUNE::Tasks::Task
     {
@@ -133,6 +138,7 @@ namespace Simulators
       Random::Generator* m_time_prng;
       Random::Generator* m_position_prng;
       Random::Generator* m_depth_prng;
+
 
       uint16_t m_GPS_src_receiver;
       //! Source Entity to use GPS information from.
@@ -317,11 +323,18 @@ namespace Simulators
         param("SNR linear b", m_args.SNR_linear_b)
         .description("Using a linear model ax+b=SNR, this is the 'b' coefficient ")
         .defaultValue("50");
-
+// Others
         param("Taglist DB Path", m_args.taglistDBpath)
         .defaultValue("")
         .description("Path for DB with taglist.");
 
+        param("Miss Probability", m_args.missProbability)
+        .defaultValue("0.0")
+        .description("Likelihood of not sending the fishTag message");
+
+        param("IMC source", m_args.imcSource)
+        .defaultValue("10256")
+        .description("The IMC source to use for the TBRTagDetection message");
 
         bind<IMC::GpsFix>(this);
       }
@@ -509,6 +522,18 @@ namespace Simulators
 
 
 
+
+      bool probability_true(double probability) {
+          // Create a random number generator
+          static std::random_device rd;
+          static std::mt19937 gen(rd());
+
+          // Create a Bernoulli distribution with the given probability
+          std::bernoulli_distribution dist(probability);
+
+          // Generate and return a random boolean value
+          return dist(gen);
+      }
       //! Main loop.
       void
       task(void)
@@ -562,7 +587,14 @@ namespace Simulators
           tag_msg.snr = SNR;
           tag_msg.trans_freq = m_args.trans_freq;
           tag_msg.recv_mem_addr = m_args.recv_mem_addr;
-
+          if(m_args.missProbability > 0.0) {
+            spew("Miss probability");
+            if(probability_true(m_args.missProbability)) {
+              war("Tag sending missed");
+              return;// Do not dispatch
+            }
+          }
+          tag_msg.setSource(m_args.imcSource);
           dispatch(tag_msg);
           if(m_args.sendRemoteSensorInfo) {
             tagPosition.lat = tag_msg.lat;
