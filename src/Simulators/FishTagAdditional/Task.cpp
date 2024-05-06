@@ -29,15 +29,12 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+// Vendor headers
 #include <FishTagEstimators/DUNETagBuffer.hpp>
-// Cpp std headers
-//#include <chrono>
 
 namespace Simulators
 {
   //! If only two vehicles receive fishTags, this task creates a simulated third one.
-  //! TODO: SNR calc
-  //! TODO: Incorporate what receivers are missing.
   //! @author Nikolai Lauvås
   namespace FishTagAdditional
   {
@@ -55,25 +52,26 @@ namespace Simulators
       bool update_c_sound;
       //! Entity providing the Speed of Sound in water
       std::string entity_c_sound;
+      //! IMC address of sources to consider for synthetic tag detections
       std::vector<uint16_t> participants;
-      //!
+      //! After receiving last detectionof tag, wait this long to delete the buffer.
       uint32_t bufferTimeout;
-      //!
-      uint32_t timestampTimeoutLimit_ms;
-      //!
+      //! Model coefficient for SNR = B_fit - k_fit*log(dist) - a_fit*dist
       double a_fit;
-      //!
+      //! Model coefficient for SNR = B_fit - k_fit*log(dist) - a_fit*dist
       double B_fit;
-      //!
+      //! Model coefficient for SNR = B_fit - k_fit*log(dist) - a_fit*dist
       double k_fit;
       //! Initial Speed of Sound in water
       float init_c_sound;
+      //! Enable/disable sending of synthetic transmissions
+      bool enabledState;
     };
     struct Task: public DUNE::Tasks::Periodic
     {
       //! Task arguments
       Arguments m_args;
-      //!
+      //! Buffer for storing recent tag detections
       FishTagEstimators::DUNETagBuffers_t tagBuffers;
       //! FishTag that is sent
       IMC::TBRFishTag m_tag_msg;
@@ -89,7 +87,7 @@ namespace Simulators
       std::map<uint32_t, std::pair<double, double>> m_fishPositions;
       //! Speed of sound provider entity label.
       int m_c_sound_eid;
-      //!
+      //! Speed of sound in water given as mps/1000
       double m_soundSpeed_kmps;
       //! Constructor.
       //! @param[in] name task name.
@@ -109,7 +107,7 @@ namespace Simulators
 // SNR
         param("Minimum SNR", m_args.SNR_detection_limit)
         .description("Mean value of disturbance")
-        .defaultValue("0.0");
+        .defaultValue("10.0");
 
         param("SNR linear a", m_args.a_fit)
         .description("Using a linear model ax+b=SNR, this is the 'a' coefficient")
@@ -128,16 +126,10 @@ namespace Simulators
         .units(Units::Second)
         .defaultValue("15");
 
-        param("Timestamp Timeout [ms]", m_args.timestampTimeoutLimit_ms)
-        .description("Maximum time [ms] to keep an estimator alive without any detections received.")
-        .units(Units::Millisecond)
-        .defaultValue("5");
-
         param("Initial Speed Of Sound", m_args.init_c_sound)
         .units(Units::MeterPerSecond)
         .description("The ID of the tracked fish tag")
         .defaultValue("1485.0");
-
 
         param("Use Speed Of Sound Measurement", m_args.update_c_sound)
         .description("If speed of sound is provided through IMC messages.")
@@ -147,12 +139,15 @@ namespace Simulators
         .description("The entity delivering the Speed of Sound in water")
         .defaultValue("CTD");
 
+         param("SendEnabled", m_args.enabledState)
+        .description("Enable/Disable sending")
+        .defaultValue("true");
+
         bind<IMC::Announce>(this);
         bind<IMC::EstimatedState>(this);
-        bind<IMC::TBRFishTag>(this);
         bind<IMC::RemoteSensorInfo>(this);
         bind<IMC::SoundSpeed>(this);
-
+        bind<IMC::TBRFishTag>(this);
       }
 
       //! Update internal state with new parameter values.
@@ -211,22 +206,6 @@ namespace Simulators
       onResourceRelease(void) {
         clearDUNETagBuffers_t(&tagBuffers);
       }
-      void
-      consume(const IMC::EstimatedState* msg)
-      {
-        if(m_positions.find(msg->getSource()) != m_positions.end()) {
-          m_positions[msg->getSource()].first = msg->lat;
-          m_positions[msg->getSource()].second = msg->lon;
-        }
-      }
-      void
-      consume(const IMC::Announce* msg)
-      {
-        if(m_positions.find(msg->getSource()) != m_positions.end()) {
-          m_positions[msg->getSource()].first = msg->lat;
-          m_positions[msg->getSource()].second = msg->lon;
-        }
-      }
 
       // Generated with Claude 3 OPUS AI
       uint32_t extractNumbers(const std::string& str) {
@@ -244,13 +223,22 @@ namespace Simulators
           
           return numbers;
       }
+
       void
-      consume(const IMC::SoundSpeed* msg)
+      consume(const IMC::Announce* msg)
       {
-        if(msg->getSourceEntity() == m_c_sound_eid) {
-          if(m_args.update_c_sound) {
-            m_soundSpeed_kmps = msg->value/1000;
-          }
+        if(m_positions.find(msg->getSource()) != m_positions.end()) {
+          m_positions[msg->getSource()].first = msg->lat;
+          m_positions[msg->getSource()].second = msg->lon;
+        }
+      }
+
+      void
+      consume(const IMC::EstimatedState* msg)
+      {
+        if(m_positions.find(msg->getSource()) != m_positions.end()) {
+          m_positions[msg->getSource()].first = msg->lat;
+          m_positions[msg->getSource()].second = msg->lon;
         }
       }
 
@@ -266,6 +254,16 @@ namespace Simulators
             spew("Added tag to pos buffer: %u", tagID);
           } else {
             err("Could not decode : %s", (msg->id).c_str());
+          }
+        }
+      }
+
+      void
+      consume(const IMC::SoundSpeed* msg)
+      {
+        if(msg->getSourceEntity() == m_c_sound_eid) {
+          if(m_args.update_c_sound) {
+            m_soundSpeed_kmps = msg->value/1000;
           }
         }
       }
@@ -298,7 +296,7 @@ namespace Simulators
         }
       }
 
-      void transmittSyntheticDetection(const FishTagEstimators::DUNETagBuffer* buffer) {
+      bool transmittSyntheticDetection(const FishTagEstimators::DUNETagBuffer* buffer) {
         if(serialNoToIMCsrc.size() == m_positions.size()) {
           for(auto participant : serialNoToIMCsrc) {
             // Check if a participant has a buffer or not
@@ -327,12 +325,16 @@ namespace Simulators
               m_tag_msg.unix_timestamp = synthTOA_ms/1000;
               m_tag_msg.millis = synthTOA_ms%1000;
 // Location and model dependent SNR
-              m_tag_msg.snr = m_args.B_fit - m_args.k_fit*std::log(dist) - m_args.a_fit*dist;; // TODO: make from model
-
-              dispatch(m_tag_msg);
-              return; // Limits it to only one
+              m_tag_msg.snr = m_args.B_fit - m_args.k_fit*std::log(dist) - m_args.a_fit*dist;
+              if(m_tag_msg.snr > m_args.SNR_detection_limit) {
+                if(m_args.enabledState) {
+                  dispatch(m_tag_msg);
+                }
+              }
+              return true; // Limits it to only one
               } catch(...) {
                 err("Something went wrong with calculating synth tag");
+                return false;
               }
             }
           }
@@ -340,8 +342,9 @@ namespace Simulators
         } else {
           war("serialNoToIMCsrc incomplete, doing nothing.");
         }
+        return false;
       }
-      //! Main loop.
+
       void
       task(void)
       {   
@@ -353,6 +356,7 @@ namespace Simulators
             buffersToDelete.push_back(buffer.first);
           }
         }
+
         // Deleting done in separate loop to not mess up iteration through map.
         for(auto &id : buffersToDelete) {
           auto it = tagBuffers.find(id);
@@ -361,12 +365,11 @@ namespace Simulators
             tagBuffers.erase(id);
           }
         }
+
         // Remaining timestamps has not timed out
         for(const auto buffer : tagBuffers) {
           if((buffer.second)->size() == 2) {
-            //if(m_args.timestampTimeoutLimit_ms > (buffer.second)->getLatestTimestamp()) {
-              transmittSyntheticDetection(buffer.second);
-            //} 
+            transmittSyntheticDetection(buffer.second);
           }
         }
       } // End of task function
