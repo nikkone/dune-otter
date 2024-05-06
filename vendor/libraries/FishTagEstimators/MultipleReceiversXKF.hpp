@@ -2,6 +2,7 @@
 #define FishTagEstimator_MultipleReceiverXKF
 #include <Eigen/Core>
 #include "Estimator.hpp"
+#include "MultipleReceiverBase.hpp"
 #include "XKF/XKF.hpp"
 
 //! Task that runs source position estimation algorithms for TBRFishTag
@@ -12,7 +13,7 @@
 namespace FishTagEstimators
 {
   template <class T>
-  class MultipleReceiverXKF : public Estimator<double>
+  class MultipleReceiverXKF : public MultipleReceiverBase
   {
     public:
       MultipleReceiverXKF() {};
@@ -32,10 +33,14 @@ namespace FishTagEstimators
         return xkf.stage3.active;
       }
 
+      void setSNRmodel(double B_fit_inn, double k_fit_inn, double a_fit_inn) {
+        xkf.stage1.setSNRmodel(B_fit_inn, k_fit_inn, a_fit_inn);
+      }
+
       void estimateToStream(std::ostream& os) const;
-  void setTDOACovariance(T TDOACovariance);
-  void setDepthCovariance(T depthCovariance);
-  bool checkTime(T transmissionFirstTime, T currentTime) const;
+      void setTDOACovariance(T TDOACovariance);
+      void setDepthCovariance(T depthCovariance);
+      bool checkTime(T transmissionFirstTime, T currentTime) const;
     private:
       
   };

@@ -18,10 +18,8 @@ namespace FishTagEstimators
     }
 
     template <class T>
-    LeastSquares<T>::LeastSquares(bool useTOASNRtieBreakerInn) {
-        xHat <<0,0,0;
-        useTOASNRtieBreaker = useTOASNRtieBreakerInn;
-        maxDm = 550; //Default
+    LeastSquares<T>::LeastSquares(bool useTOASNRtieBreakerInn) : maxDm(550), useTOASNRtieBreaker(useTOASNRtieBreakerInn), B_fit(49.807), k_fit(4.9147), a_fit(0.015309) {
+        xHat << 0,0,0;
     }
 
     template <class T>
@@ -166,11 +164,7 @@ namespace FishTagEstimators
             Eigen::Matrix<T, 3,1> xHat2 = (R2*c + w);
             //Order by ToA ascending
             std::sort(tagDetections.begin(), tagDetections.end(), TBRFishTag::compareByTOA);
-
-            // SNR to dist logarithmic model
-            const T B_fit = 49.807;
-            const T k_fit = 4.9147;
-            const T a_fit = 0.015309;          
+     
             // Check if receive order is correct for R1 and calculate squared error from SNR model
             T dist = 0;
             bool R1valid = true;

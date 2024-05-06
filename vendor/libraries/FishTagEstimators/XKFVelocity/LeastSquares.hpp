@@ -4,6 +4,7 @@
 #include <Eigen/Core>
 #include "../TagBuffer.hpp"
 #include <vector>
+#include <iostream>
 namespace FishTagEstimators
 {
   namespace XKFVelocity
@@ -34,13 +35,29 @@ namespace FishTagEstimators
         T getDm() {
           return dm;
         }
-
+        /// @brief Setter for the SNR model used in the tie breaker. Model: SNR = B_fit - k_fit*log(dist) - a_fit*dist
+        /// @param B_fit_inn Constant coefficient combining SL-NL-BW.
+        /// @param k_fit_inn Logarithic dispersion coefficient
+        /// @param a_fit_inn Absorbtion coefficient. For physicaly realistic model, should be positive.
+        void setSNRmodel(T B_fit_inn, T k_fit_inn, T a_fit_inn) {
+          //std::cout << "SNR update" << std::endl;
+          B_fit = B_fit_inn;
+          k_fit = k_fit_inn;
+          a_fit = a_fit_inn;
+        }
       private:
         /// @brief Max distance between reference receiver and target considered realistic. Larger solutions are discarded.
         T maxDm;
 
         /// @brief Estimated distance between reference receiver and target
         T dm;
+
+        //! Model coefficient for SNR = B_fit - k_fit*log(dist) - a_fit*dist
+        T B_fit;
+        //! Model coefficient for SNR = B_fit - k_fit*log(dist) - a_fit*dist
+        T k_fit;
+        //! Model coefficient for SNR = B_fit - k_fit*log(dist) - a_fit*dist
+        T a_fit;
 
         /// @brief Internal function to decide which solution of the quadratic formula to use, see (11) in paper
         /// @param R1 First solution from quadratic formula

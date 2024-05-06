@@ -1,6 +1,8 @@
 #pragma once
 #include <Eigen/Core>
 #include "Estimator.hpp"
+#include "MultipleReceiverBase.hpp"
+
 #include "XKFVelocity/XKF.hpp"
 
 //! Task that runs source position estimation algorithms for TBRFishTag
@@ -11,7 +13,7 @@
 namespace FishTagEstimators
 {
   template <class T>
-  class MultipleReceiverXKFVelocity : public Estimator<double>
+  class MultipleReceiverXKFVelocity : public MultipleReceiverBase
   {
     public:
       MultipleReceiverXKFVelocity() {};
@@ -37,6 +39,11 @@ namespace FishTagEstimators
           timestep = ts;
           xkf.setTimestep(ts);
         }
+      }
+
+
+      void setSNRmodel(double B_fit_inn, double k_fit_inn, double a_fit_inn) {
+        xkf.stage1.setSNRmodel(B_fit_inn, k_fit_inn, a_fit_inn);
       }
 
       bool isActive() const {

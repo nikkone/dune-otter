@@ -24,7 +24,7 @@ namespace FishTagEstimators
    void Estimator<T, STATES>::headerToStream(std::ostream& os) const {
     os << "N,E,D";
    }
-
+/*
     typedef enum 
   { 
     param_trans_id,
@@ -33,7 +33,7 @@ namespace FishTagEstimators
     param_max_jitter,
     param_max_updates_per_new_measurement,
     param_max_correction_attempts
-  } t_param;
+  } t_param;*/
 
     template <class T, uint8_t STATES>
   void Estimator<T, STATES>::setSoundSpeed(T soundSpeed) {
@@ -82,6 +82,10 @@ namespace FishTagEstimators
   bool Estimator<T, STATES>::activateEstimator() {
     std::cout << "Base" << std::endl;
     return false;
+  }
+  template <class T, uint8_t STATES>
+  void Estimator<T, STATES>::setSNRmodel(double B_fit_inn, double k_fit_inn, double a_fit_inn) {
+    std::cout << "SNR set at base (a,b,k): (" << a_fit_inn << "," << B_fit_inn << "," << k_fit_inn << std::endl;
   }
 
   template <class T, uint8_t STATES>

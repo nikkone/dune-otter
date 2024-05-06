@@ -69,6 +69,8 @@ namespace FishTagEstimators
       //! @param [in] x0_inn Initial estimator position [NED]
       virtual void setPositionEstimate(const Eigen::Matrix<T, c_states, 1> &x0_inn);
 
+      virtual void setSNRmodel(double B_fit_inn, double k_fit_inn, double a_fit_inn);
+
       //! Common interface to check if a estimator is considered active
       virtual bool isActive() const;
 

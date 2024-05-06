@@ -58,11 +58,11 @@ namespace SourceEstimators
       bool update_c_sound;
       //! Entity providing the Speed of Sound in water
       std::string entity_c_sound;
-
       //! Reset toggle for buffers and estimators
       bool reset_toggle;
-
+      //!
       std::vector<std::string> singleEstimators;
+      //!
       std::vector<std::string> multiEstimators;
 
 // Kalman Filter
@@ -79,20 +79,28 @@ namespace SourceEstimators
       //! Maximum allowed time [ms] shift between receivers' messages
       double max_time_shift_ms;
 // Single receiver estimator arguments
+      //!
       uint32_t ss_serial_no;
       //!
       std::vector<std::string> ss_extra_param_name;
       //!
       std::vector<double> ss_extra_param_value;
-
+      //!
       uint32_t timestampTimeout;
       //! Factor to multiply tag data with to get depth in meters
       float depthConversion;
-
       //! Wait this long untill updating position filter (To avoid processing only the two first when three are available)
       float communicationWaitSec;
       // Enable/disable timeout
       bool useTimeout;
+
+// Multiple receiver estimator arguments
+      //!
+      std::vector<std::string> mr_extra_param_name;
+      //!
+      std::vector<double> mr_extra_param_value;
+      //! a,b,k
+      std::vector<double> SNRmodel;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -103,22 +111,30 @@ namespace SourceEstimators
       FishTagEstimators::DUNETagBuffers_t tagBuffers;
       //!
       FishTagEstimators::EstimatorMap m_emap;
+      //!
       std::vector<FishTagEstimators::EstimatorMap::estimatorTypeEnum_t> SingleReceiverEstimatorTypeToUse;
+      //!
       std::vector<FishTagEstimators::EstimatorMap::estimatorTypeEnum_t> MultiReceiverEstimatorTypeToUse;
+      //! Is SS extra parameters valid?
       bool m_ss_valid;
+      //! Is MR extra parameters valid?
+      bool m_mr_valid;
       //! Speed of sound provider entity label.
       int m_c_sound_eid;
       //! Current Speed of sound in water
       float m_c_sound;
       //! Timer responsible for running filter timestep
       Time::Counter<float> m_filter_timer;
-
+      //!
       std::map<uint32_t, Time::Counter<float>> updateWaitTimer;
-
+      //!
       std::string m_startupTimestamp;
+
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
-        m_ss_valid(false)
+        m_ss_valid(false),
+        m_mr_valid(false)
+
       {
         param("Filter Timestep", m_args.filter_timestep)
         .description("The timestep of the filter")
@@ -191,7 +207,15 @@ namespace SourceEstimators
         param("SS - Extra Parameters - Value", m_args.ss_extra_param_value)
         .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
         .defaultValue("-0.5,0.01,1,0,1,7");
-
+// Multiple receiver parameters
+        param("MR - Extra Parameters - Name", m_args.mr_extra_param_name)
+        .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
+        .defaultValue("snr_a,snr_b,snr_k");
+        
+        param("MR - Extra Parameters - Value", m_args.mr_extra_param_value)
+        .description("Receiver to use for Single receiver estimators. 0 takes value from first received message.")
+        .defaultValue("0.015309,49.807,4.9147");
+// General
         param("Single Receiver Estimators", m_args.singleEstimators)
         .description("What single-receiver estimators to activate")
         .defaultValue("EKF, UKF, SRUKF");
@@ -217,6 +241,11 @@ namespace SourceEstimators
         param("Use Timeout", m_args.useTimeout)
         .description("Enable/disable timeout")
         .defaultValue("false");
+
+        param("SNRmodel abk", m_args.SNRmodel)
+        .description("SNR model a,B,k")
+        .size(3)
+        .defaultValue("0.015309,49.807,4.9147");
 
         bind<IMC::TBRFishTag>(this);
         bind<IMC::SoundSpeed>(this);
@@ -248,6 +277,31 @@ namespace SourceEstimators
             m_ss_valid = false;
           }
         }
+
+        if(paramChanged(m_args.mr_extra_param_name) || paramChanged(m_args.mr_extra_param_value)) {
+          if(m_args.mr_extra_param_name.size() == m_args.mr_extra_param_value.size()) {
+            for(unsigned i = 0; i<m_args.mr_extra_param_name.size(); i++) {
+              inf("%s = %lf", m_args.mr_extra_param_name[i].c_str(), m_args.mr_extra_param_value[i]);
+              m_emap.setParameterAll(m_args.mr_extra_param_name[i].c_str(), m_args.mr_extra_param_value[i]);
+            }
+            m_mr_valid = true;
+          } else {
+            m_mr_valid = false;
+          }
+        }
+
+        if(paramChanged(m_args.SNRmodel)) {
+          // Iterate over (transmitter,estimators) map
+          for (auto it : m_emap.estimatorMap) {
+            if (it.second != NULL) // If there are estimators for the given transmitter
+            {
+              for(auto est : *(it.second)) {
+                est->setSNRmodel(m_args.SNRmodel[1],m_args.SNRmodel[2],m_args.SNRmodel[0]);
+              }
+            }
+          }
+        }
+
         if(paramChanged(m_args.singleEstimators) || paramChanged(m_args.multiEstimators)) {
           m_emap.clear();
           clearDUNETagBuffers_t(&tagBuffers);
@@ -376,6 +430,7 @@ namespace SourceEstimators
               est->setTDOACovariance(m_args.rr_cov);
               est->setDepthCovariance(m_args.rz_cov);
               est->setTimestep(m_args.filter_timestep);
+              est->setSNRmodel(m_args.SNRmodel[1],m_args.SNRmodel[2],m_args.SNRmodel[0]);
               // TODO: Select min millis of most recent detection as X_0, as it's the closest
               est->initialize(
                 Eigen::Matrix3d::Identity(),
@@ -383,6 +438,12 @@ namespace SourceEstimators
                 Eigen::Map<Eigen::Matrix<double, c_states, c_states> >(m_args.P0.data()),
                 Eigen::Map<Eigen::Matrix<double, c_states, 1> >(m_args.x0.data())
               );
+              if(m_mr_valid) {
+                for(unsigned i = 0; i<m_args.mr_extra_param_name.size(); i++) {
+                  est->setParameter(m_args.mr_extra_param_name[i].c_str(), m_args.mr_extra_param_value[i]);
+                }
+              }
+
               updateWaitTimer[msg->trans_id].setTop(m_args.communicationWaitSec);
               // Create/clear csv logfile for estimator with header
               std::ofstream logOutStream;
