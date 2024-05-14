@@ -79,6 +79,8 @@ namespace Control
         bool quietTime;
         //!
         double safePeriodPadding;
+        //! Size of MBR used to search for dafe point in.
+        double safePointSearchDistance_m;
       };
 
       struct Task : public DUNE::Tasks::Task
@@ -206,6 +208,12 @@ namespace Control
           param("Enable Quiet in Padding Period", m_args.quietTime)
               .defaultValue("true")
               .description("Activate or deactivate the actuator cutoff within the safe period padding interval.");
+
+          param("Safe Point MBR Size", m_args.safePointSearchDistance_m)
+          .units(Units::Meter)
+          .defaultValue("2000.0")
+          .minimumValue("200.0")
+          .description("Size of MBR used to search for dafe point in.");              
 
           bind<IMC::Abort>(this);
           bind<IMC::Announce>(this);
@@ -523,7 +531,7 @@ namespace Control
 
         //! Checks if a tag is in the taglist DB and fills relevant fields in the otterformation message
         bool getTagInfoFromDB(const uint32_t transId, uint16_t& minTagInterval, uint16_t& maxTagInterval, std::string& transmissionIntervals) {
-          std::string query = "select minInterval, maxInterval, tranmsissionIntervals from taglist where ID=" + std::to_string(transId);
+          std::string query = "select minInterval, maxInterval, transmissionIntervals from taglist where ID=" + std::to_string(transId);
           
           sqlite3_stmt* db_handle = nullptr;
 
@@ -724,7 +732,7 @@ namespace Control
                 }
                 // Moving formation from land to keep formation
                 radius = m_last_of_msg.minradius;
-                if(m_con->findClosestSafePointUTM(x0,y0,radius*(1-std::cos(M_PI/participants)))) {// TODO: Debug this
+                if(m_con->findClosestSafePointUTM(x0,y0,radius*(1-std::cos(M_PI/participants)), m_args.safePointSearchDistance_m)) {// TODO: Debug this
                 // ^^^^-radius*(1-std::cos(M_PI/participants)) is the lowest distance to land that can be safely used with a rotated formation.
                   if(rotateFormation(x0,y0,radius,participants,angle)) { 
                     inf("Moved formation to safe point as mitigation for formation collision");

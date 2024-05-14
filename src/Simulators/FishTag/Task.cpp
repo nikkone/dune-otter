@@ -456,7 +456,7 @@ namespace Simulators
 
       //! Checks if a tag is in the taglist DB and fills relevant fields in the otterformation message
       bool getTagInfoFromDB(const uint32_t transId, uint16_t& minTagInterval, uint16_t& maxTagInterval, std::string& transmissionIntervals) {
-        std::string query = "select minInterval, maxInterval, tranmsissionIntervals from taglist where ID=" + std::to_string(transId);
+        std::string query = "select minInterval, maxInterval, transmissionIntervals from taglist where ID=" + std::to_string(transId);
         
         sqlite3_stmt* db_handle = nullptr;
 

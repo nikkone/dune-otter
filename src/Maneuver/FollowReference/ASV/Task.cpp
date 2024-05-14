@@ -67,12 +67,13 @@ namespace Maneuver
         std::string dbNavigableLayerName;
         //! Innavigable Layer/table Name from encDBpath
         std::string dbInnavigableLayerName;
-
+        //!
         bool useClosestSafePoint;
-
+        //! Size of MBR used to search for dafe point in.
+        double safePointSearchDistance_m;
         //! The names of other IMC vehicles to avoid while performing this maneuver.
         std::vector<std::string> otherVehicles;
-
+        //!
         double safe_distance;
       };
 
@@ -193,6 +194,12 @@ namespace Maneuver
           .defaultValue("15.0")
           .units(Units::Meter)
           .description("Minimum safe distance to other vehicles");
+
+          param("Safe Point MBR Size", m_args.safePointSearchDistance_m)
+          .units(Units::Meter)
+          .defaultValue("2000.0")
+          .minimumValue("200.0")
+          .description("Size of MBR used to search for dafe point in.");              
 
           m_got_reference = false;
           m_got_reference_start = false;
@@ -473,7 +480,7 @@ namespace Maneuver
           if(m_args.useClosestSafePoint) {
             m_con->transformSRID(Math::Angles::degrees(desired_path.end_lon), Math::Angles::degrees(desired_path.end_lat), 4326, m_last_utm_pos_end.first, m_last_utm_pos_end.second, 32632);
             inf("Original Pos: %f, %f", m_last_utm_pos_end.first, m_last_utm_pos_end.second);
-            if(m_con->findClosestSafePointUTM(m_last_utm_pos_end.first, m_last_utm_pos_end.second)) {
+            if(m_con->findClosestSafePointUTM(m_last_utm_pos_end.first, m_last_utm_pos_end.second, 1.0, m_args.safePointSearchDistance_m)) {
               //inf("Original Pos: %f, %f", desired_path.end_lat, desired_path.end_lon);
               inf("Safe Pos: %f, %f", m_last_utm_pos_end.first, m_last_utm_pos_end.second);
               spew("End Pointinlayer: %d", pointCheck->run(m_last_utm_pos_end.first, m_last_utm_pos_end.second));
@@ -613,7 +620,7 @@ namespace Maneuver
               std::pair<double,double> utmend;
               m_con->transformSRID(Math::Angles::degrees(desired_lon), Math::Angles::degrees(desired_lat), 4326, utmend.first, utmend.second, 32632);
                 inf("Original Pos: %f, %f", utmend.first, utmend.second);
-              if(m_con->findClosestSafePointUTM(utmend.first, utmend.second)) {
+              if(m_con->findClosestSafePointUTM(utmend.first, utmend.second, 1.0,  m_args.safePointSearchDistance_m)) {
                 inf("Safe Pos: %f, %f", utmend.first, utmend.second);
                 spew("End Pointinlayer: %d", pointCheck->run(utmend.first, utmend.second));
               } else {
@@ -626,7 +633,7 @@ namespace Maneuver
               if(!pointCheck->run(utmstart.first, utmstart.second)) {
                 war("Startpoint collison");
                 inf("Original Pos: %f, %f", utmstart.first, utmstart.second);
-                if(m_con->findClosestSafePointUTM(utmstart.first, utmstart.second)) {
+                if(m_con->findClosestSafePointUTM(utmstart.first, utmstart.second, 1.0,  m_args.safePointSearchDistance_m)) {
                   //inf("Original Pos: %f, %f", desired_lat, desired_lon);
                   inf("Safe Pos: %f, %f", utmstart.first, utmstart.second);
                   spew("Start Pointinlayer: %d", pointCheck->run(utmstart.first, utmstart.second));
@@ -652,6 +659,9 @@ namespace Maneuver
                   m_path_sent = true;
                   return true;
               } else {
+                  if(m_moving) {
+                    enableMovement(false);
+                  }
                 m_path.end_lat = m_estate.lat;
                 m_path.end_lon = m_estate.lon;
                 war("OMPL failed, doing nothing");

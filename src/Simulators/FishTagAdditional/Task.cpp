@@ -304,7 +304,7 @@ namespace Simulators
               war("Dispatching missing detection for : %u", participant.second);
               try{
 // Prepare TBRFishTag message
-              auto referenceDetection = ((buffer->tagBuffer).cbegin()->second)->cbegin();
+              auto referenceDetection = ((buffer->tagBuffer).cbegin()->second)->begin();
               m_tag_msg.serial_no = m_args.serial_no; // Set to the mission value
               m_tag_msg.trans_protocol = referenceDetection->trans_protocol;
               m_tag_msg.trans_id = referenceDetection->trans_id;
