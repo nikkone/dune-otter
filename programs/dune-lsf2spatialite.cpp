@@ -19,6 +19,9 @@
 //***************************************************************************
 // Utility for converting lsf logs to spatialite database                   *
 //***************************************************************************
+
+// Use command 'find . -name "*.lsf.gz"' to find all log files within folders and subfolders
+
 #include <fstream>
 #include <iostream>
 #include <iomanip>
