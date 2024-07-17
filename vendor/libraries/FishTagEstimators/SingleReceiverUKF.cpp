@@ -1,7 +1,7 @@
 #include "SingleReceiverUKF.hpp"
 namespace FishTagEstimators
 {
-  std::tuple<double, double, double> SingleReceiverUKF::getEstimate() {
+  std::tuple<double, double, double> SingleReceiverUKF::getEstimate() const{
     return {ukf.xHat(0),ukf.xHat(1),ukf.xHat(2)};
   }
 

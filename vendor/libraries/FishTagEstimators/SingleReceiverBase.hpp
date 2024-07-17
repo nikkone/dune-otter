@@ -41,6 +41,10 @@ namespace FishTagEstimators
       ~SingleReceiverBase() {};
 
       void estimateToStream(std::ostream& os) const;
+
+      //! Common interface to get interface.
+      //! @return Tuple with estimated position in a NED frame (relative to origin used in tagBuffer).
+      virtual std::tuple<double, double, double> getEstimate() const;
     protected:
       enum interval_mode_enum
       { 

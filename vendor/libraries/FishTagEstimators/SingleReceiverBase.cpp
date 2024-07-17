@@ -82,4 +82,9 @@ namespace FishTagEstimators
     double result[3] = {std::get<0>(estimate), std::get<1>(estimate), std::get<2>(estimate)};
     os << result[0] << "," << result[1] << "," << result[2];
   }
+
+   std::tuple<double, double, double> SingleReceiverBase::getEstimate() const{
+    std::cout << "SingleReceiverBase getEstimate!!!" << std::endl;
+    return {0.0,0.0,0.0};
+  }
 }

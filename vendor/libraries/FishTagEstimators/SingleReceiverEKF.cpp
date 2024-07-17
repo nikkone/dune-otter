@@ -1,7 +1,7 @@
 #include "SingleReceiverEKF.hpp"
 namespace FishTagEstimators
 {
-  std::tuple<double, double, double> SingleReceiverEKF::getEstimate() {
+  std::tuple<double, double, double> SingleReceiverEKF::getEstimate() const {
     return {ekf.xHat(0),ekf.xHat(1),ekf.xHat(2)};
   }
 

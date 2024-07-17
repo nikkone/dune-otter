@@ -1,7 +1,7 @@
 #include "SingleReceiverASLV2.hpp"
 namespace FishTagEstimators
 {
-  std::tuple<double, double, double> SingleReceiverASLV2::getEstimate() {
+  std::tuple<double, double, double> SingleReceiverASLV2::getEstimate() const {
     return {aslv.xHat(0),aslv.xHat(1),aslv.xHat(2)};
   }
 

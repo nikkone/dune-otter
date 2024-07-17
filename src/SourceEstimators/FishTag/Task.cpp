@@ -569,10 +569,12 @@ Sjekk timer i onMain, kjør m_emap.updateAll(msg->trans_id, tagBuffers[msg->tran
               if (it.second != NULL) // If there are estimators for the given transmitter
               {
                 for(auto est : *(it.second)) {
-                  if(est->hasUnprocessedData() && ( (tagBuffers[it.first]->getNoOfMostRecentdetections() > 2) || updateWaitTimer[it.first].overflow() )) {
+                  if(est->hasUnprocessedData()) {//} && ( (tagBuffers[it.first]->getNoOfMostRecentdetections() > 2) || updateWaitTimer[it.first].overflow() )) {
                     if(est->update(tagBuffers[it.first])) {
                       updateWaitTimer[it.first].reset();
                       inf("Update");
+                    } else {
+                      war("No update");
                     }
                   }
                   

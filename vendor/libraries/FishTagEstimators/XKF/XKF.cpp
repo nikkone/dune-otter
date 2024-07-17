@@ -60,6 +60,7 @@ namespace FishTagEstimators
           }
         }
       }
+      std::cout << stage3.xHat(0) << ", " << stage3.xHat(1) << ", " << stage3.xHat(2) << std::endl;
       return status;
     }
     template <class T>

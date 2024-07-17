@@ -1,7 +1,7 @@
 #include "SingleReceiverSRUKF.hpp"
 namespace FishTagEstimators
 {
-  std::tuple<double, double, double> SingleReceiverSRUKF::getEstimate() {
+  std::tuple<double, double, double> SingleReceiverSRUKF::getEstimate() const {
     return {srukf.xHat(0),srukf.xHat(1),srukf.xHat(2)};
   }
 

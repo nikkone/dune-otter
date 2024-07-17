@@ -36,7 +36,7 @@ namespace FishTagEstimators
                                         const Eigen::Matrix<double, c_states, c_states> &Q_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &P0_inn,
                                         const Eigen::Matrix<double, c_states, 1> &x0_inn);
-      std::tuple<double, double, double> getEstimate();
+      std::tuple<double, double, double> getEstimate() const;
       void print(std::ostream& os) const;
       bool isActive() const {
         return srukf.active;

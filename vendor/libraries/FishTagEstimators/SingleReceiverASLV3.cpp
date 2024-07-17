@@ -1,20 +1,20 @@
-#include "SingleReceiverASLV.hpp"
+#include "SingleReceiverASLV3.hpp"
 namespace FishTagEstimators
 {
-  std::tuple<double, double, double> SingleReceiverASLV::getEstimate() const {
+  std::tuple<double, double, double> SingleReceiverASLV3::getEstimate() const {
     return {aslv.x(0),aslv.x(1),aslv.x(2)};
   }
 
-  void SingleReceiverASLV::initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
+  void SingleReceiverASLV3::initialize(const Eigen::Matrix<double, c_states, c_states> &A_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &Q_inn,
                                         const Eigen::Matrix<double, c_states, c_states> &P0_inn,
                                         const Eigen::Matrix<double, c_states, 1> &x0_inn)
   {
     SingleReceiverBase::initialize(A_inn, Q_inn, P0_inn, x0_inn);
-    name = "SingleReceiverASLV";
+    name = "SingleReceiverASLV3";
   }
 
-  bool SingleReceiverASLV::update(TagBuffer *tagBuffer) {
+  bool SingleReceiverASLV3::update(TagBuffer *tagBuffer) {
     SingleReceiverBase::update(tagBuffer);
     if(tag_period <= 0) {
       return false;
@@ -72,11 +72,11 @@ namespace FishTagEstimators
         allMeasurements << i->N, i->E ,receiver_depth, receiverBuffer->rbegin()->N,receiverBuffer->rbegin()->E ,receiver_depth, rdoa, rangeSNR, depth;
 
           // Update the algebraic solver
-          if (aslv.addMeasurement(allMeasurements)) {
+          //if (aslv.addMeasurement(allMeasurements)) {
             if(!isActive()) {
               activateEstimator();
             }
-          }
+          //}
         
 
           updates++;
@@ -95,10 +95,10 @@ namespace FishTagEstimators
     return false;
   }
 /*
-  void SingleReceiverASLV::predict() {
+  void SingleReceiverASLV3::predict() {
     //ekf.predict();
   }*/
-  void SingleReceiverASLV::print(std::ostream& os) const {
+  void SingleReceiverASLV3::print(std::ostream& os) const {
 
     os << "x" << std::endl << aslv.x << std::endl;
   }

@@ -20,7 +20,7 @@ namespace FishTagEstimators
     }
   }
 
-  std::tuple<double, double, double> SingleReceiverXKF::getEstimate() {
+  std::tuple<double, double, double> SingleReceiverXKF::getEstimate() const {
     return {xkf.stage3.xHat(0),xkf.stage3.xHat(1),xkf.stage3.xHat(2)};
     //return {xkf.stage2.xHat(0),xkf.stage2.xHat(1),xkf.stage2.xHat(2)};
     //return {xkf.stage1.xHat(0),xkf.stage1.xHat(1),xkf.stage1.xHat(2)};
@@ -53,6 +53,7 @@ namespace FishTagEstimators
   bool SingleReceiverXKF::update(TagBuffer *tagBuffer) {
     SingleReceiverBase::update(tagBuffer);
     if(tag_period <= 0) {
+      std::cout << "tag_period <= 0" << std::endl;
       return false;
     }
     if(tagBuffer->tagBuffer.find(receiver) ==tagBuffer->tagBuffer.end()) {
@@ -65,7 +66,6 @@ namespace FishTagEstimators
     FishTagEstimators::TagBuffer tempTagBuffer(tagBuffer->tag_id, 1, tagBuffer->getDepthConversionCoefficient());
     Eigen::Matrix<double, Eigen::Dynamic, 1> RDOA(0 ,1);
     std::vector<std::pair<uint32_t, uint32_t>> RDOAcombinations;
-    tagBool_t used; // Could have been made standard vector, only need receiver address. But if we move toestimator?
 
     // Create unix timestamp in milliseconds for the most recent measurement
     long int measurement_ms = (long int)receiverBuffer->rbegin()->unix_timestamp*1000 + receiverBuffer->rbegin()->millis;
@@ -98,9 +98,9 @@ namespace FishTagEstimators
         tempTagBuffer.tagBuffer[receiver+receiverAdder] = new tagBuffer_t(1);
         tempTagBuffer.tagBuffer[receiver+receiverAdder]->push_back(*i);
 
-        RDOAcombinations.push_back(std::pair<uint32_t, uint32_t>(receiverBuffer->rbegin()->serial_no, receiver+receiverAdder));
+        RDOAcombinations.push_back(std::pair<uint32_t, uint32_t>(receiver+receiverAdder, receiverBuffer->rbegin()->serial_no));
         RDOA.conservativeResize(RDOA.rows()+1,1);
-        RDOA(RDOA.rows()-1,0) = -1*c_speed*tempTDOA_ms/1000;
+        RDOA(RDOA.rows()-1,0) = -c_speed*tempTDOA_ms/1000;
         // Depth reading from the current tag
         if(tagBuffer->getDepthConversionCoefficient() < 0.01) {
           tempTagBuffer.tagBuffer[receiver+receiverAdder]->begin()->trans_data = std::abs(std::round(receiver_depth/tagBuffer->getDepthConversionCoefficient()));
@@ -119,20 +119,23 @@ namespace FishTagEstimators
     }
 */
     if(receiverAdder <2) { // Todo: Make change to one possible
+      std::cout << "receiverAdder <2" << std::endl;
       return false; // Do not process data/update filter if no baselines available
     }
 
-    //std::cout << "RDOA" << std::endl << RDOA << std::endl;
-    //std::cout << "RDOAcombinations" << std::endl;
-    //for(auto const &it : RDOAcombinations) {
-    //  std::cout << it.first << " - " << it.second << std::endl;
-    //}
+    std::cout << "RDOA" << std::endl << RDOA << std::endl;
+    std::cout << "RDOAcombinations" << std::endl;
+    for(auto const &it : RDOAcombinations) {
+      std::cout << it.first << " - " << it.second << std::endl;
+    }
     // Run filter update, and if sucessfull, set unprocessedData to false for used data receivers
-    if(xkf.update(&tempTagBuffer, RDOA, RDOAcombinations)) {
+    uint8_t status = xkf.update(&tempTagBuffer, RDOA, RDOAcombinations);
+    if(status == 7) {
       activateEstimator();
+      unprocessedData[receiver] = false;
       return true;
     }
-
+    std::cout << "XKF.update failed, Status = " << (unsigned)status << std::endl;
     return false;
   }
   bool SingleReceiverXKF::checkTime(double transmissionFirstTime, double currentTime) const {

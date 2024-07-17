@@ -77,6 +77,7 @@ namespace FishTagEstimators
         combination++;
       }
       if(used < 2) {
+          std::cout << "LS: used < 2" << std::endl;
           return false;
       }
       // Add depth measurement
@@ -135,8 +136,8 @@ namespace FishTagEstimators
         dm = R1;
         return true;
       }
-      //std::cout << "Could not dm. R1: " << R1 << std::endl;
-      //std::cout << "a, b, c: "<< aa << ", " << bb << ", " << cc << std::endl;
+      std::cout << "Could not dm. R1: " << R1 << std::endl;
+      std::cout << "a, b, c: "<< aa << ", " << bb << ", " << cc << std::endl;
       return false;
     }
 
