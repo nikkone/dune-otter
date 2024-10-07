@@ -41,6 +41,18 @@ The running of DUNE on the otters is managed by `systemd`, and set to automatica
     sudo systemctl dune restart
 
 ### Communication with DUNE on the FishOtters
+The FishOtters communicate with each other and the user interface through a server at NTNU. The initial plan for communication was to use VPN for all communicatons. However, because of the way IMC discorvery works by using broadcast/multicast UDP, the VPN would have to be configured as a layer 2 VPN in the OSI/ISO model, which would result in more data used. Therefore, OpenVPN in UDP mode at layer 3 is used for SSH access directly to the 4G/LTE router and the otter, and IMCProxy is used on the FishOtters, field computer, and the server to convey IMC messages. A better way to do this would probably be to just statically map the ip addresses on the VPN, thereby avoiding the whold issue, which is left as future work.
+
+The FishOtters have three network connected devices available:
+1. The Teltonika RUT955 4G/LTE: Runs the OpenVPN client. SSH port 22
+2. The RPI CM4: Runs DUNE. SSH port 40022, DUNE HTTP: 
+3. The IP camera: Located on the flybridge of the FishOtter. 
 
 ### Using the field computer with OpenVPN, IMCProxy and Neptus
+To start the IMCproxy:
 
+    java -jar client.jar otter.itk.ntnu.no 9090
+
+Neptus should be available in the ubuntu menu, if not it is located in:
+
+    /home/ubuntu/lststools/neptus
