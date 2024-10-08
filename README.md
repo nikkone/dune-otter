@@ -27,6 +27,15 @@ There is an otaupdate.sh in the home folder /home/ubuntu/ on each otter. Running
 3. Unpack the .tar.bz2 that was downloaded from the server to the `/home/ubuntu/dune/` folder
 
 ### Updating/modifying IMC messages
+1. Make changes in the otter version of imc
+2. Update DUNE with the new IMC
+3. Create java bindings using imcjava
+4. Transfer java bindings to IMCproxy and Neptus and rebuild them.
+5. Deploy new imcproxy on server and otters, rebuild with ant and restart them with:
+
+       sudo systemctl restart imcproxy
+
+6. Test :)
 
 ### Neptus
 When building Neptus, IMC java bindings must be used. This is done thorugh the IMCJava tool by LSTS. Besides that, the standard LSTS approach can be used.
@@ -49,9 +58,16 @@ The FishOtters have three network connected devices available:
 3. The IP camera: Located on the flybridge of the FishOtter. 
 
 ### Using the field computer with OpenVPN, IMCProxy and Neptus
-To start the IMCproxy:
+Connect to 4G: In upper right corner, choose 'telia' profile
+Connect to VPN: In upper right corner, choose 'console'
 
-    java -jar client.jar otter.itk.ntnu.no 9090
+Test connection:
+
+    ping 10.8.0.1
+
+To start the IMCproxy:
+    
+    cd ~/lststools/IMCProxy/ && java -jar client.jar otter.itk.ntnu.no 9090
 
 Neptus should be available in the ubuntu menu, if not it is located in:
 
